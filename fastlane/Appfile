@@ -1,0 +1,5 @@
+# App Store Connect (uses API key auth via APP_STORE_CONNECT_API_KEY_* env vars)
+app_identifier("com.ghenry22.substream2")
+
+# Google Play (SUPPLY_JSON_KEY_FILE for local, SUPPLY_JSON_KEY_DATA for CI)
+json_key_file(ENV["SUPPLY_JSON_KEY_FILE"]) if ENV["SUPPLY_JSON_KEY_FILE"]

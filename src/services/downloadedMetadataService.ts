@@ -1,0 +1,128 @@
+/**
+ * Re-cache metadata (album/playlist detail) + cover art for DOWNLOADED items.
+ *
+ * Downloads carry their own metadata (see the download flow in `musicCacheService`),
+ * so offline is just a filtered view over cached data. This pass repairs downloaded
+ * items whose detail/art is missing, and backs both the proactive migration and the
+ * manual "Refresh downloads" settings button.
+ *
+ * - `missing`: only fetch detail that isn't already cached (cheap; migration).
+ * - `all`: re-fetch everything (manual refresh / update).
+ *
+ * Online-gated (no-op offline — `fetchAlbum`/`fetchPlaylist` short-circuit to the
+ * cached entry offline anyway). One run at a time. Bounded concurrency.
+ */
+import { fetchAlbumDetail, fetchPlaylistDetail } from './detailFetchService';
+import { downloadedMetadataRefreshStore } from '../store/downloadedMetadataRefreshStore';
+import { musicCacheStore } from '../store/musicCacheStore';
+import { offlineModeStore } from '../store/offlineModeStore';
+import { getDb } from '../store/persistence/db';
+import { UNKNOWN_ALBUM_ID } from '../store/persistence/musicCacheTables';
+import { albumIdsWithSongs } from '../db/repository/songs';
+import { playlistIdsWithSongs } from '../db/repository/playlists';
+import { runPool } from '../utils/promisePool';
+
+const CONCURRENCY = 3;
+
+type Task = { kind: 'album' | 'playlist'; id: string };
+
+/** Outcome of a pass. `remaining` is measured from ACTUAL store presence after
+ *  the pass (not fetch return values), so a `fetchAlbum` that returns null on a
+ *  timeout/error counts as still-missing. `remaining < attempted` ⇒ progress was
+ *  made; `remaining === attempted` ⇒ no progress (the stragglers keep failing). */
+export interface RefreshOutcome {
+  attempted: number;
+  remaining: number;
+}
+
+/**
+ * Ensure every downloaded item's detail + cover art is cached. Idempotent and
+ * RESUMABLE: `missing` mode only fetches detail that's still absent, so an
+ * interrupted run's completed work is never redone — a re-run just picks up the
+ * stragglers. (0/0 when offline or nothing to do.)
+ */
+export async function refreshDownloadedMetadata(opts: {
+  mode: 'missing' | 'all';
+}): Promise<RefreshOutcome> {
+  if (offlineModeStore.getState().offlineMode) return { attempted: 0, remaining: 0 };
+  if (downloadedMetadataRefreshStore.getState().active) return { attempted: 0, remaining: 0 };
+
+  const cachedItems = musicCacheStore.getState().cachedItems;
+  const cachedSongs = musicCacheStore.getState().cachedSongs;
+
+  // Collect the album + playlist ids whose detail must be present for offline
+  // rendering: explicit album/playlist downloads, a song's parent album, and the
+  // parent albums of favorited songs.
+  const albumIds = new Set<string>();
+  const playlistIds = new Set<string>();
+  for (const [id, item] of Object.entries(cachedItems)) {
+    if (item.type === 'album') albumIds.add(id);
+    else if (item.type === 'playlist') playlistIds.add(id);
+    else if (item.type === 'song' && item.parentAlbumId) albumIds.add(item.parentAlbumId);
+    else if (item.type === 'favorites') {
+      for (const songId of item.songIds ?? []) {
+        // `albumId` on a cached song is the file's directory; the server album is `srcAlbumId`.
+        const song = cachedSongs[songId];
+        const parent = song?.srcAlbumId ?? song?.albumId;
+        if (parent && parent !== UNKNOWN_ALBUM_ID) albumIds.add(parent);
+      }
+    }
+  }
+
+  // Presence = the item has its DETAIL in the normalized model (≥1 song / ≥1 membership
+  // row). `fetchAlbum`/`fetchPlaylist` dual-write it, so this reflects prior passes.
+  const db = getDb();
+  const albumsHave = db ? await albumIdsWithSongs(db, [...albumIds]) : new Set<string>();
+  const playlistsHave = db ? await playlistIdsWithSongs(db, [...playlistIds]) : new Set<string>();
+  const tasks: Task[] = [
+    ...[...albumIds]
+      .filter((id) => opts.mode === 'all' || !albumsHave.has(id))
+      .map((id) => ({ kind: 'album' as const, id })),
+    ...[...playlistIds]
+      .filter((id) => opts.mode === 'all' || !playlistsHave.has(id))
+      .map((id) => ({ kind: 'playlist' as const, id })),
+  ];
+
+  if (tasks.length === 0) return { attempted: 0, remaining: 0 };
+
+  const progress = downloadedMetadataRefreshStore.getState();
+  progress.start(tasks.length);
+  try {
+    await runPool(
+      tasks,
+      async (t) => {
+        try {
+          if (t.kind === 'album') {
+            await fetchAlbumDetail(t.id, { prefetchCovers: true, force: opts.mode === 'all' });
+          } else {
+            await fetchPlaylistDetail(t.id, { prefetchCovers: true, force: opts.mode === 'all' });
+          }
+          downloadedMetadataRefreshStore.getState().tick(true);
+        } catch (e) {
+          downloadedMetadataRefreshStore.getState().tick(false);
+          throw e;
+        }
+      },
+      { concurrency: CONCURRENCY },
+    );
+    // Covers go onto imageCacheService's self-draining download queue, so they land
+    // without an explicit drain here, and they're purge-protected + reconcile-recached
+    // + backfilled so an in-flight cover survives an app kill. Done is reported on
+    // DETAIL presence (measured below), not covers.
+  } finally {
+    downloadedMetadataRefreshStore.getState().finish();
+  }
+
+  // Measure what's STILL missing from actual presence, not fetch return values —
+  // `fetchAlbum` resolves null on a timeout/error without throwing. The backfill caller
+  // uses this to resume-until-complete across launches without looping forever on
+  // unfetchable items.
+  const albumTaskIds = tasks.filter((t) => t.kind === 'album').map((t) => t.id);
+  const playlistTaskIds = tasks.filter((t) => t.kind === 'playlist').map((t) => t.id);
+  const albumsHaveAfter = db ? await albumIdsWithSongs(db, albumTaskIds) : new Set<string>();
+  const playlistsHaveAfter = db ? await playlistIdsWithSongs(db, playlistTaskIds) : new Set<string>();
+  const remaining = tasks.filter((t) =>
+    t.kind === 'album' ? !albumsHaveAfter.has(t.id) : !playlistsHaveAfter.has(t.id),
+  ).length;
+  return { attempted: tasks.length, remaining };
+}

@@ -1,0 +1,83 @@
+import { create } from 'zustand';
+
+type ShareTargetType = 'album' | 'playlist' | 'queue' | 'song';
+
+interface CreateShareState {
+  visible: boolean;
+  shareType: ShareTargetType;
+  itemId: string | null;
+  songIds: string[];
+  itemName: string;
+  artistName: string | null;
+  coverArtId: string | null;
+
+  showAlbum: (albumId: string, albumName: string, artistName?: string, coverArtId?: string) => void;
+  showPlaylist: (playlistId: string, playlistName: string, coverArtId?: string) => void;
+  showQueue: (songIds: string[]) => void;
+  showSong: (songId: string, songName: string, artistName?: string, coverArtId?: string) => void;
+  hide: () => void;
+}
+
+export const createShareStore = create<CreateShareState>()((set) => ({
+  visible: false,
+  shareType: 'album',
+  itemId: null,
+  songIds: [],
+  itemName: '',
+  artistName: null,
+  coverArtId: null,
+
+  showAlbum: (albumId, albumName, artistName, coverArtId) =>
+    set({
+      visible: true,
+      shareType: 'album',
+      itemId: albumId,
+      songIds: [],
+      itemName: albumName,
+      artistName: artistName ?? null,
+      coverArtId: coverArtId ?? null,
+    }),
+
+  showPlaylist: (playlistId, playlistName, coverArtId) =>
+    set({
+      visible: true,
+      shareType: 'playlist',
+      itemId: playlistId,
+      songIds: [],
+      itemName: playlistName,
+      artistName: null,
+      coverArtId: coverArtId ?? null,
+    }),
+
+  showQueue: (songIds) =>
+    set({
+      visible: true,
+      shareType: 'queue',
+      itemId: null,
+      songIds,
+      itemName: 'Current Queue',
+      artistName: null,
+      coverArtId: null,
+    }),
+
+  showSong: (songId, songName, artistName, coverArtId) =>
+    set({
+      visible: true,
+      shareType: 'song',
+      itemId: songId,
+      songIds: [],
+      itemName: songName,
+      artistName: artistName ?? null,
+      coverArtId: coverArtId ?? null,
+    }),
+
+  hide: () =>
+    set({
+      visible: false,
+      itemId: null,
+      songIds: [],
+      itemName: '',
+      artistName: null,
+      coverArtId: null,
+    }),
+}));

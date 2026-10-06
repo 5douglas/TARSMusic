@@ -1,0 +1,15 @@
+{
+  "name": "expo-gzip",
+  "version": "1.0.0",
+  "description": "Expo native module for async gzip compression and decompression on background threads",
+  "author": "Gaven Henry",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {},
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

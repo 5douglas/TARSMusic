@@ -1,0 +1,1 @@
+subsonic,navidrome,offline,FLAC,lossless,scrobble,airsonic,gonic,self-hosted,ampache,funkwhale,radio

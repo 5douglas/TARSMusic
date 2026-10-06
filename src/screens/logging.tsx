@@ -1,0 +1,569 @@
+import Ionicons from "@react-native-vector-icons/ionicons/static";
+import { File, Paths } from 'expo-file-system';
+import { shareAsync } from 'expo-sharing';
+import { HeaderHeightContext } from "expo-router/react-navigation";
+import { useCallback, useContext, useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+
+import { GradientBackground } from '../components/GradientBackground';
+import { BottomChrome } from '../components/BottomChrome';
+import { useTheme } from '../hooks/useTheme';
+import { settingsStyles } from '../styles/settingsStyles';
+import { IMAGE_CACHE_DIAG_LOG_FILE } from '../services/imageCacheLogger';
+import { LIBRARY_SYNC_DIAG_LOG_FILE } from '../services/librarySyncLogger';
+import { VOICE_SEARCH_DIAG_LOG_FILE } from '../services/voiceSearchLogger';
+import { audioDiagnosticsStore } from '../store/audioDiagnosticsStore';
+import { imageCacheDiagnosticsStore } from '../store/imageCacheDiagnosticsStore';
+import { librarySyncDiagnosticsStore } from '../store/librarySyncDiagnosticsStore';
+import { remoteControlDiagnosticsStore } from '../store/remoteControlDiagnosticsStore';
+import { voiceSearchDiagnosticsStore } from '../store/voiceSearchDiagnosticsStore';
+import { formatBytes } from '../utils/formatters';
+
+const LOG_FILE = new File(Paths.document, 'migration-log.txt');
+const DIAG_LOG_FILE = new File(Paths.document, 'audio-diagnostics.log');
+const REMOTE_LOG_FILE = new File(Paths.document, 'remote-control-diagnostics.log');
+const IMAGE_LOG_FILE = new File(Paths.document, IMAGE_CACHE_DIAG_LOG_FILE);
+const SYNC_LOG_FILE = new File(Paths.document, LIBRARY_SYNC_DIAG_LOG_FILE);
+const VOICE_LOG_FILE = new File(Paths.document, VOICE_SEARCH_DIAG_LOG_FILE);
+
+export function LoggingScreen() {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const headerHeight = useContext(HeaderHeightContext) ?? 0;
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const diagEnabled = audioDiagnosticsStore((s) => s.enabled);
+  const diagLogSize = audioDiagnosticsStore((s) => s.logFileSize);
+  const remoteEnabled = remoteControlDiagnosticsStore((s) => s.enabled);
+  const remoteLogSize = remoteControlDiagnosticsStore((s) => s.logFileSize);
+  const imageEnabled = imageCacheDiagnosticsStore((s) => s.enabled);
+  const imageLogSize = imageCacheDiagnosticsStore((s) => s.logFileSize);
+  const syncEnabled = librarySyncDiagnosticsStore((s) => s.enabled);
+  const syncLogSize = librarySyncDiagnosticsStore((s) => s.logFileSize);
+  const voiceEnabled = voiceSearchDiagnosticsStore((s) => s.enabled);
+  const voiceLogSize = voiceSearchDiagnosticsStore((s) => s.logFileSize);
+
+  useEffect(() => {
+    audioDiagnosticsStore.getState().refreshStatus();
+    remoteControlDiagnosticsStore.getState().refreshStatus();
+    imageCacheDiagnosticsStore.getState().refreshStatus();
+    librarySyncDiagnosticsStore.getState().refreshStatus();
+    voiceSearchDiagnosticsStore.getState().refreshStatus();
+    if (LOG_FILE.exists) {
+      LOG_FILE.text().then((text) => {
+        setContent(text);
+        setLoading(false);
+      });
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleDiagToggle = useCallback(async (value: boolean) => {
+    await audioDiagnosticsStore.getState().setEnabled(value);
+  }, []);
+
+  const handleDiagReset = useCallback(async () => {
+    await audioDiagnosticsStore.getState().resetLog();
+  }, []);
+
+  const handleShareAudioLog = useCallback(async () => {
+    if (DIAG_LOG_FILE.exists) {
+      await shareAsync(DIAG_LOG_FILE.uri, { mimeType: 'text/plain' });
+    }
+  }, []);
+
+  const handleRemoteToggle = useCallback(async (value: boolean) => {
+    await remoteControlDiagnosticsStore.getState().setEnabled(value);
+  }, []);
+
+  const handleRemoteReset = useCallback(async () => {
+    await remoteControlDiagnosticsStore.getState().resetLog();
+  }, []);
+
+  const handleShareRemoteLog = useCallback(async () => {
+    if (REMOTE_LOG_FILE.exists) {
+      await shareAsync(REMOTE_LOG_FILE.uri, { mimeType: 'text/plain' });
+    }
+  }, []);
+
+  const handleImageToggle = useCallback(async (value: boolean) => {
+    await imageCacheDiagnosticsStore.getState().setEnabled(value);
+  }, []);
+
+  const handleImageReset = useCallback(async () => {
+    await imageCacheDiagnosticsStore.getState().resetLog();
+  }, []);
+
+  const handleShareImageLog = useCallback(async () => {
+    if (IMAGE_LOG_FILE.exists) {
+      await shareAsync(IMAGE_LOG_FILE.uri, { mimeType: 'text/plain' });
+    }
+  }, []);
+
+  const handleSyncToggle = useCallback(async (value: boolean) => {
+    await librarySyncDiagnosticsStore.getState().setEnabled(value);
+  }, []);
+
+  const handleSyncReset = useCallback(async () => {
+    await librarySyncDiagnosticsStore.getState().resetLog();
+  }, []);
+
+  const handleShareSyncLog = useCallback(async () => {
+    if (SYNC_LOG_FILE.exists) {
+      await shareAsync(SYNC_LOG_FILE.uri, { mimeType: 'text/plain' });
+    }
+  }, []);
+
+  const handleVoiceToggle = useCallback(async (value: boolean) => {
+    await voiceSearchDiagnosticsStore.getState().setEnabled(value);
+  }, []);
+
+  const handleVoiceReset = useCallback(async () => {
+    await voiceSearchDiagnosticsStore.getState().resetLog();
+  }, []);
+
+  const handleShareVoiceLog = useCallback(async () => {
+    if (VOICE_LOG_FILE.exists) {
+      await shareAsync(VOICE_LOG_FILE.uri, { mimeType: 'text/plain' });
+    }
+  }, []);
+
+  const handleShareMigrationLog = useCallback(async () => {
+    if (LOG_FILE.exists) {
+      await shareAsync(LOG_FILE.uri, { mimeType: 'text/plain' });
+    }
+  }, []);
+
+  const handleClearMigrationLog = useCallback(() => {
+    if (LOG_FILE.exists) {
+      LOG_FILE.delete();
+      setContent(null);
+    }
+  }, []);
+
+  if (loading) {
+    return (
+      <GradientBackground style={styles.centered}>
+        <ActivityIndicator color={colors.primary} />
+        <BottomChrome withSafeAreaPadding />
+      </GradientBackground>
+    );
+  }
+
+  return (
+    <GradientBackground scrollable>
+    <ScrollView
+      style={settingsStyles.container}
+      contentContainerStyle={[settingsStyles.content, { paddingTop: headerHeight + 16 }]}
+    >
+      {/* Audio Diagnostics */}
+      <View style={settingsStyles.section}>
+        <Text style={[settingsStyles.sectionTitle, { color: colors.label }]}>{t('audioDiagnostics')}</Text>
+        <View style={[settingsStyles.card, settingsStyles.cardPadded, { backgroundColor: colors.card }]}>
+          <View style={[styles.diagRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.diagTextWrap}>
+              <Text style={[styles.diagLabel, { color: colors.textPrimary }]}>{t('diagnosticLogging')}</Text>
+              <Text style={[styles.diagHint, { color: colors.textSecondary }]}>
+                {t('diagnosticLoggingHint')}
+              </Text>
+            </View>
+            <Switch
+              value={diagEnabled}
+              onValueChange={handleDiagToggle}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+          <View style={[styles.diagRow, styles.diagRowLast]}>
+            <Text style={[styles.diagLabel, { color: colors.textPrimary }]}>{t('logFile')}</Text>
+            <Text style={[styles.diagValue, { color: colors.textSecondary }]}>
+              {diagLogSize != null ? formatBytes(diagLogSize) : t('none')}
+            </Text>
+          </View>
+          <View style={styles.buttonRow}>
+            <Pressable
+              onPress={handleShareAudioLog}
+              disabled={diagLogSize == null}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && diagLogSize != null && settingsStyles.pressed,
+                diagLogSize == null && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="share-outline" size={18} color={diagLogSize != null ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: diagLogSize != null ? colors.primary : colors.textSecondary }]}>
+                {t('share')}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleDiagReset}
+              disabled={diagLogSize == null}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && diagLogSize != null && settingsStyles.pressed,
+                diagLogSize == null && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="trash-outline" size={18} color={diagLogSize != null ? colors.red : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: diagLogSize != null ? colors.red : colors.textSecondary }]}>
+                {t('clear')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
+      {/* Remote Control Diagnostics */}
+      <View style={settingsStyles.section}>
+        <Text style={[settingsStyles.sectionTitle, { color: colors.label }]}>{t('remoteControlDiagnostics')}</Text>
+        <View style={[settingsStyles.card, settingsStyles.cardPadded, { backgroundColor: colors.card }]}>
+          <View style={[styles.diagRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.diagTextWrap}>
+              <Text style={[styles.diagLabel, { color: colors.textPrimary }]}>{t('remoteControlLogging')}</Text>
+              <Text style={[styles.diagHint, { color: colors.textSecondary }]}>
+                {t('remoteControlLoggingHint')}
+              </Text>
+            </View>
+            <Switch
+              value={remoteEnabled}
+              onValueChange={handleRemoteToggle}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+          <View style={[styles.diagRow, styles.diagRowLast]}>
+            <Text style={[styles.diagLabel, { color: colors.textPrimary }]}>{t('logFile')}</Text>
+            <Text style={[styles.diagValue, { color: colors.textSecondary }]}>
+              {remoteLogSize != null ? formatBytes(remoteLogSize) : t('none')}
+            </Text>
+          </View>
+          <View style={styles.buttonRow}>
+            <Pressable
+              onPress={handleShareRemoteLog}
+              disabled={remoteLogSize == null}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && remoteLogSize != null && settingsStyles.pressed,
+                remoteLogSize == null && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="share-outline" size={18} color={remoteLogSize != null ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: remoteLogSize != null ? colors.primary : colors.textSecondary }]}>
+                {t('share')}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleRemoteReset}
+              disabled={remoteLogSize == null}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && remoteLogSize != null && settingsStyles.pressed,
+                remoteLogSize == null && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="trash-outline" size={18} color={remoteLogSize != null ? colors.red : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: remoteLogSize != null ? colors.red : colors.textSecondary }]}>
+                {t('clear')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
+      {/* Voice Search Diagnostics */}
+      <View style={settingsStyles.section}>
+        <Text style={[settingsStyles.sectionTitle, { color: colors.label }]}>{t('voiceSearchDiagnostics')}</Text>
+        <View style={[settingsStyles.card, settingsStyles.cardPadded, { backgroundColor: colors.card }]}>
+          <View style={[styles.diagRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.diagTextWrap}>
+              <Text style={[styles.diagLabel, { color: colors.textPrimary }]}>{t('voiceSearchLogging')}</Text>
+              <Text style={[styles.diagHint, { color: colors.textSecondary }]}>
+                {t('voiceSearchLoggingHint')}
+              </Text>
+            </View>
+            <Switch
+              value={voiceEnabled}
+              onValueChange={handleVoiceToggle}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+          <View style={[styles.diagRow, styles.diagRowLast]}>
+            <Text style={[styles.diagLabel, { color: colors.textPrimary }]}>{t('logFile')}</Text>
+            <Text style={[styles.diagValue, { color: colors.textSecondary }]}>
+              {voiceLogSize != null ? formatBytes(voiceLogSize) : t('none')}
+            </Text>
+          </View>
+          <View style={styles.buttonRow}>
+            <Pressable
+              onPress={handleShareVoiceLog}
+              disabled={voiceLogSize == null}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && voiceLogSize != null && settingsStyles.pressed,
+                voiceLogSize == null && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="share-outline" size={18} color={voiceLogSize != null ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: voiceLogSize != null ? colors.primary : colors.textSecondary }]}>
+                {t('share')}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleVoiceReset}
+              disabled={voiceLogSize == null}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && voiceLogSize != null && settingsStyles.pressed,
+                voiceLogSize == null && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="trash-outline" size={18} color={voiceLogSize != null ? colors.red : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: voiceLogSize != null ? colors.red : colors.textSecondary }]}>
+                {t('clear')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
+      {/* Library Sync Diagnostics */}
+      <View style={settingsStyles.section}>
+        <Text style={[settingsStyles.sectionTitle, { color: colors.label }]}>{t('librarySyncDiagnostics')}</Text>
+        <View style={[settingsStyles.card, settingsStyles.cardPadded, { backgroundColor: colors.card }]}>
+          <View style={[styles.diagRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.diagTextWrap}>
+              <Text style={[styles.diagLabel, { color: colors.textPrimary }]}>{t('librarySyncLogging')}</Text>
+              <Text style={[styles.diagHint, { color: colors.textSecondary }]}>
+                {t('librarySyncLoggingHint')}
+              </Text>
+            </View>
+            <Switch
+              value={syncEnabled}
+              onValueChange={handleSyncToggle}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+          <View style={[styles.diagRow, styles.diagRowLast]}>
+            <Text style={[styles.diagLabel, { color: colors.textPrimary }]}>{t('logFile')}</Text>
+            <Text style={[styles.diagValue, { color: colors.textSecondary }]}>
+              {syncLogSize != null ? formatBytes(syncLogSize) : t('none')}
+            </Text>
+          </View>
+          <View style={styles.buttonRow}>
+            <Pressable
+              onPress={handleShareSyncLog}
+              disabled={syncLogSize == null}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && syncLogSize != null && settingsStyles.pressed,
+                syncLogSize == null && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="share-outline" size={18} color={syncLogSize != null ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: syncLogSize != null ? colors.primary : colors.textSecondary }]}>
+                {t('share')}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleSyncReset}
+              disabled={syncLogSize == null}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && syncLogSize != null && settingsStyles.pressed,
+                syncLogSize == null && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="trash-outline" size={18} color={syncLogSize != null ? colors.red : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: syncLogSize != null ? colors.red : colors.textSecondary }]}>
+                {t('clear')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
+      {/* Image Cache Diagnostics */}
+      <View style={settingsStyles.section}>
+        <Text style={[settingsStyles.sectionTitle, { color: colors.label }]}>{t('imageCacheDiagnostics')}</Text>
+        <View style={[settingsStyles.card, settingsStyles.cardPadded, { backgroundColor: colors.card }]}>
+          <View style={[styles.diagRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.diagTextWrap}>
+              <Text style={[styles.diagLabel, { color: colors.textPrimary }]}>{t('imageCacheLogging')}</Text>
+              <Text style={[styles.diagHint, { color: colors.textSecondary }]}>
+                {t('imageCacheLoggingHint')}
+              </Text>
+            </View>
+            <Switch
+              value={imageEnabled}
+              onValueChange={handleImageToggle}
+              trackColor={{ false: colors.border, true: colors.primary }}
+            />
+          </View>
+          <View style={[styles.diagRow, styles.diagRowLast]}>
+            <Text style={[styles.diagLabel, { color: colors.textPrimary }]}>{t('logFile')}</Text>
+            <Text style={[styles.diagValue, { color: colors.textSecondary }]}>
+              {imageLogSize != null ? formatBytes(imageLogSize) : t('none')}
+            </Text>
+          </View>
+          <View style={styles.buttonRow}>
+            <Pressable
+              onPress={handleShareImageLog}
+              disabled={imageLogSize == null}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && imageLogSize != null && settingsStyles.pressed,
+                imageLogSize == null && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="share-outline" size={18} color={imageLogSize != null ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: imageLogSize != null ? colors.primary : colors.textSecondary }]}>
+                {t('share')}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleImageReset}
+              disabled={imageLogSize == null}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && imageLogSize != null && settingsStyles.pressed,
+                imageLogSize == null && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="trash-outline" size={18} color={imageLogSize != null ? colors.red : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: imageLogSize != null ? colors.red : colors.textSecondary }]}>
+                {t('clear')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
+      {/* Migration Log */}
+      <View style={settingsStyles.section}>
+        <Text style={[settingsStyles.sectionTitle, { color: colors.label }]}>{t('migrationLog')}</Text>
+        <View style={[settingsStyles.card, settingsStyles.cardPadded, { backgroundColor: colors.card }]}>
+          {content ? (
+            <Text
+              style={[styles.logText, { color: colors.textPrimary }]}
+              selectable
+            >
+              {content}
+            </Text>
+          ) : (
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {t('migrationLogGeneratedOnLaunch')}
+            </Text>
+          )}
+          <View style={styles.buttonRow}>
+            <Pressable
+              onPress={handleShareMigrationLog}
+              disabled={!content}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && !!content && settingsStyles.pressed,
+                !content && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="share-outline" size={18} color={content ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: content ? colors.primary : colors.textSecondary }]}>
+                {t('share')}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleClearMigrationLog}
+              disabled={!content}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: colors.border },
+                pressed && !!content && settingsStyles.pressed,
+                !content && settingsStyles.disabled,
+              ]}
+            >
+              <Ionicons name="trash-outline" size={18} color={content ? colors.red : colors.textSecondary} />
+              <Text style={[styles.actionButtonText, { color: content ? colors.red : colors.textSecondary }]}>
+                {t('clear')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </ScrollView>
+    <BottomChrome withSafeAreaPadding />
+    </GradientBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logText: {
+    fontSize: 12,
+    lineHeight: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  emptyText: {
+    fontSize: 16,
+    fontStyle: 'italic',
+    marginLeft: 4,
+  },
+  diagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  diagRowLast: {
+    borderBottomWidth: 0,
+  },
+  diagTextWrap: {
+    flex: 1,
+    marginRight: 12,
+  },
+  diagLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  diagHint: {
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  diagValue: {
+    fontSize: 14,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  actionButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});

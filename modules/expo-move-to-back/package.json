@@ -1,0 +1,15 @@
+{
+  "name": "expo-move-to-back",
+  "version": "1.0.0",
+  "description": "Move the app to background on Android (no-op on iOS)",
+  "author": "Gaven Henry",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {},
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

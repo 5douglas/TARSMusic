@@ -1,0 +1,135 @@
+{
+  "expo": {
+    "name": "substreamer",
+    "slug": "substreamer",
+    "version": "8.1.5",
+    "scheme": "substreamer",
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "orientation": "default",
+    "icon": "./src/assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.ghenry22.substream2",
+      "buildNumber": "182",
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocalNetworkUsageDescription": "Substreamer uses your local network to connect to your self-hosted music server.",
+        "NSBonjourServices": [
+          "_googlecast._tcp",
+          "_CC1AD845._googlecast._tcp"
+        ],
+        "NSLocationWhenInUseUsageDescription": "Location access is needed to detect your WiFi network name for automatic offline mode switching.",
+        "INAlternativeAppNames": [
+          {
+            "INAlternativeAppName": "Substreamer",
+            "INAlternativeAppNamePronunciationHint": "Sub Streamer"
+          },
+          {
+            "INAlternativeAppName": "Sub Streamer"
+          }
+        ]
+      },
+      "entitlements": {
+        "com.apple.developer.networking.wifi-info": true,
+        "com.apple.developer.carplay-audio": true
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#1D9BF0"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "POST_NOTIFICATIONS"
+      ],
+      "predictiveBackGestureEnabled": false,
+      "versionCode": 80000182,
+      "package": "com.ghenry22.substream2"
+    },
+    "web": {
+      "favicon": "./src/assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "react-native-bootsplash",
+        {
+          "logo": "./src/assets/splash-logo.svg",
+          "logoWidth": 130,
+          "background": "#1D9BF0"
+        }
+      ],
+      "./plugins/silence-hermes-warning",
+      "./plugins/silence-dev-launcher-warning",
+      "./plugins/dedupe-lc++",
+      "./plugins/fix-jvm-target",
+      "./plugins/large-heap",
+      "./plugins/set-gradle-version",
+      "./plugins/with-gradle-memory",
+      "./plugins/with-proguard-optimize",
+      "./modules/expo-ssl-trust/plugin",
+      "./modules/expo-backup-exclusions/plugin",
+      [
+        "react-native-queue-player",
+        {
+          "carplay": true,
+          "siri": true,
+          "chromecast": true,
+          "chromecastReceiverAppId": "CC1AD845"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 29,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "useLegacyPackaging": true,
+            "usePrecompiledHeaders": true
+          }
+        }
+      ],
+      "expo-screen-orientation",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
+      "./plugins/location-feature-optional",
+      "./plugins/strip-push-entitlement",
+      "./plugins/with-disable-sync-mount-props-override",
+      "./plugins/with-android-app-actions",
+      "./plugins/with-carplay-appearance-fix",
+      "expo-notifications",
+      "expo-sharing",
+      "expo-localization",
+      "expo-status-bar",
+      "@react-native-vector-icons/ionicons",
+      "@react-native-vector-icons/material-design-icons",
+      "@react-native-vector-icons/fontawesome5"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b3c7e72f-f01c-4110-8a30-a669b1d9bf34"
+      }
+    },
+    "owner": "ghenry22"
+  }
+}

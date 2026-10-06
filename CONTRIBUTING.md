@@ -1,0 +1,365 @@
+# Contributing to Substreamer
+
+Thank you for your interest in contributing to Substreamer! This guide covers everything you need to get started.
+
+## AI Coding Tools
+
+This project's conventions, architecture and coding standards live in a single file: **[`AGENTS.md`](./AGENTS.md)**.
+
+It follows the [AGENTS.md](https://agents.md) open standard, which Claude Code, Cursor, Copilot, Codex, Windsurf, Aider, Devin and Amp all read natively — so the rules are picked up automatically, with no configuration.
+
+**Please don't add a per-tool copy** (`CLAUDE.md`, `.cursor/rules/`, `.github/copilot-instructions.md`). We kept those as pointer stubs and retired them in August 2026: two rules files drift, and the stale one is always the one that gets read.
+
+### Terminal Observation
+
+When working with Claude Code, you can share your terminal output so the AI can see your command results. Run `npm run terminal-log` in any terminal you want observed — this starts a `script` session that logs everything to `/tmp/claude-terminal.txt`. Then ask Claude Code to "check my terminal" to have it read the output. Type `exit` to stop recording.
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/ghenry22/substreamer.git
+cd substreamer
+npm install
+npx expo start
+```
+
+Use the Expo Go app on your device or an emulator/simulator to connect to the dev server.
+
+## Local Development Environment Setup
+
+Follow these steps in order on a fresh macOS machine. If you already have some of these installed, skip to what you need.
+
+### 1. Homebrew
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Follow the post-install instructions printed in your terminal to add Homebrew to your PATH in `~/.zprofile`.
+
+### 2. nvm + Node.js 22
+
+Install [nvm](https://github.com/nvm-sh/nvm) (do not install Node via Homebrew):
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
+```
+
+Restart your terminal, then install Node 22:
+
+```bash
+nvm install 22
+nvm alias default 22
+```
+
+Verify: `node -v` should show v22.x and `npm -v` should be present.
+
+### 3. Ruby 3.2
+
+Ruby is required for fastlane (store metadata automation). macOS may ship with an outdated version, so install via Homebrew:
+
+```bash
+brew install ruby@3.2
+```
+
+Add to your `~/.zshrc`:
+
+```bash
+export PATH="/opt/homebrew/opt/ruby@3.2/bin:$PATH"
+```
+
+Restart your terminal. Verify: `ruby -v` should show 3.2.x.
+
+### 4. Fastlane
+
+Bundler ships with modern Ruby — no separate install needed. From the project root:
+
+```bash
+bundle install
+```
+
+This installs fastlane and its dependencies locally to `vendor/bundle`. If you see a message about a bundler version mismatch from an old `Gemfile.lock`, delete it and re-run (`Gemfile.lock` is gitignored).
+
+### 5. Xcode (iOS builds)
+
+Install **Xcode** from the Mac App Store, then configure it:
+
+```bash
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+sudo xcodebuild -license accept
+```
+
+### 6. CocoaPods (iOS builds)
+
+CocoaPods is required for linking native dependencies in iOS builds. Install via gem (not Homebrew, to avoid Ruby version conflicts):
+
+```bash
+gem install cocoapods
+```
+
+Verify: `pod --version` should print a version number.
+
+> **Note:** Run `pod install` directly — not `bundle exec pod install`. CocoaPods is not in the project Gemfile since Expo prebuild regenerates the `ios/` directory and manages pod installation automatically.
+
+### 7. Android Studio (Android builds)
+
+Download from https://developer.android.com/studio and install to the default location (`/Applications/Android Studio.app/`). The build scripts expect this exact path.
+
+On first launch, complete the setup wizard — this installs:
+
+- **Android SDK** (to `~/Library/Android/sdk`)
+- **JBR 17** (bundled JDK)
+- **Platform tools and emulator**
+
+Then create at least one AVD (emulator) via **Tools > Device Manager**. The `scripts/env-android.sh` helper auto-launches the first available AVD when you run `npm run android`.
+
+No manual `JAVA_HOME` or `ANDROID_HOME` exports are needed — the build scripts auto-detect from the default paths.
+
+### 8. GitHub CLI
+
+Required for creating releases (`npm run release`):
+
+```bash
+brew install gh
+gh auth login
+```
+
+Select GitHub.com, HTTPS, and authenticate via browser.
+
+### 9. Project Dependencies
+
+```bash
+cd substreamer
+npm install
+```
+
+### 10. Verify Your Setup
+
+```bash
+npx tsc --noEmit          # TypeScript — should be clean
+npx jest --no-coverage     # Tests — should all pass
+npm run ios                # iOS build (requires Xcode)
+npm run android            # Android build (requires Android Studio + emulator)
+```
+
+### Prerequisites Summary
+
+- **Node.js 22** (LTS) via nvm
+- **npm** (bundled with Node)
+- **Ruby 3.2** + Bundler (for fastlane)
+- **Xcode** (iOS builds, macOS only)
+- **CocoaPods** via gem (iOS native dependency linking)
+- **Android Studio** (Android builds — provides JBR 17 and Android SDK)
+- **GitHub CLI** (for releases)
+- A **Subsonic-compatible server** for testing (Navidrome recommended)
+
+## Native Builds
+
+The `android/` and `ios/` directories are generated by `expo prebuild` and are gitignored. **Never edit files inside them directly** — changes are lost on the next prebuild.
+
+Native Android builds require `JAVA_HOME` and `ANDROID_HOME` to be set. Use the helper scripts which auto-detect Android Studio's bundled JBR and the Android SDK:
+
+| Command | What it does |
+|---------|-------------|
+| `scripts/build-android.sh` | Sets env vars, runs `npx expo run:android` |
+| `scripts/build-android.sh --gradle-only` | Sets env vars, runs `./gradlew assembleDebug` |
+| `scripts/build-android.sh --gradle-only --release` | Release variant via Gradle |
+| `scripts/build-android.sh --no-install` | Build only, skip device install |
+| `scripts/build-modules.sh` | Builds local native module JS/types |
+
+For iOS builds, run `npx expo run:ios` directly.
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Framework | Expo ~55 / React Native 0.83 |
+| Language | TypeScript (strict mode) |
+| Routing | Expo Router (file-based) |
+| State | Zustand with SQLite persistence |
+| Audio | react-native-track-player (local fork) |
+| Lists | @shopify/flash-list v2 |
+| Animations | react-native-reanimated v4 |
+| API | Subsonic REST via subsonic-api |
+
+## Code Standards
+
+### TypeScript
+
+TypeScript strict mode is enabled. All code must pass `npx tsc --noEmit` with zero errors.
+
+### Naming Conventions
+
+| Type | Convention | Example |
+|------|-----------|---------|
+| Component files | PascalCase | `AlbumCard.tsx` |
+| Screen files | kebab-case | `album-detail.tsx` |
+| Route files | kebab-case / `[id]` | `album/[id].tsx` |
+| Components | PascalCase | `AlbumCard` |
+| Hooks | camelCase with `use` prefix | `useTheme` |
+| Stores | camelCase with `Store` suffix | `playerStore` |
+| Constants | UPPER_SNAKE_CASE | `ROW_HEIGHT` |
+| Handler functions | `handle` prefix | `handlePress` |
+| Callback props | `on` prefix | `onPress` |
+
+### Import Order
+
+Order imports as: external packages, then internal modules, then type-only imports. Use `type` keyword for type-only imports.
+
+```typescript
+import { useRouter } from 'expo-router';
+import { memo, useCallback } from 'react';
+import { Pressable, StyleSheet, Text } from 'react-native';
+
+import { CachedImage } from './CachedImage';
+import { useTheme } from '../hooks/useTheme';
+import { type AlbumID3 } from '../services/subsonicService';
+```
+
+### Styling
+
+- Use `StyleSheet.create()` at module scope for static styles.
+- Apply theme colors inline via the `useTheme()` hook — never import theme constants directly.
+- Use `CachedImage` for all Subsonic cover art — never use raw `<Image>`.
+- All animations should use `react-native-reanimated` (exception: slow linear translations like `MarqueeText` use RN `Animated`).
+
+## Testing
+
+### Running Tests
+
+```bash
+# TypeScript check
+npx tsc --noEmit
+
+# Run all tests
+npx jest --no-coverage
+
+# Run tests with coverage
+npx jest --coverage --coverageReporters=text
+
+# Run a specific test file with coverage
+npx jest path/to/test --coverage --coverageReporters=text
+```
+
+### Coverage Target
+
+Every file with a corresponding test file must maintain **80% or higher** statement coverage and branch coverage.
+
+### What to Test
+
+- Null/undefined inputs and optional fields
+- Error and failure paths
+- Edge cases and boundary conditions
+- State transitions across multiple steps
+- Interactions between subsystems
+
+Avoid tests that only confirm the trivial success case. If a function has branches, test them.
+
+### CI
+
+Tests run automatically on every push and pull request via GitHub Actions (`.github/workflows/tests.yml`).
+
+## Making Changes
+
+1. **Branch from `master`** — create a descriptive branch name (e.g. `fix/playback-resume`, `feat/shuffle-mode`).
+2. **Run checks before starting** — `npx tsc --noEmit` and `npx jest --no-coverage` must both pass.
+3. **Make your changes** — keep commits focused and atomic.
+4. **Run checks after finishing** — both must still pass. Add or update tests to cover your changes.
+5. **Open a pull request** — fill out the PR template, describe what changed and why, and link related issues.
+
+## Architecture Overview
+
+```
+src/
+  app/            # Expo Router routes (thin wrappers importing from screens/)
+  screens/        # Screen components with business logic
+  components/     # Reusable UI components
+  hooks/          # Custom hooks
+  services/       # API clients and external integrations (plain async functions)
+  store/          # Zustand stores (SQLite persistence via expo-sqlite)
+  constants/      # Theme definitions
+  utils/          # Formatting, color, string, and timing helpers
+modules/          # Local Expo native modules
+plugins/          # Expo config plugins (modify native projects during prebuild)
+scripts/          # Build helper scripts
+```
+
+### Key Patterns
+
+- **Route/Screen separation:** Route files in `app/` are thin wrappers; all business logic lives in `screens/`.
+- **Zustand stores** manage all app state with SQLite persistence.
+- **Services** are plain modules exporting async functions (no classes).
+- **`CachedImage`** is the standard component for all cover art.
+- **`useTheme()`** provides `{ theme, colors }` for all styling.
+
+## Data Migration System
+
+Substreamer includes a versioned data migration system that runs automatically during the animated splash screen on app launch. Migrations handle changes to stored data or cached files between app versions.
+
+### How It Works
+
+1. On every launch the splash screen plays its logo animation.
+2. After the animation, the system checks for pending migration tasks by comparing the store's `completedVersion` against the task registry.
+3. If there are no pending tasks the splash fades out normally.
+4. If there are pending tasks the logo shrinks and slides up, a status message and progress indicator appear, tasks run sequentially. On completion a checkmark and "Update complete" message display briefly before the splash fades out.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/services/migrationService.ts` | Task definitions and runner |
+| `src/store/migrationStore.ts` | Tracks which migration version has completed |
+| `src/components/AnimatedSplashScreen.tsx` | Splash screen with integrated migration UI |
+
+### Adding a New Migration Task
+
+1. Open `src/services/migrationService.ts`.
+2. Add a new entry to the `MIGRATION_TASKS` array with the next sequential `id`:
+
+```typescript
+{
+  id: 2,
+  name: 'Short description for the user',
+  run: async () => {
+    // Your migration logic here.
+    // Throw an error to signal failure.
+  },
+},
+```
+
+3. The runner picks up any task whose `id` is greater than `completedVersion` and executes them in order.
+
+## Releasing
+
+Releases are managed by a script that increments the version, updates the changelog, commits, tags, pushes, and creates a GitHub release.
+
+Native production builds run automatically when a new release version is created.
+
+### Prerequisites
+
+[GitHub CLI](https://cli.github.com) must be installed and authenticated:
+
+```bash
+brew install gh
+gh auth login
+```
+
+### Creating a Release
+
+```bash
+npm run release -- patch   # 8.0.0 -> 8.0.1
+npm run release -- minor   # 8.0.0 -> 8.1.0
+npm run release -- major   # 8.0.0 -> 9.0.0
+```
+
+The script will:
+
+1. Increment the version in `app.json` and `package.json`
+2. Collect all commits since the last release tag
+3. Prepend a new entry to `CHANGELOG.md`
+4. Commit the changes, create a git tag, and push to origin
+5. Create a GitHub release with the changelog as release notes
+
+The working tree must be clean (no uncommitted changes) before running.

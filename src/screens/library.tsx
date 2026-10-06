@@ -1,0 +1,211 @@
+import { useIsFocused } from "expo-router/react-navigation";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+
+import { EmptyState } from '../components/EmptyState';
+import { SegmentControl } from '../components/SegmentControl';
+import { useTheme } from '../hooks/useTheme';
+import { runWhenIdle } from '../utils/runWhenIdle';
+import { filterBarStore } from '../store/filterBarStore';
+import { offlineModeStore } from '../store/offlineModeStore';
+import { searchStore } from '../store/searchStore';
+import {
+  layoutPreferencesStore,
+  type ItemLayout,
+} from '../store/layoutPreferencesStore';
+import { AlbumLibraryListScreen } from './album-library-list';
+import { ArtistListScreen } from './artist-list';
+import { PlaylistListScreen } from './playlist-list';
+import { SongLibraryListScreen } from './song-library-list';
+
+type LibrarySegment = 'albums' | 'artists' | 'playlists' | 'songs';
+
+const SEGMENT_KEYS = [
+  { key: 'songs', labelKey: 'songs' },
+  { key: 'albums', labelKey: 'albums' },
+  { key: 'artists', labelKey: 'artists' },
+  { key: 'playlists', labelKey: 'playlists' },
+] as const;
+
+/* ------------------------------------------------------------------ */
+/*  LibraryScreen                                                     */
+/* ------------------------------------------------------------------ */
+
+export function LibraryScreen() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const isFocused = useIsFocused();
+  const headerHeight = searchStore((s) => s.headerHeight);
+  const [activeSegment, setActiveSegment] = useState<LibrarySegment>('albums');
+
+  // Defer the heavy list render past the tap so switching segments (and the
+  // first tab mount) stays responsive on slower devices — the segment control
+  // updates instantly and the list fills in on the next idle window. Mirrors
+  // how detail screens gate heavy content behind useTransitionComplete().
+  const [contentReady, setContentReady] = useState(false);
+  useEffect(() => {
+    setContentReady(false);
+    return runWhenIdle(() => setContentReady(true));
+  }, [activeSegment]);
+
+  const segments = useMemo(
+    () => SEGMENT_KEYS.map((s) => ({ key: s.key, label: t(s.labelKey) })),
+    [t],
+  );
+
+  const albumLayout = layoutPreferencesStore((s) => s.albumLayout);
+  const artistLayout = layoutPreferencesStore((s) => s.artistLayout);
+  const playlistLayout = layoutPreferencesStore((s) => s.playlistLayout);
+  const songLayout = layoutPreferencesStore((s) => s.songLayout);
+  const setAlbumLayout = layoutPreferencesStore((s) => s.setAlbumLayout);
+  const setArtistLayout = layoutPreferencesStore((s) => s.setArtistLayout);
+  const setPlaylistLayout = layoutPreferencesStore((s) => s.setPlaylistLayout);
+  const setSongLayout = layoutPreferencesStore((s) => s.setSongLayout);
+
+  const toggleAlbumLayout = useCallback(() => {
+    setAlbumLayout(albumLayout === 'list' ? 'grid' : 'list');
+  }, [albumLayout, setAlbumLayout]);
+
+  const toggleArtistLayout = useCallback(() => {
+    setArtistLayout(artistLayout === 'list' ? 'grid' : 'list');
+  }, [artistLayout, setArtistLayout]);
+
+  const togglePlaylistLayout = useCallback(() => {
+    setPlaylistLayout(playlistLayout === 'list' ? 'grid' : 'list');
+  }, [playlistLayout, setPlaylistLayout]);
+
+  const toggleSongLayout = useCallback(() => {
+    setSongLayout(songLayout === 'list' ? 'grid' : 'list');
+  }, [songLayout, setSongLayout]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+
+    const layoutMap: Record<LibrarySegment, { layout: ItemLayout; toggle: () => void }> = {
+      albums: { layout: albumLayout, toggle: toggleAlbumLayout },
+      artists: { layout: artistLayout, toggle: toggleArtistLayout },
+      playlists: { layout: playlistLayout, toggle: togglePlaylistLayout },
+      songs: { layout: songLayout, toggle: toggleSongLayout },
+    };
+
+    const current = layoutMap[activeSegment];
+    const store = filterBarStore.getState();
+    store.setLayoutToggle({
+      layout: current.layout,
+      onToggle: current.toggle,
+    });
+    store.setDownloadButtonConfig(null);
+    store.setHideDownloaded(activeSegment === 'artists');
+    store.setHideFavorites(activeSegment === 'playlists');
+  }, [
+    isFocused,
+    activeSegment,
+    albumLayout,
+    artistLayout,
+    playlistLayout,
+    songLayout,
+    toggleAlbumLayout,
+    toggleArtistLayout,
+    togglePlaylistLayout,
+    toggleSongLayout,
+  ]);
+
+  const downloadedOnly = filterBarStore((s) => s.downloadedOnly);
+  const favoritesOnly = filterBarStore((s) => s.favoritesOnly);
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
+
+  const segmentHeight = 52;
+  const contentInsetTop = headerHeight + segmentHeight;
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.content}>
+        {contentReady ? (
+          <>
+            {activeSegment === 'albums' && (
+              <AlbumLibraryListScreen
+                layout={albumLayout}
+                downloadedOnly={downloadedOnly}
+                favoritesOnly={favoritesOnly}
+                contentInsetTop={contentInsetTop}
+              />
+            )}
+            {activeSegment === 'artists' && (
+              // Artists cannot be downloaded, so the Downloaded filter hides them
+              // entirely; offline mode enforces that filter. The COPY still keys off
+              // `offlineMode` because the implication runs one way (offline ⇒
+              // downloaded-only, never the reverse) — telling an online user "not
+              // available offline" would be false.
+              downloadedOnly ? (
+                <View style={[styles.emptyContainer, { paddingTop: contentInsetTop }]}>
+                  <EmptyState
+                    icon={offlineMode ? 'cloud-offline-outline' : 'cloud-download-outline'}
+                    title={offlineMode ? t('notAvailableOffline') : t('artistsNotDownloadable')}
+                    subtitle={
+                      offlineMode
+                        ? t('artistsNotAvailableOffline')
+                        : t('artistsNotDownloadableHint')
+                    }
+                  />
+                </View>
+              ) : (
+                <ArtistListScreen
+                  layout={artistLayout}
+                  favoritesOnly={favoritesOnly}
+                  contentInsetTop={contentInsetTop}
+                />
+              )
+            )}
+            {activeSegment === 'playlists' && (
+              <PlaylistListScreen
+                layout={playlistLayout}
+                downloadedOnly={downloadedOnly}
+                contentInsetTop={contentInsetTop}
+              />
+            )}
+            {activeSegment === 'songs' && (
+              <SongLibraryListScreen
+                layout={songLayout}
+                downloadedOnly={downloadedOnly}
+                favoritesOnly={favoritesOnly}
+                contentInsetTop={contentInsetTop}
+              />
+            )}
+          </>
+        ) : (
+          <View style={[styles.emptyContainer, { paddingTop: contentInsetTop }]}>
+            <ActivityIndicator color={colors.primary} size="large" />
+          </View>
+        )}
+      </View>
+      <View style={[styles.segmentOverlay, { top: headerHeight }]}>
+        <SegmentControl segments={segments} selected={activeSegment} onSelect={setActiveSegment} />
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Styles                                                            */
+/* ------------------------------------------------------------------ */
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  segmentOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 1,
+  },
+});

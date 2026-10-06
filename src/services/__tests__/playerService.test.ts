@@ -1,0 +1,1040 @@
+jest.mock('react-native', () => ({
+  // expo-modules-core looks optional native modules up here when expo-file-system loads.
+  TurboModuleRegistry: { get: () => null },
+  AppState: {
+    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+  },
+  Platform: { OS: 'android' },
+}));
+
+jest.mock('../../store/persistence/kvStorage', () => require('../../store/persistence/__mocks__/kvStorage'));
+
+const mockSetCurrentTrack = jest.fn();
+const mockSetPlaybackState = jest.fn();
+const mockSetQueue = jest.fn();
+const mockSetProgress = jest.fn();
+const mockSetError = jest.fn();
+const mockSetRetrying = jest.fn();
+const mockSetQueueLoading = jest.fn();
+const mockSetQueueFormats = jest.fn();
+const mockAddQueueFormat = jest.fn();
+const mockClearQueueFormats = jest.fn();
+const mockSetTrackSource = jest.fn();
+const mockPlayerStoreSetState = jest.fn();
+
+jest.mock('../../store/playerStore', () => ({
+  playerStore: {
+    getState: jest.fn(() => ({
+      currentTrack: null,
+      currentTrackIndex: null,
+      queue: [],
+      position: 0,
+      duration: 100,
+      bufferedPosition: 0,
+      error: null,
+      retrying: false,
+      playbackState: 'idle',
+      setCurrentTrack: mockSetCurrentTrack,
+      setPlaybackState: mockSetPlaybackState,
+      setQueue: mockSetQueue,
+      setProgress: mockSetProgress,
+      setError: mockSetError,
+      setRetrying: mockSetRetrying,
+      setQueueLoading: mockSetQueueLoading,
+      setQueueFormats: mockSetQueueFormats,
+      addQueueFormat: mockAddQueueFormat,
+      clearQueueFormats: mockClearQueueFormats,
+      setTrackSource: mockSetTrackSource,
+    })),
+    setState: (...args: unknown[]) => mockPlayerStoreSetState(...args),
+  },
+}));
+
+const mockToastFail = jest.fn();
+jest.mock('../../store/playbackToastStore', () => ({
+  playbackToastStore: {
+    getState: jest.fn(() => ({ show: jest.fn(), succeed: jest.fn(), fail: mockToastFail })),
+  },
+}));
+
+jest.mock('../../store/serverInfoStore', () => ({
+  serverInfoStore: { getState: jest.fn(() => ({ extensions: [] })) },
+}));
+
+jest.mock('../scrobbleService', () => ({
+  addCompletedScrobble: jest.fn(),
+  sendNowPlaying: jest.fn(),
+}));
+
+jest.mock('../imageCacheService', () => ({
+  resolveDisplayImages: jest.fn(async (subjects: unknown[]) =>
+    subjects.map(() => ({ coverArtId: undefined, uri: null, isRemote: false }))),
+}));
+
+jest.mock('../musicCacheService', () => ({
+  getLocalTrackUri: jest.fn().mockReturnValue(null),
+  waitForTrackMapsReady: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../../store/musicCacheStore', () => ({
+  musicCacheStore: { getState: jest.fn(() => ({ cachedSongs: {} })) },
+  // Nothing downloaded here, so the queue builder's completion pass is a pass-through.
+  completeSongFromCache: (song: unknown) => song,
+}));
+
+const mockOfflineMode = { offlineMode: false };
+jest.mock('../../store/offlineModeStore', () => ({
+  offlineModeStore: { getState: jest.fn(() => mockOfflineMode) },
+}));
+
+jest.mock('../subsonicService');
+
+const mockPersistQueue = jest.fn();
+const mockPersistCurrentIndex = jest.fn();
+const mockClearPersistedQueue = jest.fn();
+const mockGetPersistedQueue = jest.fn().mockReturnValue(null);
+const mockGetPersistedPosition = jest.fn().mockReturnValue(null);
+
+jest.mock('../queuePersistenceService', () => ({
+  persistQueue: (...args: unknown[]) => mockPersistQueue(...args),
+  persistCurrentIndex: (...args: unknown[]) => mockPersistCurrentIndex(...args),
+  persistPositionIfDue: jest.fn(),
+  flushPosition: jest.fn(),
+  clearPersistedQueue: () => mockClearPersistedQueue(),
+  getPersistedQueue: () => mockGetPersistedQueue(),
+  getPersistedPosition: () => mockGetPersistedPosition(),
+}));
+
+import { playbackSettingsStore } from '../../store/playbackSettingsStore';
+import { addCompletedScrobble, sendNowPlaying } from '../scrobbleService';
+import { getCoverArtUrl, getStreamUrl, type Child } from '../subsonicService';
+import {
+  initPlayer,
+  restorePersistedQueueAfterBoot,
+  playTrack,
+  togglePlayPause,
+  skipToNext,
+  skipToPrevious,
+  seekTo,
+  skipToTrack,
+  retryPlayback,
+  clearQueue,
+  addToQueue,
+  removeFromQueue,
+  removeNonDownloadedTracks,
+  cycleRepeatMode,
+  applyPlaybackRate,
+  shuffleQueue,
+  canSkipToPrevious,
+  applyLocalPlayToPlayer,
+  playSongNext,
+  rebuildQueueForServerSwitch,
+  updateRemoteCapabilities,
+  applyPlaybackMode,
+  applyPitchCorrection,
+  applyReplayGain,
+  applyEqualizerConfig,
+  setEqualizerEnabled,
+  applyEqualizerPreset,
+  setEqualizerBandGain,
+  resetEqualizer,
+  saveEqualizerPreset,
+  deleteEqualizerPreset,
+} from '../playerService';
+import { equalizerSettingsStore, EQ_CUSTOM_PRESET_LABEL } from '../../store/equalizerSettingsStore';
+
+// The global __mocks__/react-native-queue-player.js exposes the shared player
+// instance + an event emitter.
+const rnqp = require('react-native-queue-player');
+const mockTP = rnqp.__trackPlayer as Record<string, jest.Mock>;
+const mockEq = rnqp.__equalizer as Record<string, jest.Mock>;
+const emit = rnqp.__emit as (name: string, ...args: unknown[]) => void;
+
+const makeChild = (id: string, overrides?: Partial<Child>): Child => ({
+  id,
+  title: `Song ${id}`,
+  artist: 'Test Artist',
+  album: 'Test Album',
+  coverArt: `cover-${id}`,
+  duration: 200,
+  ...overrides,
+} as Child);
+
+const defaultPlayerState = () => ({
+  currentTrack: null,
+  currentTrackIndex: null,
+  queue: [],
+  position: 0,
+  duration: 100,
+  bufferedPosition: 0,
+  error: null,
+  retrying: false,
+  playbackState: 'idle',
+  setCurrentTrack: mockSetCurrentTrack,
+  setPlaybackState: mockSetPlaybackState,
+  setQueue: mockSetQueue,
+  setProgress: mockSetProgress,
+  setError: mockSetError,
+  setRetrying: mockSetRetrying,
+  setQueueLoading: mockSetQueueLoading,
+  setQueueFormats: mockSetQueueFormats,
+  addQueueFormat: mockAddQueueFormat,
+  clearQueueFormats: mockClearQueueFormats,
+  setTrackSource: mockSetTrackSource,
+});
+
+beforeAll(async () => {
+  jest.spyOn(console, 'log').mockImplementation();
+  jest.spyOn(console, 'warn').mockImplementation();
+  // initPlayer is idempotent; call once to register the RNQP event listeners.
+  await initPlayer();
+});
+
+afterAll(() => {
+  jest.restoreAllMocks();
+});
+
+beforeEach(async () => {
+  await clearQueue();
+  jest.clearAllMocks();
+  jest.spyOn(console, 'log').mockImplementation();
+  jest.spyOn(console, 'warn').mockImplementation();
+
+  const { playerStore } = require('../../store/playerStore');
+  (playerStore.getState as jest.Mock).mockReturnValue(defaultPlayerState());
+  // clearAllMocks keeps persistent return values; pin the engine's idle defaults.
+  mockTP.getState.mockReturnValue('none');
+  mockTP.getCurrentTrackIndex.mockReturnValue(-1);
+
+  playbackSettingsStore.setState({
+    repeatMode: 'off',
+    playbackRate: 1,
+    maxBitRate: null,
+    streamFormat: 'raw',
+    estimateContentLength: false,
+    remoteControlMode: 'skip-track',
+    skipForwardInterval: 15,
+    skipBackwardInterval: 15,
+  } as any);
+
+  (getCoverArtUrl as jest.Mock).mockReturnValue('https://example.com/art.jpg');
+  (getStreamUrl as jest.Mock).mockReturnValue('https://example.com/stream.mp3');
+  mockGetPersistedQueue.mockReturnValue(null);
+  mockGetPersistedPosition.mockReturnValue(null);
+  mockOfflineMode.offlineMode = false;
+});
+
+describe('initPlayer', () => {
+  it('registered the RNQP player + emitter used by these tests', () => {
+    expect(typeof mockTP.setQueue).toBe('function');
+    expect(typeof emit).toBe('function');
+  });
+});
+
+describe('restorePersistedQueueAfterBoot — live car-session adoption', () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+  it('adopts a live (playing) car session: no engine re-drive, ignores the stale persisted queue', async () => {
+    // A car/Siri browse tap started playback THIS process — playTrack sets currentChildQueue.
+    const carQueue = [makeChild('c1'), makeChild('c2')];
+    await playTrack(carQueue[0], carQueue);
+    mockTP.setQueue.mockClear();
+    mockTP.play.mockClear();
+    mockTP.seekTo.mockClear();
+    mockSetCurrentTrack.mockClear();
+
+    // Engine reports a live playing session; a STALE queue sits on disk.
+    mockTP.getState.mockReturnValue('playing');
+    mockTP.getCurrentTrackIndex.mockReturnValue(0);
+    mockGetPersistedQueue.mockReturnValue({ queue: [makeChild('OLD')], currentTrackIndex: 0 });
+
+    restorePersistedQueueAfterBoot();
+
+    // Did NOT re-drive the engine (no restart); adopted the LIVE track, not 'OLD'.
+    expect(mockTP.setQueue).not.toHaveBeenCalled();
+    expect(mockTP.play).not.toHaveBeenCalled();
+    expect(mockTP.seekTo).not.toHaveBeenCalled();
+    expect(mockSetCurrentTrack).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1' }), 0);
+  });
+
+  it('adopts a PAUSED car session without restarting', async () => {
+    const carQueue = [makeChild('c1')];
+    await playTrack(carQueue[0], carQueue);
+    mockTP.setQueue.mockClear();
+    mockTP.play.mockClear();
+
+    mockTP.getState.mockReturnValue('paused');
+    mockTP.getCurrentTrackIndex.mockReturnValue(0);
+
+    restorePersistedQueueAfterBoot();
+
+    expect(mockTP.setQueue).not.toHaveBeenCalled();
+    expect(mockTP.play).not.toHaveBeenCalled();
+  });
+
+  it('falls through to the normal restore when the engine is empty', async () => {
+    mockTP.getState.mockReturnValue('none');
+    mockTP.getCurrentTrackIndex.mockReturnValue(-1);
+    mockGetPersistedQueue.mockReturnValue({
+      queue: [makeChild('p1'), makeChild('p2')],
+      currentTrackIndex: 1,
+    });
+
+    restorePersistedQueueAfterBoot();
+    await flush();
+
+    // restorePersistedQueue() seeded the store from the persisted queue (index 1).
+    expect(mockSetCurrentTrack).toHaveBeenCalledWith(expect.objectContaining({ id: 'p2' }), 1);
+  });
+
+  it('does NOT adopt an ended leftover queue — falls through to restore', async () => {
+    mockTP.getState.mockReturnValue('ended');
+    mockTP.getCurrentTrackIndex.mockReturnValue(0);
+    mockGetPersistedQueue.mockReturnValue({ queue: [makeChild('p1')], currentTrackIndex: 0 });
+
+    restorePersistedQueueAfterBoot();
+    await flush();
+
+    expect(mockSetCurrentTrack).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), 0);
+  });
+});
+
+describe('playTrack', () => {
+  it('loads the queue at the tapped index and plays', async () => {
+    const queue = [makeChild('t1'), makeChild('t2'), makeChild('t3')];
+    await playTrack(queue[1], queue);
+
+    expect(mockTP.setQueue).toHaveBeenCalledTimes(1);
+    const [tracks, startIndex] = mockTP.setQueue.mock.calls[0];
+    expect(tracks).toHaveLength(3);
+    expect(tracks[0].id).toBe('t1');
+    expect(startIndex).toBe(1);
+    expect(mockTP.play).toHaveBeenCalled();
+  });
+
+  it('starts at 0 when the tapped track is the first', async () => {
+    const queue = [makeChild('t1'), makeChild('t2')];
+    await playTrack(queue[0], queue);
+    expect(mockTP.setQueue.mock.calls[0][1]).toBe(0);
+  });
+
+  it('shows failure toast on error', async () => {
+    mockTP.setQueue.mockRejectedValueOnce(new Error('boom'));
+    await playTrack(makeChild('t1'), [makeChild('t1')]);
+    expect(mockToastFail).toHaveBeenCalled();
+  });
+
+  it('updates the queue in the store', async () => {
+    const queue = [makeChild('t1')];
+    await playTrack(queue[0], queue);
+    expect(mockSetQueue).toHaveBeenCalledWith(queue);
+  });
+});
+
+describe('togglePlayPause', () => {
+  it('pauses when playing', async () => {
+    mockTP.getState.mockReturnValueOnce('playing');
+    await togglePlayPause();
+    expect(mockTP.pause).toHaveBeenCalled();
+  });
+
+  it('plays when paused', async () => {
+    mockTP.getState.mockReturnValueOnce('paused');
+    await togglePlayPause();
+    expect(mockTP.play).toHaveBeenCalled();
+    expect(mockTP.skipToIndex).not.toHaveBeenCalled();
+  });
+
+  it('after the queue ended, restarts the last active track from 0 then plays', async () => {
+    mockTP.getState.mockReturnValueOnce('ended');
+    mockTP.getCurrentTrackIndex.mockReturnValueOnce(4);
+    await togglePlayPause();
+    expect(mockTP.skipToIndex).toHaveBeenCalledWith(4);
+    expect(mockTP.play).toHaveBeenCalledTimes(1);
+    expect(mockTP.skipToIndex.mock.invocationCallOrder[0]).toBeLessThan(
+      mockTP.play.mock.invocationCallOrder[0],
+    );
+  });
+});
+
+describe('transport passthroughs', () => {
+  it('skipToNext / skipToPrevious', async () => {
+    await skipToNext();
+    expect(mockTP.skipToNext).toHaveBeenCalled();
+    await skipToPrevious();
+    expect(mockTP.skipToPrevious).toHaveBeenCalled();
+    expect(mockTP.play).not.toHaveBeenCalled();
+  });
+
+  it.each(['playing', 'paused', 'buffering'] as const)(
+    'a skip from %s never adds a play',
+    async (state) => {
+      mockTP.getState.mockReturnValue(state);
+      await skipToNext();
+      await skipToPrevious();
+      expect(mockTP.play).not.toHaveBeenCalled();
+    },
+  );
+
+  it('a skip after the queue ended plays once the skip has landed', async () => {
+    mockTP.getState.mockReturnValueOnce('ended');
+    await skipToNext();
+    expect(mockTP.play).toHaveBeenCalledTimes(1);
+    expect(mockTP.skipToNext.mock.invocationCallOrder[0]).toBeLessThan(
+      mockTP.play.mock.invocationCallOrder[0],
+    );
+
+    mockTP.play.mockClear();
+    mockTP.getState.mockReturnValueOnce('ended');
+    await skipToPrevious();
+    expect(mockTP.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('seekTo passes through and clamps negatives to 0', async () => {
+    await seekTo(60);
+    expect(mockTP.seekTo).toHaveBeenCalledWith(60);
+    await seekTo(-10);
+    expect(mockTP.seekTo).toHaveBeenCalledWith(0);
+  });
+
+  it('skipToTrack skips to the index and plays', async () => {
+    await skipToTrack(3);
+    expect(mockTP.skipToIndex).toHaveBeenCalledWith(3);
+    expect(mockTP.play).toHaveBeenCalled();
+  });
+
+  it('retryPlayback clears the error and re-attempts', async () => {
+    await retryPlayback();
+    expect(mockSetError).toHaveBeenCalledWith(null);
+    expect(mockTP.retry).toHaveBeenCalled();
+  });
+});
+
+describe('canSkipToPrevious', () => {
+  it('false when no track / empty queue', () => {
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(), currentTrackIndex: null, queue: [],
+    });
+    expect(canSkipToPrevious()).toBe(false);
+  });
+
+  it('true when a track is loaded', () => {
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(), currentTrackIndex: 0, queue: [{ id: '1' }],
+    });
+    expect(canSkipToPrevious()).toBe(true);
+  });
+});
+
+describe('clearQueue', () => {
+  it('clears the native queue and resets store state', async () => {
+    await clearQueue();
+    expect(mockTP.clearQueue).toHaveBeenCalled();
+    expect(mockSetCurrentTrack).toHaveBeenCalledWith(null);
+    expect(mockSetQueue).toHaveBeenCalledWith([]);
+    expect(mockSetPlaybackState).toHaveBeenCalledWith('idle');
+    expect(mockSetProgress).toHaveBeenCalledWith(0, 0, 0);
+    expect(mockClearPersistedQueue).toHaveBeenCalled();
+  });
+});
+
+describe('rebuildQueueForServerSwitch', () => {
+  it('no-ops when the queue is empty', async () => {
+    mockTP.setQueue.mockClear();
+    await rebuildQueueForServerSwitch();
+    expect(mockTP.setQueue).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds with new URLs, preserves index + position, resumes playback', async () => {
+    const queue = [makeChild('t1'), makeChild('t2'), makeChild('t3')];
+    await playTrack(queue[1], queue);
+    mockTP.setQueue.mockClear();
+    mockTP.play.mockClear();
+    mockTP.seekTo.mockClear();
+
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(), currentTrackIndex: 1, position: 42, playbackState: 'playing', queue,
+    });
+    (getStreamUrl as jest.Mock).mockImplementation((id: string) => `https://secondary.example.com/stream/${id}`);
+
+    await rebuildQueueForServerSwitch();
+
+    expect(mockTP.setQueue).toHaveBeenCalledTimes(1);
+    const [tracks, idx] = mockTP.setQueue.mock.calls[0];
+    expect(tracks).toHaveLength(3);
+    expect(tracks[1].url).toBe('https://secondary.example.com/stream/t2');
+    expect(idx).toBe(1);
+    expect(mockTP.seekTo).toHaveBeenCalledWith(42);
+    expect(mockTP.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not resume play when paused', async () => {
+    const queue = [makeChild('t1')];
+    await playTrack(queue[0], queue);
+    mockTP.play.mockClear();
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(), currentTrackIndex: 0, playbackState: 'paused', queue,
+    });
+    await rebuildQueueForServerSwitch();
+    expect(mockTP.play).not.toHaveBeenCalled();
+  });
+});
+
+describe('playSongNext', () => {
+  it('starts fresh playback when the queue is empty', async () => {
+    await clearQueue();
+    mockTP.setQueue.mockClear();
+    mockTP.play.mockClear();
+    await playSongNext(makeChild('new-song'));
+    expect(mockTP.setQueue).toHaveBeenCalled();
+    expect(mockTP.play).toHaveBeenCalled();
+    expect(mockTP.setQueue.mock.calls[0][0][0].id).toBe('new-song');
+  });
+
+  it('inserts at currentIndex + 1 when the queue has tracks', async () => {
+    const queue = [makeChild('a'), makeChild('b'), makeChild('c')];
+    await playTrack(queue[1], queue);
+    mockTP.addToQueue.mockClear();
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(), currentTrackIndex: 1, queue,
+    });
+    await playSongNext(makeChild('inserted'));
+    expect(mockTP.addToQueue).toHaveBeenCalledTimes(1);
+    expect(mockTP.addToQueue.mock.calls[0][0][0].id).toBe('inserted');
+    expect(mockTP.addToQueue.mock.calls[0][1]).toBe(2);
+  });
+
+  it('does not disturb current playback (no setQueue/play)', async () => {
+    const queue = [makeChild('a'), makeChild('b')];
+    await playTrack(queue[0], queue);
+    mockTP.setQueue.mockClear();
+    mockTP.play.mockClear();
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(), currentTrackIndex: 0, queue,
+    });
+    await playSongNext(makeChild('next'));
+    expect(mockTP.setQueue).not.toHaveBeenCalled();
+    expect(mockTP.play).not.toHaveBeenCalled();
+  });
+});
+
+describe('offline-mode queue building', () => {
+  it('playTrack filters non-cached tracks when offline and refocuses on a cached one', async () => {
+    const { getLocalTrackUri } = require('../musicCacheService');
+    (getLocalTrackUri as jest.Mock).mockImplementation((id: string) => (id === 't2' ? '/local/t2.mp3' : null));
+    mockOfflineMode.offlineMode = true;
+    await playTrack(makeChild('t1'), [makeChild('t1'), makeChild('t2'), makeChild('t3')]);
+    const tracks = mockTP.setQueue.mock.calls.at(-1)?.[0] as Array<{ id: string }>;
+    expect(tracks.map((t) => t.id)).toEqual(['t2']);
+    expect(mockTP.setQueue.mock.calls.at(-1)?.[1]).toBe(0);
+    expect(mockTP.play).toHaveBeenCalled();
+  });
+
+  it('playTrack clears + toasts when all tracks are non-cached offline', async () => {
+    const { getLocalTrackUri } = require('../musicCacheService');
+    (getLocalTrackUri as jest.Mock).mockReturnValue(null);
+    mockOfflineMode.offlineMode = true;
+    mockTP.setQueue.mockClear();
+    await playTrack(makeChild('t1'), [makeChild('t1'), makeChild('t2')]);
+    expect(mockTP.setQueue).not.toHaveBeenCalled();
+    expect(mockToastFail).toHaveBeenCalled();
+    expect(mockSetQueue).toHaveBeenCalledWith([]);
+  });
+
+  it('leaves non-cached tracks when online', async () => {
+    const { getLocalTrackUri } = require('../musicCacheService');
+    (getLocalTrackUri as jest.Mock).mockReturnValue(null);
+    mockOfflineMode.offlineMode = false;
+    await playTrack(makeChild('t1'), [makeChild('t1'), makeChild('t2'), makeChild('t3')]);
+    const tracks = mockTP.setQueue.mock.calls.at(-1)?.[0] as Array<{ id: string }>;
+    expect(tracks.map((t) => t.id)).toEqual(['t1', 't2', 't3']);
+  });
+});
+
+describe('addToQueue', () => {
+  it('does nothing for an empty array', async () => {
+    await addToQueue([]);
+    expect(mockTP.addToQueue).not.toHaveBeenCalled();
+  });
+
+  it('starts playback when the queue is empty', async () => {
+    await clearQueue();
+    mockTP.setQueue.mockClear();
+    await addToQueue([makeChild('t1'), makeChild('t2')]);
+    expect(mockTP.setQueue).toHaveBeenCalled();
+    expect(mockTP.play).toHaveBeenCalled();
+  });
+
+  it('appends when the queue has items', async () => {
+    await playTrack(makeChild('t1'), [makeChild('t1')]);
+    mockTP.addToQueue.mockClear();
+    await addToQueue([makeChild('t2'), makeChild('t3')]);
+    expect(mockTP.addToQueue).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 't2' }),
+        expect.objectContaining({ id: 't3' }),
+      ]),
+    );
+  });
+});
+
+describe('removeFromQueue', () => {
+  it('ignores out-of-bounds index', async () => {
+    await playTrack(makeChild('t1'), [makeChild('t1')]);
+    mockTP.removeFromQueue.mockClear();
+    await removeFromQueue(5);
+    expect(mockTP.removeFromQueue).not.toHaveBeenCalled();
+  });
+
+  it('clears the queue when removing the only track', async () => {
+    await playTrack(makeChild('t1'), [makeChild('t1')]);
+    mockTP.clearQueue.mockClear();
+    await removeFromQueue(0);
+    expect(mockTP.clearQueue).toHaveBeenCalled();
+  });
+
+  it('removes by index batch when more than one track', async () => {
+    await playTrack(makeChild('a'), [makeChild('a'), makeChild('b')]);
+    mockTP.removeFromQueue.mockClear();
+    await removeFromQueue(0);
+    expect(mockTP.removeFromQueue).toHaveBeenCalledWith([0]);
+  });
+});
+
+describe('removeNonDownloadedTracks', () => {
+  const { getLocalTrackUri } = jest.requireMock('../musicCacheService');
+  const downloaded = (...ids: string[]) =>
+    (getLocalTrackUri as jest.Mock).mockImplementation((id: string) => (ids.includes(id) ? `/local/${id}` : null));
+
+  afterEach(() => {
+    (getLocalTrackUri as jest.Mock).mockReset().mockReturnValue(null);
+  });
+
+  it('removes streamed tracks but keeps the playing one', async () => {
+    const queue = ['a', 'b', 'c', 'd'].map((id) => makeChild(id));
+    await playTrack(queue[2], queue);
+    downloaded('b');
+    mockTP.getCurrentTrackIndex.mockReturnValue(2);
+    mockTP.removeFromQueue.mockClear();
+    mockTP.clearQueue.mockClear();
+
+    await removeNonDownloadedTracks();
+
+    expect(mockTP.removeFromQueue.mock.calls).toEqual([[[3]], [[0]]]);
+    expect(mockTP.clearQueue).not.toHaveBeenCalled();
+  });
+
+  it('clears the queue when every track is streamed', async () => {
+    const queue = ['a', 'b'].map((id) => makeChild(id));
+    await playTrack(queue[0], queue);
+    downloaded();
+    mockTP.removeFromQueue.mockClear();
+    mockTP.clearQueue.mockClear();
+
+    await removeNonDownloadedTracks();
+
+    expect(mockTP.clearQueue).toHaveBeenCalled();
+    expect(mockTP.removeFromQueue).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when every track is downloaded', async () => {
+    const queue = ['a', 'b'].map((id) => makeChild(id));
+    await playTrack(queue[0], queue);
+    downloaded('a', 'b');
+    mockTP.removeFromQueue.mockClear();
+    mockTP.clearQueue.mockClear();
+
+    await removeNonDownloadedTracks();
+
+    expect(mockTP.removeFromQueue).not.toHaveBeenCalled();
+    expect(mockTP.clearQueue).not.toHaveBeenCalled();
+  });
+});
+
+describe('cycleRepeatMode', () => {
+  it('off -> all (queue)', async () => {
+    playbackSettingsStore.setState({ repeatMode: 'off' } as any);
+    await cycleRepeatMode();
+    expect(playbackSettingsStore.getState().repeatMode).toBe('all');
+    expect(mockTP.setRepeatMode).toHaveBeenCalledWith('queue');
+  });
+  it('all -> one (track)', async () => {
+    playbackSettingsStore.setState({ repeatMode: 'all' } as any);
+    await cycleRepeatMode();
+    expect(mockTP.setRepeatMode).toHaveBeenCalledWith('track');
+  });
+  it('one -> off', async () => {
+    playbackSettingsStore.setState({ repeatMode: 'one' } as any);
+    await cycleRepeatMode();
+    expect(mockTP.setRepeatMode).toHaveBeenCalledWith('off');
+  });
+});
+
+describe('applyPlaybackRate', () => {
+  it('sets the store rate and the native speed', async () => {
+    playbackSettingsStore.setState({ playbackRate: 1 } as any);
+    await applyPlaybackRate(1.5);
+    expect(playbackSettingsStore.getState().playbackRate).toBe(1.5);
+    expect(mockTP.setPlaybackSpeed).toHaveBeenCalledWith(1.5);
+  });
+});
+
+describe('updateRemoteCapabilities', () => {
+  it('maps skip-track mode', async () => {
+    playbackSettingsStore.setState({ remoteControlMode: 'skip-track', skipForwardInterval: 15, skipBackwardInterval: 15 } as any);
+    await updateRemoteCapabilities();
+    expect(mockTP.setRemoteControls).toHaveBeenCalledWith({
+      skipMode: 'track', forwardJumpInterval: 15, backwardJumpInterval: 15,
+    });
+  });
+  it('maps skip-interval mode', async () => {
+    playbackSettingsStore.setState({ remoteControlMode: 'skip-interval', skipForwardInterval: 30, skipBackwardInterval: 10 } as any);
+    await updateRemoteCapabilities();
+    expect(mockTP.setRemoteControls).toHaveBeenCalledWith({
+      skipMode: 'interval', forwardJumpInterval: 30, backwardJumpInterval: 10,
+    });
+  });
+});
+
+describe('shuffleQueue', () => {
+  it('does nothing with fewer than 2 tracks', async () => {
+    await playTrack(makeChild('t1'), [makeChild('t1')]);
+    mockTP.setQueue.mockClear();
+    await shuffleQueue();
+    expect(mockTP.setQueue).not.toHaveBeenCalled();
+  });
+
+  it('replaces the queue via setQueue(_, 0) and plays', async () => {
+    const queue = Array.from({ length: 5 }, (_, i) => makeChild(`t${i}`));
+    await playTrack(queue[0], queue);
+    mockTP.setQueue.mockClear();
+    mockTP.play.mockClear();
+    await shuffleQueue();
+    expect(mockTP.setQueue).toHaveBeenCalledTimes(1);
+    expect(mockTP.setQueue.mock.calls[0][1]).toBe(0);
+    expect(mockTP.play).toHaveBeenCalled();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Event handlers (driven through the RNQP mock emitter)              */
+/* ------------------------------------------------------------------ */
+
+describe('onStateChange', () => {
+  it('maps native states to PlaybackStatus', () => {
+    emit('stateChange', 'playing');
+    expect(mockSetPlaybackState).toHaveBeenCalledWith('playing');
+    emit('stateChange', 'paused');
+    expect(mockSetPlaybackState).toHaveBeenCalledWith('paused');
+    emit('stateChange', 'buffering');
+    expect(mockSetPlaybackState).toHaveBeenCalledWith('buffering');
+    emit('stateChange', 'ended');
+    expect(mockSetPlaybackState).toHaveBeenCalledWith('stopped');
+    emit('stateChange', 'none');
+    expect(mockSetPlaybackState).toHaveBeenCalledWith('idle');
+  });
+
+  it('clears error + retrying when transitioning to playing', () => {
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(), error: 'boom', retrying: true,
+    });
+    emit('stateChange', 'playing');
+    expect(mockSetError).toHaveBeenCalledWith(null);
+    expect(mockSetRetrying).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('onProgress', () => {
+  it('writes position/duration + absolute buffered edge (position + buffered-ahead)', () => {
+    // RNQP `buffered` is seconds AHEAD of position; the store holds the absolute
+    // edge. Background throttling of onProgress is native (configure), not here.
+    emit('progress', { position: 12, duration: 200, buffered: 30 });
+    expect(mockSetProgress).toHaveBeenCalledWith(12, 200, 42);
+  });
+});
+
+describe('onTrackChange', () => {
+  it('sets the current track + sends now-playing when resolved', async () => {
+    const queue = [makeChild('t1'), makeChild('t2')];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+    emit('trackChange', { id: 't2' }, 1, 'auto-advance');
+    expect(mockSetCurrentTrack).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' }), 1);
+    expect(sendNowPlaying).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' }), undefined);
+  });
+
+  it('sets current track to null when track is empty', () => {
+    emit('trackChange', undefined, -1, 'queue-replaced');
+    expect(mockSetCurrentTrack).toHaveBeenCalledWith(null, null);
+  });
+});
+
+describe('playback-report scrobble', () => {
+  // Reset the per-play guard to track index 0 (queue-replaced ⇒ no completion
+  // scrobble), then clear mocks so each case starts from a known state.
+  async function armPlay(trigger: number) {
+    playbackSettingsStore.setState({ scrobbleTrigger: trigger } as any);
+    const queue = [makeChild('t1'), makeChild('t2')];
+    await playTrack(queue[0], queue);
+    emit('trackChange', { id: 't1' }, 0, 'queue-replaced');
+    jest.clearAllMocks();
+  }
+
+  it('scrobbles at exactly the configured milestone (default 50%)', async () => {
+    await armPlay(50);
+    emit('milestone', 50, 0);
+    expect(addCompletedScrobble).toHaveBeenCalledWith(expect.objectContaining({ id: 't1' }), undefined);
+  });
+
+  it('does not scrobble at other milestones', async () => {
+    await armPlay(50);
+    emit('milestone', 25, 0);
+    emit('milestone', 75, 0);
+    expect(addCompletedScrobble).not.toHaveBeenCalled();
+  });
+
+  it('reports exactly once per play (milestone, not again on later milestones or completion)', async () => {
+    await armPlay(50);
+    emit('milestone', 50, 0);
+    emit('milestone', 75, 0);
+    emit('milestone', 90, 0);
+    emit('trackChange', { id: 't2' }, 1, 'auto-advance');
+    expect(addCompletedScrobble).toHaveBeenCalledTimes(1);
+  });
+
+  it('completion fallback reports when the milestone was skipped by a seek', async () => {
+    await armPlay(50);
+    // The 50 milestone is consumed silently by a seek → never emitted; the track
+    // then finishes and auto-advances.
+    emit('trackChange', { id: 't2' }, 1, 'auto-advance');
+    expect(addCompletedScrobble).toHaveBeenCalledWith(expect.objectContaining({ id: 't1' }), undefined);
+  });
+
+  it('does not report on a user skip (not a natural completion)', async () => {
+    await armPlay(50);
+    emit('trackChange', { id: 't2' }, 1, 'user-skip-next');
+    expect(addCompletedScrobble).not.toHaveBeenCalled();
+  });
+
+  it('trigger 100 reports only on completion, never on a milestone', async () => {
+    await armPlay(100);
+    emit('milestone', 25, 0);
+    emit('milestone', 50, 0);
+    emit('milestone', 90, 0);
+    expect(addCompletedScrobble).not.toHaveBeenCalled();
+    emit('trackChange', { id: 't2' }, 1, 'auto-advance');
+    expect(addCompletedScrobble).toHaveBeenCalledWith(expect.objectContaining({ id: 't1' }), undefined);
+  });
+
+  describe('after removing a track above the playing one', () => {
+    // Queue t0, t1, t2 with t1 playing at index 1. Removing t0 moves t1 to index 0;
+    // native reports that new index on later milestones and gives no track change.
+    async function armMiddle(trigger: number) {
+      playbackSettingsStore.setState({ scrobbleTrigger: trigger } as any);
+      const queue = [makeChild('t0'), makeChild('t1'), makeChild('t2')];
+      await playTrack(queue[1], queue);
+      emit('trackChange', { id: 't1' }, 1, 'queue-replaced');
+      jest.clearAllMocks();
+    }
+
+    it('does not scrobble the playing track a second time when it ends', async () => {
+      await armMiddle(50);
+      emit('milestone', 50, 1);
+      mockTP.getCurrentTrackIndex.mockReturnValue(0);
+      await removeFromQueue(0);
+      emit('milestone', 75, 0);
+      emit('trackChange', { id: 't2' }, 1, 'auto-advance');
+      expect(addCompletedScrobble).toHaveBeenCalledTimes(1);
+      expect(addCompletedScrobble).toHaveBeenCalledWith(expect.objectContaining({ id: 't1' }), undefined);
+    });
+
+    it('scrobbles the playing track, not the next one, on completion (trigger 100)', async () => {
+      await armMiddle(100);
+      emit('milestone', 90, 1);
+      mockTP.getCurrentTrackIndex.mockReturnValue(0);
+      await removeFromQueue(0);
+      emit('trackChange', { id: 't2' }, 1, 'auto-advance');
+      expect(addCompletedScrobble).toHaveBeenCalledTimes(1);
+      expect(addCompletedScrobble).toHaveBeenCalledWith(expect.objectContaining({ id: 't1' }), undefined);
+    });
+  });
+
+  it('re-scrobbles each repeat-one loop (milestone value wraps down)', async () => {
+    await armPlay(50);
+    emit('milestone', 50, 0); // loop 1
+    emit('milestone', 90, 0);
+    emit('milestone', 25, 0); // loop 2 begins → guard resets
+    emit('milestone', 50, 0); // loop 2
+    expect(addCompletedScrobble).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('onError', () => {
+  it('surfaces the error message', () => {
+    emit('error', { message: 'Network error', fatal: false });
+    expect(mockSetError).toHaveBeenCalledWith('Network error');
+    expect(mockSetRetrying).toHaveBeenCalledWith(false);
+  });
+
+  it('falls back to a default message', () => {
+    emit('error', { fatal: true });
+    expect(mockSetError).toHaveBeenCalledWith('Playback error occurred');
+  });
+});
+
+describe('onQueueEnd', () => {
+  it('pins progress to the end of the current track', () => {
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(), currentTrack: makeChild('t1', { duration: 240 }),
+    });
+    emit('queueEnd');
+    expect(mockSetProgress).toHaveBeenCalledWith(240, 240, 240);
+  });
+
+  it('no-ops when there is no current track', () => {
+    emit('queueEnd');
+    expect(mockSetProgress).not.toHaveBeenCalled();
+  });
+});
+
+describe('applyLocalPlayToPlayer', () => {
+  const now = '2026-07-03T10:00:00.000Z';
+
+  it('updates playerStore.currentTrack when it is the scrobbled song', async () => {
+    const track = makeChild('s1', { playCount: 7 });
+    await playTrack(track, [track]);
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValueOnce({
+      ...defaultPlayerState(), currentTrack: track,
+    });
+    applyLocalPlayToPlayer('s1', now);
+    expect(mockPlayerStoreSetState).toHaveBeenCalledWith({
+      currentTrack: { ...track, playCount: 8, played: now },
+    });
+  });
+
+  it('does not update when a different song is scrobbled', async () => {
+    const playing = makeChild('current');
+    await playTrack(playing, [playing]);
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValueOnce({
+      ...defaultPlayerState(), currentTrack: playing,
+    });
+    applyLocalPlayToPlayer('other', now);
+    expect(mockPlayerStoreSetState).not.toHaveBeenCalled();
+  });
+});
+
+describe('applyPlaybackMode', () => {
+  afterEach(() => playbackSettingsStore.setState({ playbackMode: 'gapless', crossfadeDurationMs: 5000 } as any));
+
+  it('sends gapless with no crossfade duration', async () => {
+    playbackSettingsStore.setState({ playbackMode: 'gapless', crossfadeDurationMs: 5000 } as any);
+    mockTP.setPlaybackMode.mockClear();
+    await applyPlaybackMode();
+    expect(mockTP.setPlaybackMode).toHaveBeenCalledWith({
+      kind: 'gapless',
+      crossfadeDurationMs: undefined,
+    });
+  });
+
+  it('sends crossfade with the configured duration', async () => {
+    playbackSettingsStore.setState({ playbackMode: 'crossfade', crossfadeDurationMs: 8000 } as any);
+    mockTP.setPlaybackMode.mockClear();
+    await applyPlaybackMode();
+    expect(mockTP.setPlaybackMode).toHaveBeenCalledWith({
+      kind: 'crossfade',
+      crossfadeDurationMs: 8000,
+    });
+  });
+});
+
+describe('applyPitchCorrection', () => {
+  afterEach(() => playbackSettingsStore.setState({ pitchCorrection: 'none' } as any));
+
+  it('persists the mode and pushes it to the engine', async () => {
+    mockTP.setPitchCorrectionMode.mockClear();
+    await applyPitchCorrection('voice');
+    expect(playbackSettingsStore.getState().pitchCorrection).toBe('voice');
+    expect(mockTP.setPitchCorrectionMode).toHaveBeenCalledWith('voice');
+  });
+});
+
+describe('applyReplayGain', () => {
+  afterEach(() => playbackSettingsStore.setState({ replayGainMode: 'off' } as any));
+
+  it('pushes the persisted mode to the engine', async () => {
+    playbackSettingsStore.setState({ replayGainMode: 'album' } as any);
+    mockTP.setReplayGainMode.mockClear();
+    await applyReplayGain();
+    expect(mockTP.setReplayGainMode).toHaveBeenCalledWith('album');
+  });
+
+  it('pushes off when disabled', async () => {
+    playbackSettingsStore.setState({ replayGainMode: 'off' } as any);
+    mockTP.setReplayGainMode.mockClear();
+    await applyReplayGain();
+    expect(mockTP.setReplayGainMode).toHaveBeenCalledWith('off');
+  });
+});
+
+describe('equalizer wrappers', () => {
+  const FLAT = new Array(10).fill(0);
+
+  beforeEach(() => {
+    equalizerSettingsStore.setState({ enabled: false, gains: FLAT.slice(), presetName: 'Flat' });
+    Object.values(mockEq).forEach((fn) => typeof fn?.mockClear === 'function' && fn.mockClear());
+  });
+
+  it('applyEqualizerConfig re-applies persisted gains + enabled to the engine', async () => {
+    equalizerSettingsStore.setState({ enabled: true, gains: [3, 0, 0, 0, 0, 0, 0, 0, 0, 3] });
+    await applyEqualizerConfig();
+    expect(mockEq.setAllBandGains).toHaveBeenCalledWith([3, 0, 0, 0, 0, 0, 0, 0, 0, 3]);
+    expect(mockEq.setEnabled).toHaveBeenCalledWith(true);
+  });
+
+  it('setEqualizerEnabled persists + pushes to the engine', async () => {
+    await setEqualizerEnabled(true);
+    expect(equalizerSettingsStore.getState().enabled).toBe(true);
+    expect(mockEq.setEnabled).toHaveBeenCalledWith(true);
+  });
+
+  it('applyEqualizerPreset loads the preset gains + name into store and engine', async () => {
+    await applyEqualizerPreset('Rock');
+    const rock = [5, 4, 3, 1, -1, -1, 2, 3, 4, 4];
+    expect(equalizerSettingsStore.getState().gains).toEqual(rock);
+    expect(equalizerSettingsStore.getState().presetName).toBe('Rock');
+    expect(mockEq.setAllBandGains).toHaveBeenCalledWith(rock);
+  });
+
+  it('setEqualizerBandGain updates one band and flips the preset to Custom', async () => {
+    await setEqualizerBandGain(2, 6);
+    expect(equalizerSettingsStore.getState().gains[2]).toBe(6);
+    expect(equalizerSettingsStore.getState().presetName).toBe(EQ_CUSTOM_PRESET_LABEL);
+    expect(mockEq.setBandGain).toHaveBeenCalledWith(2, 6);
+  });
+
+  it('resetEqualizer restores flat gains + Flat preset and resets the engine', async () => {
+    equalizerSettingsStore.setState({ gains: [4, 4, 4, 4, 4, 4, 4, 4, 4, 4], presetName: 'Custom' });
+    await resetEqualizer();
+    expect(equalizerSettingsStore.getState().gains).toEqual(FLAT);
+    expect(equalizerSettingsStore.getState().presetName).toBe('Flat');
+    expect(mockEq.reset).toHaveBeenCalled();
+  });
+
+  it('save/delete custom preset delegate to the engine', async () => {
+    await saveEqualizerPreset('Mine');
+    expect(mockEq.saveCustomPreset).toHaveBeenCalledWith('Mine');
+    expect(equalizerSettingsStore.getState().presetName).toBe('Mine');
+    await deleteEqualizerPreset('Mine');
+    expect(mockEq.deleteCustomPreset).toHaveBeenCalledWith('Mine');
+  });
+});

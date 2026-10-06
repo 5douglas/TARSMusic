@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["ExpoSslTrustModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.ssltrust.ExpoSslTrustModule"]
+  }
+}

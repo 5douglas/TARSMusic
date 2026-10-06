@@ -1,0 +1,461 @@
+/**
+ * Per-row SQLite persistence for the image cache — query helpers only.
+ *
+ * Every cover-art ID cached to disk is represented by up to four rows, one
+ * per size variant (50 / 150 / 300 / 600). The source is always 600px, with
+ * an `ext` that matches the Content-Type from the Subsonic fetch (`jpg` /
+ * `png` / `webp`). The smaller variants are always derived locally as JPEG,
+ * so for those `ext === 'jpg'`.
+ *
+ * A row must only be written AFTER the corresponding file has been renamed
+ * to its final name on disk. That ordering, combined with the idempotent
+ * `ON CONFLICT` upsert below, makes a mid-generation crash safe: the
+ * partially-cached directory simply has fewer rows in the table, and the
+ * next `cacheAllSizes()` / reconciliation pass regenerates what's missing.
+ *
+ * All DB access is async so the image download/reconcile worker never blocks
+ * the JS thread. Multi-statement writes go out as one atomic batch.
+ */
+import { getDb, type BatchCommand, type InternalDb } from './db';
+
+export interface CachedImageRow {
+  coverArtId: string;
+  size: number; // 50 | 150 | 300 | 600
+  ext: string; // 'jpg' | 'png' | 'webp' (variants are always 'jpg')
+  bytes: number;
+  cachedAt: number; // ms epoch
+}
+
+interface RawRow {
+  cover_art_id: string;
+  size: number;
+  ext: string;
+  bytes: number;
+  cached_at: number;
+}
+
+function mapRow(row: RawRow): CachedImageRow {
+  return {
+    coverArtId: row.cover_art_id,
+    size: row.size,
+    ext: row.ext,
+    bytes: row.bytes,
+    cachedAt: row.cached_at,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Aggregate read — powers `imageCacheStore` on hydrate               */
+/* ------------------------------------------------------------------ */
+
+export interface ImageCacheAggregates {
+  /** Sum of every variant file's size in bytes. */
+  totalBytes: number;
+  /** COUNT(*) — total variant files on disk. */
+  fileCount: number;
+  /** COUNT(DISTINCT cover_art_id) — unique logical images. */
+  imageCount: number;
+  /** Count of cover_art_ids with fewer than 4 variants. */
+  incompleteCount: number;
+}
+
+const EMPTY_AGGREGATES: ImageCacheAggregates = {
+  totalBytes: 0,
+  fileCount: 0,
+  imageCount: 0,
+  incompleteCount: 0,
+};
+
+/**
+ * Single-query derivation of every aggregate the store needs. Runs both scans
+ * of `cached_images` on op-SQLite's pool thread.
+ */
+export async function hydrateImageCacheAggregatesAsync(): Promise<ImageCacheAggregates> {
+  const db = getDb();
+  if (db === null) return { ...EMPTY_AGGREGATES };
+  try {
+    const totals = await db.getFirstAsync<{
+      total_bytes: number | null;
+      file_count: number;
+      image_count: number;
+    }>(
+      `SELECT
+         COALESCE(SUM(bytes), 0) AS total_bytes,
+         COUNT(*) AS file_count,
+         COUNT(DISTINCT cover_art_id) AS image_count
+       FROM cached_images;`,
+    );
+    // Exclude cover_art_ids currently in the image-download queue: those rows
+    // are "in progress" (queued or downloading), not "incomplete". Mid-refresh
+    // a cover is briefly missing variants between delete and download-complete,
+    // and without this filter the Settings count ticks up to 1 and back to 0 on
+    // every row, making the screen flash.
+    const incomplete = await db.getFirstAsync<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM (
+         SELECT cover_art_id FROM cached_images
+           WHERE cover_art_id NOT IN (
+             SELECT cover_art_id FROM image_download_queue
+           )
+           GROUP BY cover_art_id HAVING COUNT(*) < 4
+       );`,
+    );
+    return {
+      totalBytes: totals?.total_bytes ?? 0,
+      fileCount: totals?.file_count ?? 0,
+      imageCount: totals?.image_count ?? 0,
+      incompleteCount: incomplete?.c ?? 0,
+    };
+  } catch {
+    return { ...EMPTY_AGGREGATES };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Single-variant writes                                              */
+/* ------------------------------------------------------------------ */
+
+const CACHED_IMAGE_UPSERT_SQL = `INSERT INTO cached_images (cover_art_id, size, ext, bytes, cached_at)
+   VALUES (?, ?, ?, ?, ?)
+   ON CONFLICT(cover_art_id, size) DO UPDATE SET
+     ext = excluded.ext,
+     bytes = excluded.bytes,
+     cached_at = excluded.cached_at;`;
+
+const cachedImageUpsertCommand = (row: CachedImageRow): BatchCommand => [
+  CACHED_IMAGE_UPSERT_SQL,
+  [row.coverArtId, row.size, row.ext, row.bytes, row.cachedAt],
+];
+
+async function upsertCachedImageInternal(db: InternalDb, row: CachedImageRow): Promise<void> {
+  const [sql, params] = cachedImageUpsertCommand(row);
+  await db.runAsync(sql, params);
+}
+
+/**
+ * Record a variant as cached on disk. Must be called AFTER the file has
+ * been renamed from its `.tmp` to its final name.
+ */
+export async function upsertCachedImage(row: CachedImageRow): Promise<void> {
+  const db = getDb();
+  if (db === null) return;
+  if (!row.coverArtId || !row.size) return;
+  try {
+    await upsertCachedImageInternal(db, row);
+  } catch {
+    /* dropped */
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Deletion                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Delete every row for a cover_art_id. Returns the freed bytes/count so
+ * the in-memory aggregates can be updated incrementally.
+ */
+export async function deleteCachedImagesForCoverArt(
+  coverArtId: string,
+): Promise<{ bytes: number; count: number }> {
+  const db = getDb();
+  if (db === null || !coverArtId) return { bytes: 0, count: 0 };
+  try {
+    const totals = await db.getFirstAsync<{
+      total_bytes: number | null;
+      file_count: number;
+    }>(
+      `SELECT COALESCE(SUM(bytes), 0) AS total_bytes, COUNT(*) AS file_count
+         FROM cached_images WHERE cover_art_id = ?;`,
+      [coverArtId],
+    );
+    await db.runAsync('DELETE FROM cached_images WHERE cover_art_id = ?;', [coverArtId]);
+    return {
+      bytes: totals?.total_bytes ?? 0,
+      count: totals?.file_count ?? 0,
+    };
+  } catch {
+    return { bytes: 0, count: 0 };
+  }
+}
+
+/**
+ * Delete a single variant row. Used by the SQL-side of reconciliation when
+ * a DB row's file has vanished from disk.
+ */
+export async function deleteCachedImageVariant(
+  coverArtId: string,
+  size: number,
+): Promise<void> {
+  const db = getDb();
+  if (db === null) return;
+  try {
+    await db.runAsync('DELETE FROM cached_images WHERE cover_art_id = ? AND size = ?;', [
+      coverArtId,
+      size,
+    ]);
+  } catch {
+    /* dropped */
+  }
+}
+
+/** Remove every row. Used on logout / clearImageCache via resetAllStores. */
+export async function clearAllCachedImages(): Promise<void> {
+  const db = getDb();
+  if (db === null) return;
+  try {
+    await db.runAsync('DELETE FROM cached_images;');
+  } catch {
+    /* dropped */
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Point reads                                                        */
+/* ------------------------------------------------------------------ */
+
+export async function hasCachedImage(coverArtId: string, size: number): Promise<boolean> {
+  const db = getDb();
+  if (db === null) return false;
+  try {
+    const row = await db.getFirstAsync<{ c: number }>(
+      'SELECT 1 AS c FROM cached_images WHERE cover_art_id = ? AND size = ? LIMIT 1;',
+      [coverArtId, size],
+    );
+    return !!row;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * All variants for a single cover-art id, ordered by size ascending. The single
+ * source of truth for "which variants does this cover have?" on the render +
+ * decision paths — `getAllAsync` keeps the SQLite work off the JS thread. A
+ * cover has ≤4 rows, so callers filter the small result in memory.
+ */
+export async function getCachedImagesForCoverArtAsync(
+  coverArtId: string,
+): Promise<CachedImageRow[]> {
+  const db = getDb();
+  if (db === null) return [];
+  try {
+    const rows = await db.getAllAsync<RawRow>(
+      `SELECT cover_art_id, size, ext, bytes, cached_at
+         FROM cached_images WHERE cover_art_id = ? ORDER BY size ASC;`,
+      [coverArtId],
+    );
+    return rows.map(mapRow);
+  } catch {
+    return [];
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Incomplete detection                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Every distinct cover_art_id that has at least one variant cached on
+ * disk. Used by the image-download-queue's "refresh all cached covers"
+ * cycle to enumerate everything currently in the cache for re-download.
+ */
+export async function getAllCachedCoverArtIds(): Promise<string[]> {
+  const db = getDb();
+  if (db === null) return [];
+  try {
+    const rows = await db.getAllAsync<{ cover_art_id: string }>(
+      `SELECT DISTINCT cover_art_id FROM cached_images
+         ORDER BY cover_art_id ASC;`,
+    );
+    return rows.map((r) => r.cover_art_id);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Every cover_art_id whose row count is < 4 AND that isn't currently
+ * in the image-download queue. Excluding in-flight covers keeps the
+ * Repair button from racing the refresh worker for the same rows.
+ */
+export async function findIncompleteCovers(): Promise<string[]> {
+  const db = getDb();
+  if (db === null) return [];
+  try {
+    const rows = await db.getAllAsync<{ cover_art_id: string }>(
+      `SELECT cover_art_id FROM cached_images
+         WHERE cover_art_id NOT IN (
+           SELECT cover_art_id FROM image_download_queue
+         )
+         GROUP BY cover_art_id HAVING COUNT(*) < 4
+         ORDER BY cover_art_id ASC;`,
+    );
+    return rows.map((r) => r.cover_art_id);
+  } catch {
+    return [];
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Browser listing                                                    */
+/* ------------------------------------------------------------------ */
+
+export interface CachedImageEntry {
+  coverArtId: string;
+  files: Array<{ size: number; ext: string; bytes: number; cachedAt: number }>;
+  /** Convenience: true when every size variant (50/150/300/600) is present. */
+  complete: boolean;
+}
+
+export type CacheBrowserFilter = 'all' | 'complete' | 'incomplete';
+
+const EXPECTED_VARIANTS = 4;
+
+/**
+ * Sentinel cover-art IDs rendered from bundled assets (CachedImage's asset
+ * resolver) rather than the disk cache, so any row for one is stale and must not
+ * surface in the image-cache browser UI. Duplicated from `imageCacheService.ts`:
+ * the persistence layer must not depend on the service.
+ */
+const SENTINEL_COVER_ART_IDS: ReadonlySet<string> = new Set([
+  '__starred_cover__',
+  '__various_artists_cover__',
+]);
+
+/**
+ * List every cached image grouped by cover_art_id, with an optional
+ * complete/incomplete filter. Drives the image-cache-browser screen from a
+ * single indexed SQL scan.
+ */
+export async function listCachedImagesForBrowser(
+  filter: CacheBrowserFilter = 'all',
+): Promise<CachedImageEntry[]> {
+  const db = getDb();
+  if (db === null) return [];
+  try {
+    const rows = await db.getAllAsync<RawRow>(
+      `SELECT cover_art_id, size, ext, bytes, cached_at
+         FROM cached_images ORDER BY cover_art_id ASC, size ASC;`,
+    );
+    const entries: CachedImageEntry[] = [];
+    let current: CachedImageEntry | null = null;
+    for (const row of rows) {
+      if (!current || current.coverArtId !== row.cover_art_id) {
+        if (current) {
+          current.complete = current.files.length === EXPECTED_VARIANTS;
+          entries.push(current);
+        }
+        current = { coverArtId: row.cover_art_id, files: [], complete: false };
+      }
+      current.files.push({
+        size: row.size,
+        ext: row.ext,
+        bytes: row.bytes,
+        cachedAt: row.cached_at,
+      });
+    }
+    if (current) {
+      current.complete = current.files.length === EXPECTED_VARIANTS;
+      entries.push(current);
+    }
+    // Hide sentinel coverArtIds: a stale row for one is permanently
+    // "incomplete" (the download pipeline can't service it) while the bundled
+    // artwork still renders, so it would pad the user's incomplete list.
+    const visible = entries.filter((e) => !SENTINEL_COVER_ART_IDS.has(e.coverArtId));
+    if (filter === 'complete') return visible.filter((e) => e.complete);
+    if (filter === 'incomplete') return visible.filter((e) => !e.complete);
+    return visible;
+  } catch {
+    return [];
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Bulk insert — used by the migration and by reconciliation          */
+/* ------------------------------------------------------------------ */
+
+/** Rows per batch, matching the repository-layer norm. Keeps a whole-cache
+ *  write off the pool thread as one enormous savepoint. */
+const WRITE_CHUNK = 500;
+
+export async function bulkInsertCachedImages(rows: readonly CachedImageRow[]): Promise<void> {
+  const db = getDb();
+  if (db === null) return;
+  if (rows.length === 0) return;
+  try {
+    const commands = rows
+      .filter((row) => row.coverArtId && row.size)
+      .map(cachedImageUpsertCommand);
+    for (let i = 0; i < commands.length; i += WRITE_CHUNK) {
+      // eslint-disable-next-line no-await-in-loop
+      await db.runAtomicBatchAsync(commands.slice(i, i + WRITE_CHUNK));
+    }
+  } catch {
+    /* dropped */
+  }
+}
+
+/**
+ * Delete many variants in chunked batches. The row-at-a-time
+ * {@link deleteCachedImageVariant} serializes one round trip per row through the
+ * write mutex, which reconciliation can reach at whole-cache scale.
+ */
+export async function deleteCachedImageVariants(
+  pairs: readonly { coverArtId: string; size: number }[],
+): Promise<void> {
+  const db = getDb();
+  if (db === null) return;
+  if (pairs.length === 0) return;
+  try {
+    const commands: BatchCommand[] = pairs.map((p) => [
+      'DELETE FROM cached_images WHERE cover_art_id = ? AND size = ?;',
+      [p.coverArtId, p.size],
+    ]);
+    for (let i = 0; i < commands.length; i += WRITE_CHUNK) {
+      // eslint-disable-next-line no-await-in-loop
+      await db.runAtomicBatchAsync(commands.slice(i, i + WRITE_CHUNK));
+    }
+  } catch {
+    /* dropped */
+  }
+}
+
+/**
+ * Every (cover_art_id, size, ext) row, for reconciliation's single snapshot.
+ *
+ * Returns `null` — not `[]` — when the table cannot be read, including a null
+ * handle. Reconciliation treats an empty array as "no rows exist" and would
+ * rewrite the whole cache from disk off a swallowed error, so the two cases
+ * must stay distinguishable here.
+ */
+export async function getAllCachedImageRows(): Promise<
+  { coverArtId: string; size: number; ext: string }[] | null
+> {
+  const db = getDb();
+  if (db === null) return null;
+  try {
+    const rows = await db.getAllAsync<{ cover_art_id: string; size: number; ext: string }>(
+      'SELECT cover_art_id, size, ext FROM cached_images;',
+    );
+    return rows.map((r) => ({ coverArtId: r.cover_art_id, size: r.size, ext: r.ext }));
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Diagnostic                                                         */
+/* ------------------------------------------------------------------ */
+
+export async function countCachedImages(): Promise<number> {
+  const db = getDb();
+  if (db === null) return 0;
+  try {
+    const row = await db.getFirstAsync<{ c: number }>(
+      'SELECT COUNT(*) AS c FROM cached_images;',
+    );
+    return row?.c ?? 0;
+  } catch {
+    return 0;
+  }
+}

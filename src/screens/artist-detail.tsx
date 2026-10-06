@@ -1,0 +1,682 @@
+import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { LIST_DRAW_DISTANCE } from '../constants/layout';
+import Ionicons from "@react-native-vector-icons/ionicons/static";
+import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AlbumRow } from '../components/AlbumRow';
+import { EmptyState } from '../components/EmptyState';
+import { ArtistCard } from '../components/ArtistCard';
+import { CachedImage } from '../components/CachedImage';
+import { BottomChrome } from '../components/BottomChrome';
+import { MoreOptionsButton } from '../components/MoreOptionsButton';
+import { SectionTitle } from '../components/SectionTitle';
+import { SongCard } from '../components/SongCard';
+import { closeOpenRow } from '../components/SwipeableRow';
+import { DetailScreenBackground } from '../components/DetailScreenBackground';
+import { PlayAllButton, ShufflePlayButton } from '../components/DetailHeroButtons';
+import { useDetailFetch } from '../hooks/useDetailFetch';
+import { useIsStarred } from '../hooks/useIsStarred';
+import { useLayoutMode } from '../hooks/useLayoutMode';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
+import { useTheme } from '../hooks/useTheme';
+import { useTransitionComplete } from '../hooks/useTransitionComplete';
+import { refreshCoverArt } from '../services/imageCacheService';
+import { PillToggle } from '../components/PillToggle';
+import { playAllByArtist, playMoreByArtist, toggleStar } from '../services/moreOptionsService';
+import { shuffleArray } from '../utils/arrayHelpers';
+import { playTrack } from '../services/playerService';
+import {
+  fetchArtistBase,
+  fetchArtistBio,
+  fetchArtistInfo,
+  fetchArtistTopSongs,
+} from '../services/detailFetchService';
+import { getDb } from '../store/persistence/db';
+import { getArtistBase } from '../db/repository/details';
+import { subscribeDetailChanged } from '../db/detailNotifier';
+import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
+import { moreOptionsStore } from '../store/moreOptionsStore';
+import { offlineModeStore } from '../store/offlineModeStore';
+import { playbackSettingsStore, type ArtistPlayMode } from '../store/playbackSettingsStore';
+
+import {
+  type AlbumID3,
+  type ArtistID3,
+  type ArtistWithAlbumsID3,
+  type Child,
+} from '../services/subsonicService';
+
+const HERO_PADDING = 24;
+const HERO_IMAGE_SIZE = 180;
+const HERO_COVER_SIZE = 600;
+const HEADER_BAR_HEIGHT = 44;
+const CARD_WIDTH = 88;
+const HORIZONTAL_GAP = 10;
+
+/* ------------------------------------------------------------------ */
+/*  Main screen                                                       */
+/* ------------------------------------------------------------------ */
+
+export function ArtistDetailScreen() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
+  const artistPlayMode = playbackSettingsStore((s) => s.artistPlayMode);
+  const { width: screenWidth } = useWindowDimensions();
+  const heroImageSize = Math.min(Math.max(HERO_IMAGE_SIZE, screenWidth * 0.35), 280);
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const starred = useIsStarred('artist', id ?? '');
+
+  const handleToggleStar = useCallback(() => {
+    if (id) toggleStar('artist', id);
+  }, [id]);
+
+  const [artist, setArtist] = useState<ArtistWithAlbumsID3 | null>(null);
+  const [similarArtists, setSimilarArtists] = useState<ArtistID3[]>([]);
+  const [heroFallbackUrl, setHeroFallbackUrl] = useState<string | undefined>(undefined);
+  const [topSongs, setTopSongs] = useState<Child[]>([]);
+  const [biography, setBiography] = useState<string | null>(null);
+  const [bioExpanded, setBioExpanded] = useState(false);
+  const [albumSortDesc, setAlbumSortDesc] = useState(
+    () => layoutPreferencesStore.getState().artistAlbumSortOrder === 'newest',
+  );
+  const [topSongsSettled, setTopSongsSettled] = useState(false);
+  const [bioLoading, setBioLoading] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [hasCache, setHasCache] = useState(false);
+  const [cacheChecked, setCacheChecked] = useState(false);
+
+  // Defer heavy sections (top songs, similar artists, albums) until the
+  // navigation animation completes so the transition isn't blocked by
+  // mounting dozens of CachedImage components synchronously.
+  const ready = useTransitionComplete();
+  const isWide = useLayoutMode() === 'wide';
+  const refreshControlKey = useRefreshControlKey();
+
+  // Read the cached detail from the local DB first (fast) — the server fetch only runs on a
+  // genuine miss. The server refresh (fetchArtist) dual-writes normalized + bumps the detail
+  // notifier, so a re-open resolves instantly here and a background MBID-override refetch
+  // re-reads without a store subscription.
+  useEffect(() => {
+    if (!id) return;
+    const db = getDb();
+    if (!db) {
+      setCacheChecked(true);
+      return;
+    }
+    let alive = true;
+    const read = () =>
+      getArtistBase(db, id).then((d) => {
+        if (!alive || !d) return;
+        setArtist({ ...d.artist, album: d.albums } as ArtistWithAlbumsID3);
+        // Presence is the repository's rule (albums present, or a known-empty artist) —
+        // never "the row exists", which is true for everything after a list sync.
+        setHasCache(true);
+      });
+    read()
+      .catch(() => { /* treat a read failure as a miss → server fetch */ })
+      .finally(() => { if (alive) setCacheChecked(true); });
+    const unsub = subscribeDetailChanged('artist', id, () => { void read(); });
+    return () => {
+      alive = false;
+      unsub();
+    };
+  }, [id]);
+
+  // The other three parts load independently — `useDetailFetch` only calls `load` on a
+  // base MISS, so routing them through it would leave them unfetched for every artist we
+  // already hold. Each owns its own state and its own failure; none may set the shared
+  // `error`, which would blank a screen that has already rendered its albums.
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    const force = refreshNonce > 0;
+    void fetchArtistInfo(id, { force })
+      .then((info) => {
+        if (!alive || !info) return;
+        setSimilarArtists(info.similarArtist);
+        setHeroFallbackUrl(info.largeImageUrl ?? undefined);
+      })
+      .catch(() => { /* section stays absent */ });
+    setBioLoading(true);
+    void fetchArtistBio(id, { force })
+      .then((bio) => { if (alive && bio) setBiography(bio.biography); })
+      .catch(() => { /* section stays absent */ })
+      .finally(() => { if (alive) setBioLoading(false); });
+    setTopSongsSettled(false);
+    void fetchArtistTopSongs(id, { force })
+      .then((top) => { if (alive) setTopSongs(top?.songs ?? []); })
+      .catch(() => { /* section stays absent */ })
+      .finally(() => { if (alive) setTopSongsSettled(true); });
+    return () => { alive = false; };
+  }, [id, refreshNonce]);
+
+  /* ---- Header right: more options button ---- */
+  useEffect(() => {
+    if (Platform.OS === 'ios') return;
+    if (!artist) return;
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={styles.headerRight}>
+          {!offlineMode && (
+            <Pressable onPress={handleToggleStar} hitSlop={8} style={styles.starButton}>
+              <Ionicons
+                name={starred ? 'heart' : 'heart-outline'}
+                size={22}
+                color={starred ? colors.red : colors.textPrimary}
+              />
+            </Pressable>
+          )}
+          <MoreOptionsButton
+            onPress={() =>
+              moreOptionsStore.getState().show({ type: 'artist', item: artist })
+            }
+            color={colors.textPrimary}
+          />
+        </View>
+      ),
+    });
+  }, [artist, navigation, colors.textPrimary, colors.red, starred, offlineMode, handleToggleStar]);
+
+  /* ---- Data fetching ---- */
+  const load = useCallback(async (artistId: string, isRefresh: boolean) => {
+    // Base only. The other three parts have their own effect; a pull bumps the nonce so
+    // they re-run forced. `force` here is the local-row bypass — it deliberately does NOT
+    // re-resolve the bio, which would re-hammer MusicBrainz on every pull.
+    if (isRefresh) setRefreshNonce((n) => n + 1);
+    const base = await fetchArtistBase(artistId, { force: isRefresh });
+    if (!base) {
+      setArtist(null);
+      setSimilarArtists([]);
+      setHeroFallbackUrl(undefined);
+      setTopSongs([]);
+      setBiography(null);
+      return t('artistNotFound');
+    }
+    setArtist({ ...base.artist, album: base.albums } as ArtistWithAlbumsID3);
+    if (isRefresh && base.artist.id) {
+      refreshCoverArt(base.artist.id, 'artist-detail-pull').catch(() => { /* non-critical */ });
+    }
+    return null;
+  }, [t]);
+
+  const { loading, refreshing, error, onRefresh } = useDetailFetch({
+    id,
+    hasCache,
+    cacheChecked,
+    missingIdMessage: t('missingArtistId'),
+    failedMessage: t('failedToLoadArtist'),
+    load,
+  });
+
+  /* ---- Derived values ---- */
+  const albums = artist?.album ?? [];
+
+  const sortedAlbums = useMemo(() => {
+    if (albums.length === 0) return albums;
+    return [...albums].sort((a, b) => {
+      const yearA = a.year ?? 0;
+      const yearB = b.year ?? 0;
+      return albumSortDesc ? yearB - yearA : yearA - yearB;
+    });
+  }, [albums, albumSortDesc]);
+
+  const renderAlbumItem = useCallback(
+    ({ item }: { item: AlbumID3 }) => (
+      <View style={styles.albumRowWrap}>
+        <AlbumRow album={item} />
+      </View>
+    ),
+    [],
+  );
+
+  const albumKeyExtractor = useCallback((item: AlbumID3) => item.id, []);
+
+  const topSongsRenderItem = useCallback(
+    ({ item }: { item: Child }) => (
+      <SongCard
+        song={item}
+        width={CARD_WIDTH}
+        songs={topSongs}
+      />
+    ),
+    [topSongs],
+  );
+
+  const topSongsKeyExtractor = useCallback(
+    (item: Child, index: number) => `${item.id}-${index}`,
+    [],
+  );
+
+  const similarArtistsRenderItem = useCallback(
+    ({ item }: { item: (typeof similarArtists)[number] }) => (
+      <ArtistCard artist={item} width={CARD_WIDTH} />
+    ),
+    [],
+  );
+
+  const similarArtistsKeyExtractor = useCallback(
+    (item: (typeof similarArtists)[number]) => item.id,
+    [],
+  );
+
+  const playModeOptions = useMemo(
+    (): [{ key: ArtistPlayMode; label: string }, { key: ArtistPlayMode; label: string }] => [
+      { key: 'topSongs', label: t('topSongs') },
+      { key: 'allSongs', label: t('allSongs') },
+    ],
+    [t],
+  );
+
+  const handlePlayModeChange = useCallback((mode: ArtistPlayMode) => {
+    playbackSettingsStore.getState().setArtistPlayMode(mode);
+  }, []);
+
+  const listHeader = useMemo(() => {
+    if (!artist) return null;
+    return (
+      <>
+        {/* ---- Hero ---- */}
+        <View style={styles.hero}>
+          <CachedImage
+            coverArtId={artist.coverArt}
+            size={HERO_COVER_SIZE}
+            fallbackUri={heroFallbackUrl}
+            style={[styles.heroImage, { width: heroImageSize, height: heroImageSize, borderRadius: heroImageSize / 2 }]}
+            resizeMode="cover"
+          />
+          <Text style={[styles.artistName, { color: colors.textPrimary }]}>
+            {artist.name}
+          </Text>
+          <View style={styles.meta}>
+            <Ionicons name="disc-outline" size={14} color={colors.primary} />
+            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+              {t('albumCount', { count: artist.albumCount ?? 0 })}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.heroButtons}>
+          <PillToggle
+            options={playModeOptions}
+            selected={artistPlayMode}
+            onSelect={handlePlayModeChange}
+            colors={colors}
+          />
+          <View style={styles.heroPlayButtons}>
+            {/* Top songs arrive after the base, so an unarrived list must not read as an
+                empty one — that would silently fall through to "more by artist" and play
+                the wrong thing. Only the topSongs mode depends on it; allSongs needs the
+                base alone and stays live. */}
+            <ShufflePlayButton
+              disabled={artistPlayMode === 'topSongs' && !topSongsSettled}
+              onPress={() => {
+                if (artistPlayMode === 'allSongs') {
+                  playAllByArtist(artist.id, artist.name, true);
+                } else if (topSongs.length > 1) {
+                  const shuffled = shuffleArray(topSongs);
+                  playTrack(shuffled[0], shuffled);
+                } else {
+                  playMoreByArtist(artist.id, artist.name);
+                }
+              }}
+            />
+            <PlayAllButton
+              disabled={artistPlayMode === 'topSongs' && !topSongsSettled}
+              onPress={() => {
+                if (artistPlayMode === 'allSongs') {
+                  playAllByArtist(artist.id, artist.name, false);
+                } else if (topSongs.length > 0) {
+                  playTrack(topSongs[0], topSongs);
+                } else {
+                  playMoreByArtist(artist.id, artist.name);
+                }
+              }}
+            />
+          </View>
+        </View>
+
+        {/* Heavy sections deferred until after the navigation animation */}
+        {ready && (
+          <>
+            {/* ---- Biography ---- */}
+            {/* The bio is the slowest part — it can fall through to MusicBrainz — so show
+                the section with a spinner while it resolves rather than leaving a gap that
+                looks like the artist simply has no bio. */}
+            {bioLoading && (biography == null || biography.length === 0) && (
+              <View style={styles.section}>
+                <SectionTitle title={t('about')} color={colors.label} />
+                <View style={styles.bioLoading}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={[styles.bioLoadingText, { color: colors.textSecondary }]}>
+                    {t('loadingBiography')}
+                  </Text>
+                </View>
+              </View>
+            )}
+            {biography != null && biography.length > 0 && (
+              <View style={styles.section}>
+                <SectionTitle title={t('about')} color={colors.label} />
+                <Text
+                  style={[styles.bioText, { color: colors.textSecondary }]}
+                  numberOfLines={bioExpanded ? undefined : 4}
+                >
+                  {biography}
+                </Text>
+                <Pressable
+                  onPress={() => setBioExpanded((prev) => !prev)}
+                  style={({ pressed }) => pressed && styles.pressed}
+                >
+                  <Text style={[styles.bioToggle, { color: colors.primary }]}>
+                    {bioExpanded ? t('showLess') : t('readMore')}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* ---- Top Songs ---- */}
+            {topSongs.length > 0 && (
+              <View style={styles.section}>
+                <SectionTitle title={t('topSongs')} color={colors.label} />
+                {/* Uncapped: the fetch is already bounded by the list-length setting, so what
+                    renders matches what Play/Shuffle queue from. */}
+                <FlashList
+                  data={topSongs}
+                  renderItem={topSongsRenderItem}
+                  keyExtractor={topSongsKeyExtractor}
+                  drawDistance={LIST_DRAW_DISTANCE}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.horizontalList}
+                  ItemSeparatorComponent={() => (
+                    <View style={{ width: HORIZONTAL_GAP }} />
+                  )}
+                />
+              </View>
+            )}
+
+            {/* ---- Similar Artists ---- */}
+            {similarArtists.length > 0 && (
+              <View style={styles.section}>
+                <SectionTitle title={t('similarArtists')} color={colors.label} />
+                <FlashList
+                  data={similarArtists}
+                  renderItem={similarArtistsRenderItem}
+                  keyExtractor={similarArtistsKeyExtractor}
+                  drawDistance={LIST_DRAW_DISTANCE}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.horizontalList}
+                  ItemSeparatorComponent={() => (
+                    <View style={{ width: HORIZONTAL_GAP }} />
+                  )}
+                />
+              </View>
+            )}
+
+            {/* ---- Albums section header (list items follow in FlashList) ---- */}
+            {albums.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <SectionTitle title={t('albums')} color={colors.label} />
+                  <Pressable
+                    onPress={() => setAlbumSortDesc((prev) => !prev)}
+                    style={({ pressed }) => [
+                      styles.sortButton,
+                      pressed && styles.pressed,
+                    ]}
+                    hitSlop={8}
+                  >
+                    <Ionicons
+                      name={albumSortDesc ? 'arrow-down' : 'arrow-up'}
+                      size={14}
+                      color={colors.primary}
+                    />
+                    <Text style={[styles.sortLabel, { color: colors.textPrimary }]}>
+                      {albumSortDesc ? t('newest') : t('oldest')}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </>
+        )}
+      </>
+    );
+  }, [
+    artist,
+    heroFallbackUrl,
+    heroImageSize,
+    ready,
+    biography,
+    bioExpanded,
+    topSongs,
+    similarArtists,
+    albums.length,
+    albumSortDesc,
+    colors.textPrimary,
+    colors.textSecondary,
+    colors.label,
+    colors.primary,
+    topSongsRenderItem,
+    topSongsKeyExtractor,
+    similarArtistsRenderItem,
+    similarArtistsKeyExtractor,
+    artistPlayMode,
+    playModeOptions,
+    handlePlayModeChange,
+    t,
+  ]);
+
+  /* ---- Loading state ---- */
+  if (loading) {
+    return (
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  /* ---- Error state ---- */
+  if (error || !artist) {
+    return (
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <EmptyState
+          icon="person-outline"
+          title={t('couldntLoadArtist')}
+          subtitle={`${t('loadArtistError')}\n\n${error ?? t('unknownError')}`}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {Platform.OS === 'ios' && artist && (
+        <Stack.Toolbar placement="right">
+          {!offlineMode && (
+            <Stack.Toolbar.Button
+              icon={starred ? 'heart.fill' : 'heart'}
+              onPress={handleToggleStar}
+              tintColor={starred ? colors.red : undefined}
+            />
+          )}
+          <Stack.Toolbar.Button
+            icon="ellipsis"
+            onPress={() => moreOptionsStore.getState().show({ type: 'artist', item: artist })}
+          />
+        </Stack.Toolbar>
+      )}
+      <View style={styles.container}>
+        <DetailScreenBackground coverArt={artist?.coverArt} isWide={isWide} />
+
+        <FlashList
+          data={sortedAlbums}
+          renderItem={renderAlbumItem}
+          keyExtractor={albumKeyExtractor}
+          drawDistance={LIST_DRAW_DISTANCE}
+          ListHeaderComponent={listHeader}
+          onScrollBeginDrag={closeOpenRow}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.content,
+            // paddingTop on both platforms, never contentInset+contentOffset:
+            // Fabric recycles RCTScrollViewComponentView across screen pushes and
+            // ignores contentOffset on a recycled instance, leaving the hero partly
+            // scrolled off the top. See album-detail.tsx.
+            { paddingTop: insets.top + HEADER_BAR_HEIGHT },
+          ]}
+          refreshControl={
+            offlineMode ? undefined : (
+              <RefreshControl
+                key={refreshControlKey}
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.primary}
+                progressViewOffset={insets.top + HEADER_BAR_HEIGHT}
+              />
+            )
+          }
+        />
+        <BottomChrome withSafeAreaPadding />
+      </View>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Styles                                                            */
+/* ------------------------------------------------------------------ */
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    paddingBottom: 32,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  starButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  pressed: {
+    opacity: 0.8,
+  },
+
+  /* Hero */
+  hero: {
+    width: '100%',
+    paddingTop: HERO_PADDING / 2,
+    paddingBottom: HERO_PADDING,
+    alignItems: 'center',
+  },
+  heroImage: {
+    width: HERO_IMAGE_SIZE,
+    height: HERO_IMAGE_SIZE,
+    borderRadius: HERO_IMAGE_SIZE / 2,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+  },
+  artistName: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: 16,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  metaText: {
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  heroButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  heroPlayButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  /* Sections */
+  section: {
+    paddingHorizontal: 16,
+    marginTop: 20,
+  },
+
+  /* Biography */
+  bioLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  bioLoadingText: {
+    fontSize: 13,
+  },
+  bioText: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  bioToggle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+
+  /* Album list */
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 4,
+    marginBottom: 10,
+    gap: 4,
+  },
+  sortLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  albumRowWrap: {
+    paddingHorizontal: 16,
+  },
+
+  /* Horizontal card lists (Top Songs / Similar Artists) */
+  horizontalList: {
+    paddingRight: 16,
+  },
+});

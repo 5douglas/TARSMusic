@@ -1,0 +1,82 @@
+# EAS Build ignore — keeps fastlane and non-build files out of cloud builds.
+# When this file exists, EAS uses it INSTEAD of .gitignore to decide what to
+# upload. So we include the relevant .gitignore entries plus fastlane exclusions.
+
+# dependencies (installed on the build server)
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native credentials (managed by EAS)
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.keystore
+credentials.json
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Claude Code
+.claude/
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env*.local
+
+# release script temp file
+.release-notes-tmp
+
+# saved plans
+plans/
+
+# test coverage
+coverage/
+
+# typescript
+*.tsbuildinfo
+
+# local module build output
+modules/*/android/build/
+modules/*/ios/build/
+
+# generated native folders
+/ios
+/android
+
+# ── Fastlane (metadata-only — not needed for native builds) ──
+fastlane/
+Gemfile
+Gemfile.lock
+vendor/
+
+# ── Other non-build files ──
+.github/
+.cursor/
+.git/
+FEATURES.md
+CONTRIBUTING.md
+CHANGELOG.md
+README.md
+LICENSE
+scripts/
+__tests__/
+**/*.test.ts
+**/*.test.tsx
+play-store-key.json

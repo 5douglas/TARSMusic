@@ -1,0 +1,93 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# Local dev tools / test harnesses (contain personal/internal server details)
+tools/
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.keystore
+credentials.json
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Claude Code
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.mcp.json
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env*.local
+
+# release script temp file
+.release-notes-tmp
+
+# saved plans
+plans/
+
+# Simulator fixture packages. The folder, its README and its scripts are tracked; every
+# snapshot inside it is NOT — they are gigabytes of real listening history and downloaded
+# audio, and none of that belongs in the repo. See sim-snapshots/README.md.
+/sim-snapshots/*
+!/sim-snapshots/README.md
+!/sim-snapshots/restore.sh
+!/sim-snapshots/restore-android.sh
+!/sim-snapshots/list.sh
+!/sim-snapshots/verify.sh
+
+# test coverage
+coverage/
+
+# typescript
+*.tsbuildinfo
+
+# local module build output
+modules/*/android/build/
+modules/*/ios/build/
+
+# generated native folders
+/ios
+/android
+FEATURES.md
+
+# ruby / bundler
+vendor/
+Gemfile.lock
+
+# fastlane
+fastlane/.env
+fastlane/.api_key.json
+fastlane/.metadata_push
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output
+play-store-key.json
+
+# Local reference copies of Subsonic server implementations — read-only, never committed.
+# Clone/refresh with scripts or by hand; see plans/research-search3-paging-behaviour.md
+reference/

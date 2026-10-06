@@ -1,0 +1,15 @@
+{
+  "name": "expo-image-colors",
+  "version": "1.0.0",
+  "description": "Local Expo module that extracts a two-colour palette (primary + optional secondary) from a local image for theme-appropriate gradient backgrounds. Returns both dark-mode and light-mode variants in one call, clamped into lightness bands that guarantee icon contrast.",
+  "author": "Gaven Henry",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {},
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

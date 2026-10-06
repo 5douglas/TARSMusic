@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "local",
+    "promptToConfigurePushNotifications": false
+  },
+  "build": {
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_USE_PRECOMPILED_MODULES": "0"
+      },
+      "ios": {
+        "image": "latest"
+      },
+      "android": {
+        "image": "latest",
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "1012991665"
+      },
+      "android": {
+        "track": "beta",
+        "releaseStatus": "completed"
+      }
+    }
+  }
+}

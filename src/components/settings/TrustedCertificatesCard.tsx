@@ -1,0 +1,316 @@
+import Ionicons from '@react-native-vector-icons/ionicons/static';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+
+import { BottomSheet } from '../BottomSheet';
+import { CertificatePromptModal } from '../CertificatePromptModal';
+import { useTheme } from '../../hooks/useTheme';
+import { useThemedAlert } from '../../hooks/useThemedAlert';
+import { settingsStyles } from '../../styles/settingsStyles';
+import { removeTrustForHost, trustCertificateForHost } from '../../services/sslTrustService';
+import { authStore } from '../../store/authStore';
+import { sslCertStore, type TrustedCertEntry } from '../../store/sslCertStore';
+import { getCertificateInfo, type CertificateInfo } from '../../../modules/expo-ssl-trust/src';
+import { SettingsSectionTitle } from './SettingsSectionTitle';
+
+export function TrustedCertificatesCard() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const { alert, confirm } = useThemedAlert();
+
+  const serverUrl = authStore((s) => s.serverUrl);
+  const activeHostname = useMemo(() => {
+    if (!serverUrl) return null;
+    try { return new URL(serverUrl).hostname; } catch { return null; }
+  }, [serverUrl]);
+
+  const trustedCerts = sslCertStore((s) => s.trustedCerts);
+  const trustedCertEntries = useMemo(() => {
+    const entries = Object.entries(trustedCerts) as [string, TrustedCertEntry][];
+    return entries.sort((a, b) => {
+      if (a[0] === activeHostname) return -1;
+      if (b[0] === activeHostname) return 1;
+      return b[1].acceptedAt - a[1].acceptedAt;
+    });
+  }, [trustedCerts, activeHostname]);
+
+  const [certUrlPromptVisible, setCertUrlPromptVisible] = useState(false);
+  const [certUrlValue, setCertUrlValue] = useState('');
+  const [pendingFetch, setPendingFetch] = useState<{ url: string; hostname: string } | null>(null);
+  const [certFetching, setCertFetching] = useState(false);
+  const [certModalVisible, setCertModalVisible] = useState(false);
+  const [certInfo, setCertInfo] = useState<CertificateInfo | null>(null);
+  const [certHostname, setCertHostname] = useState('');
+
+  const handleRemoveTrustedCert = useCallback((hostname: string) => {
+    const isActive = hostname === activeHostname;
+    confirm({
+      title: isActive ? t('removeActiveCertificate') : t('removeTrustedCertificate'),
+      message: isActive
+        ? t('removeActiveCertificateMessage', { hostname })
+        : t('removeTrustedCertificateMessage', { hostname }),
+      confirmLabel: t('remove'),
+      destructive: true,
+      onConfirm: () => {
+        removeTrustForHost(hostname).catch(() => {
+          /* best-effort removal */
+        });
+      },
+    });
+  }, [confirm, activeHostname, t]);
+
+  const normalizeUrl = useCallback((input: string): { url: string; hostname: string } | null => {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    try {
+      const parsed = new URL(withScheme);
+      parsed.protocol = 'https:';
+      return { url: parsed.toString(), hostname: parsed.hostname };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const handleAddCertificate = useCallback(() => {
+    setCertUrlValue('');
+    setCertUrlPromptVisible(true);
+  }, []);
+
+  // Fetch the cert for a validated URL. Run only after the input sheet's Modal
+  // has fully torn down (see handleUrlPromptCloseComplete) so the certificate
+  // prompt Modal never stacks on top of the input sheet's Modal (Android shows
+  // one at a time).
+  const fetchCertificate = useCallback(async (url: string, hostname: string) => {
+    setCertFetching(true);
+    try {
+      const info = await getCertificateInfo(url);
+      if (info.isSystemTrusted) {
+        // The device already trusts this cert. Pinning it would do nothing for
+        // security and would needlessly route streaming through the loopback
+        // proxy (and break at the next cert rotation), so refuse it.
+        alert(t('certAlreadyTrustedTitle'), t('certAlreadyTrustedMessage', { hostname }));
+        return;
+      }
+      setCertInfo(info);
+      setCertHostname(hostname);
+      setCertModalVisible(true);
+    } catch (e) {
+      alert(t('certificateError'), e instanceof Error ? e.message : t('failedToFetchCertificate'));
+    } finally {
+      setCertFetching(false);
+    }
+  }, [alert, t]);
+
+  const handleFetchCertificate = useCallback(() => {
+    const result = normalizeUrl(certUrlValue);
+    if (!result) {
+      alert(t('invalidUrl'), t('invalidUrlMessage'));
+      return;
+    }
+    // Stash the resolved target and close the input sheet; the fetch (which can
+    // open the certificate prompt Modal) fires from onCloseComplete once this
+    // sheet's Modal is gone.
+    setPendingFetch(result);
+    setCertUrlPromptVisible(false);
+  }, [certUrlValue, normalizeUrl, alert, t]);
+
+  const handleUrlPromptClose = useCallback(() => {
+    setCertUrlPromptVisible(false);
+  }, []);
+
+  const handleUrlPromptCloseComplete = useCallback(() => {
+    if (!pendingFetch) return;
+    const { url, hostname } = pendingFetch;
+    setPendingFetch(null);
+    void fetchCertificate(url, hostname);
+  }, [pendingFetch, fetchCertificate]);
+
+  const handleTrustFetchedCert = useCallback(async () => {
+    if (!certInfo || !certHostname) return;
+    await trustCertificateForHost(certHostname, certInfo.sha256Fingerprint, certInfo.validTo);
+    setCertModalVisible(false);
+    setCertInfo(null);
+  }, [certInfo, certHostname]);
+
+  const handleCancelCert = useCallback(() => {
+    setCertModalVisible(false);
+    setCertInfo(null);
+  }, []);
+
+  return (
+    <>
+      <View style={settingsStyles.section}>
+        <SettingsSectionTitle>{t('trustedCertificates')}</SettingsSectionTitle>
+        <View style={[settingsStyles.card, settingsStyles.cardPadded, { backgroundColor: colors.card }]}>
+          {trustedCertEntries.length > 0 ? (
+            trustedCertEntries.map(([hostname, entry]) => {
+              const isActive = hostname === activeHostname;
+              const isExpired = !!(entry.validTo && entry.validTo !== 'Unknown' && new Date(entry.validTo) < new Date());
+              return (
+                <View
+                  key={hostname}
+                  style={[
+                    styles.certRow,
+                    { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.certInfo}>
+                    <View style={styles.certHeader}>
+                      <Ionicons
+                        name={isExpired ? 'shield-outline' : isActive ? 'shield-checkmark' : 'shield-checkmark-outline'}
+                        size={16}
+                        color={isExpired ? colors.red : colors.primary}
+                      />
+                      <Text style={[styles.certHostname, { color: colors.textPrimary }]}>
+                        {hostname}
+                      </Text>
+                      {isActive && !isExpired && (
+                        <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
+                      )}
+                      {isExpired && (
+                        <Text style={[styles.expiredBadge, { color: colors.red }]}>{t('expired')}</Text>
+                      )}
+                    </View>
+                    <Text style={[styles.certFingerprint, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {entry.sha256.substring(0, 23)}...
+                    </Text>
+                    <Text style={[styles.certDate, { color: isExpired ? colors.red : colors.textSecondary }]}>
+                      {t('trustedDate', { date: new Date(entry.acceptedAt).toLocaleDateString() })}
+                      {entry.validTo && entry.validTo !== 'Unknown'
+                        ? `  ·  ${isExpired ? t('expiredDate', { date: new Date(entry.validTo).toLocaleDateString() }) : t('expiresDate', { date: new Date(entry.validTo).toLocaleDateString() })}`
+                        : ''}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => handleRemoveTrustedCert(hostname)}
+                    hitSlop={8}
+                    style={({ pressed }) => [pressed && settingsStyles.pressed]}
+                  >
+                    <Ionicons name="close-circle-outline" size={22} color={colors.red} />
+                  </Pressable>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={[styles.placeholder, { color: colors.textSecondary }]}>
+              {t('noTrustedCertificates')}
+            </Text>
+          )}
+          {certFetching ? (
+            <View style={styles.addRow}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.addText, { color: colors.primary }]}>{t('fetchingCertificate')}</Text>
+            </View>
+          ) : (
+            <Pressable
+              onPress={handleAddCertificate}
+              style={({ pressed }) => [styles.addRow, pressed && settingsStyles.pressed]}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+              <Text style={[styles.addText, { color: colors.primary }]}>{t('addCertificate')}</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {/* Certificate URL input sheet */}
+      <BottomSheet
+        visible={certUrlPromptVisible}
+        onClose={handleUrlPromptClose}
+        onCloseComplete={handleUrlPromptCloseComplete}
+      >
+        <View style={styles.sheetHeader}>
+          <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+            {t('addCertificate')}
+          </Text>
+          <Text style={[styles.sheetHint, { color: colors.textSecondary }]}>
+            {t('addCertificateHint')}
+          </Text>
+        </View>
+        <View style={styles.sheetForm}>
+          <TextInput
+            style={[styles.sheetInput, { color: colors.textPrimary, backgroundColor: colors.inputBg, borderColor: colors.border }]}
+            value={certUrlValue}
+            onChangeText={setCertUrlValue}
+            placeholder="https://music.example.com"
+            placeholderTextColor={colors.textSecondary}
+            autoFocus
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            returnKeyType="go"
+            onSubmitEditing={handleFetchCertificate}
+          />
+          <Pressable
+            onPress={handleFetchCertificate}
+            style={({ pressed }) => [
+              styles.sheetSaveButton,
+              { backgroundColor: colors.primary },
+              pressed && settingsStyles.pressed,
+            ]}
+          >
+            <Text style={styles.sheetSaveButtonText}>{t('fetch')}</Text>
+          </Pressable>
+          <Pressable onPress={handleUrlPromptClose} style={styles.sheetCancelButton}>
+            <Text style={[styles.sheetCancelButtonText, { color: colors.primary }]}>{t('cancel')}</Text>
+          </Pressable>
+        </View>
+      </BottomSheet>
+
+      <CertificatePromptModal
+        visible={certModalVisible}
+        certInfo={certInfo}
+        hostname={certHostname}
+        isManualAdd
+        onTrust={handleTrustFetchedCert}
+        onCancel={handleCancelCert}
+      />
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  certRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    gap: 12,
+  },
+  certInfo: { flex: 1 },
+  certHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  certHostname: { fontSize: 16, fontWeight: '600' },
+  certFingerprint: { fontSize: 12, fontFamily: 'monospace', marginBottom: 2 },
+  certDate: { fontSize: 12 },
+  activeDot: { width: 6, height: 6, borderRadius: 3 },
+  expiredBadge: { fontSize: 12, fontWeight: '600' },
+  placeholder: { fontSize: 16, fontStyle: 'italic', padding: 16 },
+  addRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
+  addText: { fontSize: 16, fontWeight: '500' },
+  sheetHeader: { paddingHorizontal: 4, marginBottom: 16 },
+  sheetTitle: { fontSize: 18, fontWeight: '700', marginBottom: 6 },
+  sheetHint: { fontSize: 13, lineHeight: 18 },
+  sheetForm: { paddingHorizontal: 4 },
+  sheetInput: {
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  sheetSaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  sheetSaveButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  sheetCancelButton: { alignItems: 'center', paddingVertical: 12, marginBottom: 4 },
+  sheetCancelButtonText: { fontSize: 16, fontWeight: '500' },
+});

@@ -1,0 +1,79 @@
+/**
+ * Image download queue store — Zustand wrapper around the persistent SQL
+ * queue. Mirror of `musicCacheStore`'s queue exposure shape, scaled down for
+ * the simpler image-cache needs (no per-row UI inspection — Settings only
+ * needs the cycle summary).
+ *
+ * Cycle metadata (cycleId, scope, total, isPaused) is owned by the
+ * service-layer kvStorage blob (`substreamer-image-queue-meta`) and re-read
+ * on every subscription tick — the store is a thin reactive mirror, not the
+ * source of truth.
+ */
+import { create } from 'zustand';
+
+import {
+  type ImageDownloadQueueScope,
+} from './persistence/imageDownloadQueueTable';
+import {
+  type ImageQueuePhase,
+  getImageQueueState,
+  subscribeImageQueueChanges,
+} from '../services/imageCacheService';
+
+export interface ImageDownloadQueueState {
+  cycleId: string | null;
+  cycleScope: ImageDownloadQueueScope | null;
+  cycleTotal: number;
+  cycleProcessed: number;
+  cycleFailed: number;
+  isPaused: boolean;
+  phase: ImageQueuePhase;
+
+  /** Re-read cycle meta into the store. Safe to call repeatedly. */
+  hydrateFromDbAsync: () => Promise<void>;
+  /** Update only the derived progress fields without re-querying the queue array. */
+  refreshProgress: () => Promise<void>;
+}
+
+export const imageDownloadQueueStore = create<ImageDownloadQueueState>()((set) => ({
+  cycleId: null,
+  cycleScope: null,
+  cycleTotal: 0,
+  cycleProcessed: 0,
+  cycleFailed: 0,
+  isPaused: false,
+  phase: 'active',
+
+  hydrateFromDbAsync: async () => {
+    const s = await getImageQueueState();
+    set({
+      cycleId: s.cycleId,
+      cycleScope: s.cycleScope,
+      cycleTotal: s.cycleTotal,
+      cycleProcessed: s.processed,
+      cycleFailed: s.failed,
+      isPaused: s.isPaused,
+      phase: s.phase,
+    });
+  },
+
+  refreshProgress: async () => {
+    const s = await getImageQueueState();
+    set({
+      cycleId: s.cycleId,
+      cycleScope: s.cycleScope,
+      cycleTotal: s.cycleTotal,
+      cycleProcessed: s.processed,
+      cycleFailed: s.failed,
+      isPaused: s.isPaused,
+      phase: s.phase,
+    });
+  },
+}));
+
+// Wire the service-layer notifier so any queue mutation pushes a refresh
+// into the store. Service is the source of truth; this is a one-way
+// subscription so the store reactively mirrors the SQL/meta state.
+subscribeImageQueueChanges(() => {
+  void imageDownloadQueueStore.getState().refreshProgress();
+});
