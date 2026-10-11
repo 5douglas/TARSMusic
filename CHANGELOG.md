@@ -1,5 +1,11 @@
 # Changelog
 
+## [8.1.7] - 2026-10-11
+
+- chore: enable native diagnostic
+- ci: update coverage badge [skip ci]
+- Translate the route picker and explain the Local Network denial
+- ci: update coverage badge [skip ci]
 ## [8.1.6] - 2026-10-07
 
 - chore: bump RNQP
