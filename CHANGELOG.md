@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.1.8] - 2026-10-12
+
+- chore: logging
+- ci: update coverage badge [skip ci]
 ## [8.1.7] - 2026-10-11
 
 - chore: enable native diagnostic
