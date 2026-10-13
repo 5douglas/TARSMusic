@@ -1,5 +1,10 @@
 # Changelog
 
+## [8.1.9] - 2026-10-13
+
+- ci: update coverage badge [skip ci]
+- chore: RNQP testing
+- ci: update coverage badge [skip ci]
 ## [8.1.8] - 2026-10-12
 
 - chore: logging
