@@ -48,6 +48,7 @@
     "drizzle-orm": "^0.45.2",
     "expo": "~57.0.8",
     "expo-async-fs": "file:./modules/expo-async-fs",
+    "expo-audio": "~57.0.5",
     "expo-backup-exclusions": "file:./modules/expo-backup-exclusions",
     "expo-battery": "~57.0.1",
     "expo-blur": "~57.0.2",
