@@ -779,6 +779,14 @@ export default function RootLayout() {
           options={{ ...blurHeaderOptions, title: i18n.t('downloads'), headerBackTitle: i18n.t('back') }}
         />
         <Stack.Screen
+          name="discover-browse"
+          options={({ route }) => ({
+            ...blurHeaderOptions,
+            title: (route.params as { title?: string } | undefined)?.title ?? '',
+            headerBackTitle: i18n.t('back'),
+          })}
+        />
+        <Stack.Screen
           name="settings-server"
           options={{ ...blurHeaderOptions, title: i18n.t('serverAccount'), headerBackTitle: i18n.t('settings') }}
         />

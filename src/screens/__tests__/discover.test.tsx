@@ -29,6 +29,7 @@ jest.mock('@shopify/flash-list', () => {
 
 let mockFocused = true;
 jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => mockFocused }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 
 jest.mock('../../hooks/useTheme', () => ({
@@ -46,9 +47,11 @@ jest.mock('../../hooks/useTheme', () => ({
 
 const mockFetchPlaylist = jest.fn();
 const mockQueueDownload = jest.fn();
+const mockSearch = jest.fn();
 jest.mock('../../services/discoverService', () => ({
   fetchDiscoverPlaylist: (...args: unknown[]) => mockFetchPlaylist(...args),
   queueDiscoverDownload: (...args: unknown[]) => mockQueueDownload(...args),
+  searchDiscover: (...args: unknown[]) => mockSearch(...args),
 }));
 
 const mockTogglePreview = jest.fn();
@@ -162,6 +165,15 @@ describe('DiscoverScreen playlists', () => {
     fireEvent.press(screen.getByText('New releases'));
     expect(screen.getByText('Elevador')).toBeTruthy();
     expect(mockFetchPlaylist).toHaveBeenCalledTimes(2);
+  });
+
+  it('switches to the search panel without fetching a playlist', async () => {
+    mockFetchPlaylist.mockResolvedValue(playlist([item()]));
+    render(<DiscoverScreen />);
+    await waitFor(() => expect(screen.getByText('Elevador')).toBeTruthy());
+    fireEvent.press(screen.getByText('Search'));
+    expect(screen.getByText('Find new music to add to your library')).toBeTruthy();
+    expect(mockFetchPlaylist).toHaveBeenCalledTimes(1);
   });
 
   it('shows the empty state for an empty playlist', async () => {

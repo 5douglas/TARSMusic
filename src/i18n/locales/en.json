@@ -1188,5 +1188,12 @@
   "discoverLoadFailed": "Could not load this playlist",
   "discoverLoadFailedHint": "Check the connection, address and token.",
   "discoverEditConnection": "Edit connection",
-  "discoverEmpty": "Nothing here yet"
+  "discoverEmpty": "Nothing here yet",
+  "discoverSearchPlaceholder": "Search Deezer for songs, albums, artists",
+  "discoverSearchHint": "Find new music to add to your library",
+  "discoverNoResults": "No results",
+  "discoverTopTracks": "Top tracks",
+  "discoverDownloadAlbum": "Download album",
+  "discoverFans_one": "{{count}} fan",
+  "discoverFans_other": "{{count}} fans"
 }
