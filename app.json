@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "substreamer",
+    "name": "Substreamer Discover",
     "slug": "substreamer",
     "version": "8.1.9",
     "scheme": "substreamer",
@@ -56,7 +56,7 @@
       ],
       "predictiveBackGestureEnabled": false,
       "versionCode": 80000186,
-      "package": "com.ghenry22.substream2"
+      "package": "com.douglas.substreamer.discover"
     },
     "web": {
       "favicon": "./src/assets/favicon.png"

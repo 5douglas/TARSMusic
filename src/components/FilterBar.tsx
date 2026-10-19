@@ -82,7 +82,8 @@ export const FilterBar = memo(function FilterBar({
     layoutToggle?.onToggle();
   }, [layoutToggle]);
 
-  const isSettings = routeName === 'settings';
+  // Discover lists remote Deezer items, so the library filters don't apply there either.
+  const isSettings = routeName === 'settings' || routeName === 'discover';
   const showOfflineChip = showInFilterBar;
   const showDownloadedChip = !isSettings && !hideDownloaded;
   const showFavoritesChip = !isSettings && routeName !== 'favorites' && !hideFavorites;
