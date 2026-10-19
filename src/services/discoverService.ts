@@ -36,6 +36,53 @@ export interface DiscoverPlaylist {
   items: DiscoverItem[];
 }
 
+export interface DiscoverAlbum {
+  id: number;
+  type: 'album';
+  title: string;
+  artist: string;
+  artist_id: number | null;
+  cover: string | null;
+  cover_small: string | null;
+  record_type: string | null;
+  release_date: string | null;
+  track_count: number | null;
+  explicit: boolean;
+  link: string;
+  in_library: boolean;
+}
+
+export interface DiscoverArtist {
+  id: number;
+  type: 'artist';
+  title: string;
+  cover: string | null;
+  cover_small: string | null;
+  fans: number | null;
+  album_count: number | null;
+  link: string;
+  in_library: boolean;
+}
+
+export type DiscoverSearchType = 'track' | 'album' | 'artist';
+
+export interface DiscoverSearchResult {
+  query: string;
+  type: DiscoverSearchType;
+  count: number;
+  items: Array<DiscoverItem | DiscoverAlbum | DiscoverArtist>;
+}
+
+/** An album (its tracks) or an artist (top tracks + discography). */
+export interface DiscoverBrowse extends DiscoverPlaylist {
+  type: 'album' | 'artist';
+  cover: string | null;
+  link: string;
+  album?: DiscoverAlbum;
+  artist?: DiscoverArtist;
+  albums?: DiscoverAlbum[];
+}
+
 const PLAYLIST_PATHS: Record<DiscoverPlaylistKind, string> = {
   'new-releases': '/playlists/new-releases',
   recommended: '/playlists/recommended',
@@ -52,23 +99,45 @@ export function isDiscoverConfigured(): boolean {
   return connection() !== null;
 }
 
-export async function fetchDiscoverPlaylist(
-  kind: DiscoverPlaylistKind,
-  refresh = false,
-): Promise<DiscoverPlaylist | null> {
+/** GETs a backend path; null when unconfigured, on HTTP errors, or when the body has no `items`. */
+async function getItems<T extends { items: unknown[] }>(path: string, refresh: boolean): Promise<T | null> {
   const conn = connection();
   if (!conn) return null;
-  const path = PLAYLIST_PATHS[kind];
   const url = `${conn.baseUrl}${path}${refresh ? `${path.includes('?') ? '&' : '?'}refresh=1` : ''}`;
   try {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${conn.token}` } });
     if (!res.ok) return null;
-    const data = (await res.json()) as DiscoverPlaylist;
+    const data = (await res.json()) as T;
     return Array.isArray(data?.items) ? data : null;
   } catch {
     // Network failure: the screen shows its error state and offers retry.
     return null;
   }
+}
+
+export function fetchDiscoverPlaylist(
+  kind: DiscoverPlaylistKind,
+  refresh = false,
+): Promise<DiscoverPlaylist | null> {
+  return getItems<DiscoverPlaylist>(PLAYLIST_PATHS[kind], refresh);
+}
+
+export function searchDiscover(
+  query: string,
+  type: DiscoverSearchType,
+): Promise<DiscoverSearchResult | null> {
+  return getItems<DiscoverSearchResult>(
+    `/search?q=${encodeURIComponent(query)}&type=${type}`,
+    false,
+  );
+}
+
+export function fetchDiscoverBrowse(
+  kind: 'album' | 'artist',
+  id: number,
+  refresh = false,
+): Promise<DiscoverBrowse | null> {
+  return getItems<DiscoverBrowse>(`/browse/${kind}/${id}`, refresh);
 }
 
 /** Queues a Deezer track/album link in deemix. Resolves true when the backend accepted it. */

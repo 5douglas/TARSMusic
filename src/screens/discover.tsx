@@ -1,8 +1,6 @@
-import Ionicons from "@react-native-vector-icons/ionicons/static";
 import { FlashList } from '@shopify/flash-list';
-import { Image } from 'expo-image';
 import { useIsFocused } from "expo-router/react-navigation";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -14,100 +12,34 @@ import {
   View,
 } from 'react-native';
 
+import { DiscoverTrackRow } from '../components/DiscoverRows';
+import { DiscoverSearch } from '../components/DiscoverSearch';
 import { EmptyState } from '../components/EmptyState';
 import { SegmentControl } from '../components/SegmentControl';
+import { useDiscoverActions } from '../hooks/useDiscoverActions';
 import { useTheme } from '../hooks/useTheme';
-import { stopDiscoverPreview, toggleDiscoverPreview } from '../services/discoverPreviewService';
+import { stopDiscoverPreview } from '../services/discoverPreviewService';
 import {
   fetchDiscoverPlaylist,
-  queueDiscoverDownload,
   type DiscoverItem,
   type DiscoverPlaylist,
   type DiscoverPlaylistKind,
 } from '../services/discoverService';
 import { discoverPreviewStore } from '../store/discoverPreviewStore';
 import { discoverSettingsStore } from '../store/discoverSettingsStore';
-import { playbackToastStore } from '../store/playbackToastStore';
 import { searchStore } from '../store/searchStore';
-import { themedAlertStore } from '../store/themedAlertStore';
-import { formatTrackDuration } from '../utils/formatters';
+
+type DiscoverSegment = DiscoverPlaylistKind | 'search';
 
 const SEGMENT_KEYS = [
   { key: 'new-releases', labelKey: 'discoverNewReleases' },
   { key: 'recommended', labelKey: 'discoverForYou' },
   { key: 'charts-br', labelKey: 'discoverTopBrazil' },
   { key: 'charts-global', labelKey: 'discoverTopGlobal' },
+  { key: 'search', labelKey: 'search' },
 ] as const;
 
 const SEGMENT_HEIGHT = 52;
-
-/* ------------------------------------------------------------------ */
-/*  Row                                                               */
-/* ------------------------------------------------------------------ */
-
-const DiscoverRow = memo(function DiscoverRow({
-  item,
-  playing,
-  onPreview,
-  onDownload,
-}: {
-  item: DiscoverItem;
-  playing: boolean;
-  onPreview: (item: DiscoverItem) => void;
-  onDownload: (item: DiscoverItem, wholeAlbum: boolean) => void;
-}) {
-  const { colors } = useTheme();
-  const { t } = useTranslation();
-  const detail = item.reason ?? (item.release_date ? `${item.record_type ?? ''} ${item.release_date}`.trim() : null);
-
-  return (
-    <View style={styles.row}>
-      <Pressable
-        onPress={() => onPreview(item)}
-        style={styles.coverWrap}
-        accessibilityRole="button"
-        accessibilityLabel={playing ? t('discoverStopPreview') : t('discoverPlayPreview')}
-      >
-        <Image source={item.cover_small ?? undefined} style={styles.cover} />
-        <View style={styles.coverOverlay}>
-          <Ionicons name={playing ? 'stop' : 'play'} size={20} color="#fff" />
-        </View>
-      </Pressable>
-      <View style={styles.info}>
-        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
-          {item.position != null ? `${item.position}. ` : ''}
-          {item.title}
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-          {item.artist} · {item.album} · {formatTrackDuration(item.duration)}
-        </Text>
-        <View style={styles.metaLine}>
-          {item.in_library && (
-            <Text style={[styles.badge, { color: colors.green, borderColor: colors.green }]}>
-              {t('discoverInLibrary')}
-            </Text>
-          )}
-          {detail != null && (
-            <Text style={[styles.detail, { color: colors.textSecondary }]} numberOfLines={1}>
-              {detail}
-            </Text>
-          )}
-        </View>
-      </View>
-      <Pressable
-        onPress={() => onDownload(item, false)}
-        onLongPress={item.album_link ? () => onDownload(item, true) : undefined}
-        hitSlop={8}
-        style={({ pressed }) => [styles.downloadButton, pressed && styles.pressed]}
-        accessibilityRole="button"
-        accessibilityLabel={t('discoverDownload')}
-        accessibilityHint={item.album_link ? t('discoverDownloadHint') : undefined}
-      >
-        <Ionicons name="cloud-download-outline" size={24} color={colors.primary} />
-      </Pressable>
-    </View>
-  );
-});
 
 /* ------------------------------------------------------------------ */
 /*  Connection form                                                   */
@@ -176,7 +108,8 @@ export function DiscoverScreen() {
   const playingId = discoverPreviewStore((s) => s.playingId);
   const configured = !!baseUrl && !!token;
 
-  const [segment, setSegment] = useState<DiscoverPlaylistKind>('new-releases');
+  const { handlePreview, handleTrackDownload } = useDiscoverActions();
+  const [segment, setSegment] = useState<DiscoverSegment>('new-releases');
   const [playlists, setPlaylists] = useState<Partial<Record<DiscoverPlaylistKind, DiscoverPlaylist>>>({});
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -194,7 +127,7 @@ export function DiscoverScreen() {
   }, []);
 
   useEffect(() => {
-    if (!configured || playlists[segment]) return;
+    if (!configured || segment === 'search' || playlists[segment]) return;
     let alive = true;
     setLoading(true);
     setFailed(false);
@@ -220,6 +153,7 @@ export function DiscoverScreen() {
   }, [isFocused]);
 
   const handleRefresh = useCallback(async () => {
+    if (segment === 'search') return;
     setRefreshing(true);
     try {
       await load(segment, true);
@@ -228,44 +162,16 @@ export function DiscoverScreen() {
     }
   }, [load, segment]);
 
-  const handlePreview = useCallback((item: DiscoverItem) => {
-    void toggleDiscoverPreview(item.id);
-  }, []);
-
-  const handleDownload = useCallback(
-    (item: DiscoverItem, wholeAlbum: boolean) => {
-      const url = wholeAlbum && item.album_link ? item.album_link : item.link;
-      const name = wholeAlbum ? item.album : item.title;
-      themedAlertStore.getState().show(
-        wholeAlbum ? t('discoverDownloadAlbumTitle') : t('discoverDownloadTrackTitle'),
-        `${name} · ${item.artist}`,
-        [
-          { text: t('cancel'), style: 'cancel' },
-          {
-            text: t('discoverDownload'),
-            onPress: () => {
-              void queueDiscoverDownload(url).then((ok) => {
-                if (ok) playbackToastStore.getState().flashSuccess(t('discoverDownloadQueued'));
-                else themedAlertStore.getState().show(t('discoverDownloadFailed'), undefined, [{ text: t('ok') }]);
-              });
-            },
-          },
-        ],
-      );
-    },
-    [t],
-  );
-
   const renderItem = useCallback(
     ({ item }: { item: DiscoverItem }) => (
-      <DiscoverRow
+      <DiscoverTrackRow
         item={item}
         playing={item.id === playingId}
         onPreview={handlePreview}
-        onDownload={handleDownload}
+        onDownload={handleTrackDownload}
       />
     ),
-    [playingId, handlePreview, handleDownload],
+    [playingId, handlePreview, handleTrackDownload],
   );
 
   const contentInsetTop = headerHeight + SEGMENT_HEIGHT;
@@ -274,9 +180,11 @@ export function DiscoverScreen() {
     return <DiscoverConnectionForm topInset={headerHeight} />;
   }
 
-  const current = playlists[segment];
+  const current = segment === 'search' ? undefined : playlists[segment];
   let body;
-  if (!current && loading) {
+  if (segment === 'search') {
+    body = <DiscoverSearch topInset={contentInsetTop} playingId={playingId} />;
+  } else if (!current && loading) {
     body = (
       <View style={[styles.center, { paddingTop: contentInsetTop }]}>
         <ActivityIndicator color={colors.primary} />
@@ -361,59 +269,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 8,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    gap: 12,
-  },
-  coverWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  cover: {
-    width: 52,
-    height: 52,
-  },
-  coverOverlay: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  info: {
-    flex: 1,
-    minWidth: 0,
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
   subtitle: {
     fontSize: 13,
-  },
-  metaLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  badge: {
-    fontSize: 10,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    overflow: 'hidden',
-  },
-  detail: {
-    fontSize: 12,
-    flexShrink: 1,
-  },
-  downloadButton: {
-    padding: 4,
   },
   pressed: {
     opacity: 0.5,

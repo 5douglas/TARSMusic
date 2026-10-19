@@ -4,7 +4,9 @@ const mockFetch = jest.fn();
 import { discoverSettingsStore } from '../../store/discoverSettingsStore';
 import {
   discoverPreviewUrl,
+  fetchDiscoverBrowse,
   fetchDiscoverPlaylist,
+  searchDiscover,
   isDiscoverConfigured,
   queueDiscoverDownload,
 } from '../discoverService';
@@ -63,6 +65,27 @@ describe('fetchDiscoverPlaylist', () => {
     await expect(fetchDiscoverPlaylist('recommended')).resolves.toBeNull();
     mockFetch.mockRejectedValueOnce(new Error('offline'));
     await expect(fetchDiscoverPlaylist('recommended')).resolves.toBeNull();
+  });
+});
+
+describe('searchDiscover', () => {
+  it('encodes the query and passes the type', async () => {
+    const result = { query: 'jão & cia', type: 'album', count: 0, items: [] };
+    mockFetch.mockResolvedValue({ ok: true, json: async () => result });
+    await expect(searchDiscover('jão & cia', 'album')).resolves.toEqual(result);
+    expect(mockFetch.mock.calls[0][0]).toBe(`${BASE}/search?q=j%C3%A3o%20%26%20cia&type=album`);
+  });
+});
+
+describe('fetchDiscoverBrowse', () => {
+  it('requests albums and artists by id, with optional refresh', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ ...playlist, type: 'album' }) });
+    await fetchDiscoverBrowse('album', 5);
+    await fetchDiscoverBrowse('artist', 7, true);
+    expect(mockFetch.mock.calls.map((c) => c[0])).toEqual([
+      `${BASE}/browse/album/5`,
+      `${BASE}/browse/artist/7?refresh=1`,
+    ]);
   });
 });
 
