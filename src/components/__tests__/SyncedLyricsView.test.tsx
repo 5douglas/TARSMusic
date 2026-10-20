@@ -77,7 +77,7 @@ import { playerStore } from '../../store/playerStore';
 import { impactAsync } from '../../utils/haptics';
 import { type LyricsLine } from '../../services/subsonicService';
 
-const { SyncedLyricsView } = require('../SyncedLyricsView');
+const { SyncedLyricsView, pickActiveLine } = require('../SyncedLyricsView');
 
 // NOTE: the auto-scroll mechanism (ScrollView ref + useEffect watching
 // `activeIndexJs`) is intentionally NOT asserted here. ScrollView's
@@ -161,5 +161,32 @@ describe('SyncedLyricsView', () => {
     const { UNSAFE_root } = renderView({ lines: [] });
     expect(UNSAFE_root).toBeTruthy();
     expect(seekTo).not.toHaveBeenCalled();
+  });
+});
+
+describe('pickActiveLine', () => {
+  const starts = [1000, 4000, 8000];
+
+  it('is -1 before the first line and with no lines', () => {
+    expect(pickActiveLine(starts, 500, -1)).toBe(-1);
+    expect(pickActiveLine([], 5000, -1)).toBe(-1);
+  });
+
+  it('finds the line whose start is the latest one reached', () => {
+    expect(pickActiveLine(starts, 1000, -1)).toBe(0);
+    expect(pickActiveLine(starts, 3999, 0)).toBe(0);
+    expect(pickActiveLine(starts, 4000, 0)).toBe(1);
+    expect(pickActiveLine(starts, 60000, 1)).toBe(2);
+  });
+
+  it('holds the current line through small backward jitter', () => {
+    expect(pickActiveLine(starts, 3800, 1)).toBe(1);
+    expect(pickActiveLine(starts, 800, 0)).toBe(0);
+  });
+
+  it('follows a real seek backwards', () => {
+    expect(pickActiveLine(starts, 3000, 1)).toBe(0);
+    expect(pickActiveLine(starts, 1200, 2)).toBe(0);
+    expect(pickActiveLine(starts, 100, 0)).toBe(-1);
   });
 });
