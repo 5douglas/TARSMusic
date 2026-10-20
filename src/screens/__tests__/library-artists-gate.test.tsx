@@ -9,6 +9,9 @@ jest.mock('expo-router/react-navigation', () => ({ useIsFocused: () => true }));
 jest.mock('../album-library-list', () => ({ AlbumLibraryListScreen: () => null }));
 jest.mock('../playlist-list', () => ({ PlaylistListScreen: () => null }));
 jest.mock('../song-library-list', () => ({ SongLibraryListScreen: () => null }));
+jest.mock('../favorites', () => ({ FavoritesScreen: () => null }));
+jest.mock('../../components/DiscoverDownloads', () => ({ DiscoverDownloads: () => null }));
+jest.mock('../../components/DiscoverConnectHint', () => ({ DiscoverConnectHint: () => null }));
 jest.mock('../artist-list', () => {
   const { Text } = require('react-native');
   return { ArtistListScreen: () => <Text testID="artist-list">artist list</Text> };

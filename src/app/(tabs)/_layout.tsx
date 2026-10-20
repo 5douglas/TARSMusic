@@ -11,7 +11,6 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, View } from 'react-native';
 
-import WaveformLogo from '../../components/WaveformLogo';
 import { BannerStack } from '../../components/BannerStack';
 import { BottomChrome } from '../../components/BottomChrome';
 import { GradientBackground } from '../../components/GradientBackground';
@@ -71,34 +70,7 @@ export default function TabLayout() {
           options={{
             title: t('home'),
             tabBarIcon: ({ color, size }) => (
-              <WaveformLogo size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="library"
-          options={{
-            title: t('library'),
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="musical-notes" size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="favorites"
-          options={{
-            title: t('favorites'),
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="heart" size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="discover"
-          options={{
-            title: t('discover'),
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="compass" size={size} color={color} />
+              <Ionicons name="home" size={size} color={color} />
             ),
           }}
         />
@@ -112,11 +84,11 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="settings"
+          name="library"
           options={{
-            title: t('settings'),
+            title: t('yourLibrary'),
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="settings" size={size} color={color} />
+              <Ionicons name="library" size={size} color={color} />
             ),
           }}
         />

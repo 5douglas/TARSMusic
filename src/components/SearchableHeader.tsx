@@ -4,6 +4,7 @@ import Ionicons from "@react-native-vector-icons/ionicons/static";
 // surfaces it at js-tabs.
 import type { BottomTabHeaderProps } from "expo-router/build/react-navigation/bottom-tabs";
 import { BlurView } from 'expo-blur';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +14,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -34,6 +36,7 @@ export function SearchableHeader({ route }: BottomTabHeaderProps) {
   const { t } = useTranslation();
   const { theme, colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const inputRef = useRef<TextInput>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -103,8 +106,31 @@ export function SearchableHeader({ route }: BottomTabHeaderProps) {
     };
   }, []);
 
+  // Spotify-style top row: profile button (opens Settings) and the tab's title.
+  const titleKey = route.name === 'library' ? 'yourLibrary' : route.name === 'search' ? 'search' : null;
+  const topRow = (
+    <View style={styles.titleRow}>
+      <Pressable
+        onPress={() => router.push('/settings')}
+        hitSlop={8}
+        style={[styles.profileButton, { backgroundColor: colors.primary }]}
+        accessibilityRole="button"
+        accessibilityLabel={t('settings')}
+      >
+        <Ionicons name="person" size={16} color="#fff" />
+      </Pressable>
+      {titleKey && (
+        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
+          {t(titleKey)}
+        </Text>
+      )}
+    </View>
+  );
+
   const headerContent = (
     <>
+      {topRow}
+      {isSearchTab && (
       <View style={styles.row}>
         <View
           style={[styles.inputContainer, { backgroundColor: colors.inputBg }]}
@@ -135,6 +161,7 @@ export function SearchableHeader({ route }: BottomTabHeaderProps) {
           )}
         </View>
       </View>
+      )}
       <FilterBar routeName={route.name} />
     </>
   );
@@ -188,6 +215,25 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: SCREEN_HEIGHT,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  profileButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '800',
   },
   row: {
     flexDirection: 'row',

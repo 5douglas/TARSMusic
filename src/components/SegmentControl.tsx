@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { useTheme } from '../hooks/useTheme';
 
@@ -8,6 +8,7 @@ export interface Segment<K extends string = string> {
   label: string;
 }
 
+/** Spotify-style filter pills on one horizontally scrollable row. */
 export const SegmentControl = memo(function SegmentControl<K extends string>({
   segments,
   selected,
@@ -20,22 +21,26 @@ export const SegmentControl = memo(function SegmentControl<K extends string>({
   const { colors } = useTheme();
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.inputBg + 'D9' }]}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+    >
       {segments.map(({ key, label }) => {
         const isActive = selected === key;
         return (
           <Pressable
             key={key}
             onPress={() => onSelect(key)}
-            style={[
-              styles.button,
-              isActive && [styles.buttonActive, { backgroundColor: colors.card }],
-            ]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            style={[styles.pill, { backgroundColor: isActive ? colors.primary : colors.inputBg }]}
           >
             <Text
               style={[
                 styles.label,
-                { color: isActive ? colors.textPrimary : colors.textSecondary },
+                { color: isActive ? '#fff' : colors.textPrimary },
                 isActive && styles.labelActive,
               ]}
             >
@@ -44,7 +49,7 @@ export const SegmentControl = memo(function SegmentControl<K extends string>({
           </Pressable>
         );
       })}
-    </View>
+    </ScrollView>
   );
 }) as <K extends string>(props: {
   segments: readonly Segment<K>[];
@@ -53,32 +58,26 @@ export const SegmentControl = memo(function SegmentControl<K extends string>({
 }) => React.JSX.Element;
 
 const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 0,
+  },
   container: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 4,
-    borderRadius: 10,
-    padding: 3,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    gap: 8,
   },
-  button: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  buttonActive: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 2,
-    elevation: 2,
+  pill: {
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    justifyContent: 'center',
   },
   label: {
     fontSize: 14,
     fontWeight: '500',
   },
   labelActive: {
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

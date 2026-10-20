@@ -45,11 +45,13 @@ const SEGMENT_KEYS = [
 /*  FavoritesScreen                                                   */
 /* ------------------------------------------------------------------ */
 
-export function FavoritesScreen() {
+/** `topInset` overrides the tab-header height when embedded below other chrome (Library's pills). */
+export function FavoritesScreen({ topInset }: { topInset?: number } = {}) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const isFocused = useIsFocused();
-  const headerHeight = searchStore((s) => s.headerHeight);
+  const tabHeaderHeight = searchStore((s) => s.headerHeight);
+  const headerHeight = topInset ?? tabHeaderHeight;
   const [activeSegment, setActiveSegment] = useState<FavoritesSegment>('songs');
 
   const segments = useMemo(

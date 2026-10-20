@@ -1208,5 +1208,11 @@
   "discoverCancelAll": "Cancel all",
   "discoverCancelAllTitle": "Cancel all downloads?",
   "discoverCancelAllBody": "Everything still downloading or waiting in the queue is removed.",
-  "discoverEditConnectionBody": "Disconnect from this discover server to enter a new address or token?"
+  "discoverEditConnectionBody": "Disconnect from this discover server to enter a new address or token?",
+  "yourLibrary": "Your Library",
+  "likedSongs": "Liked",
+  "discoverServer": "Discover",
+  "discoverServerSubtitle": "Server for new releases, mixes, charts and downloads",
+  "discoverConnected": "Connected to Discover",
+  "discoverOpenSettings": "Open Discover settings"
 }
