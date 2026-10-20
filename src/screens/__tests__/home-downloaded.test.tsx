@@ -58,6 +58,25 @@ const stubCard =
     return React.createElement(Text, { testID: `${kind}:${item?.id ?? ''}` }, kind);
   };
 jest.mock('../../components/AlbumCard', () => ({ AlbumCard: stubCard('album') }));
+// Discover rows and shortcuts have their own suites; here they report where they render.
+jest.mock('../../components/DiscoverHomeSections', () => ({
+  DiscoverHomeSections: ({ ids }: { ids: string[] }) => {
+    const { Text } = require('react-native');
+    const React = require('react');
+    return React.createElement(Text, null, `discover:${ids.join(',')}`);
+  },
+}));
+jest.mock('../../components/QuickAccessGrid', () => ({
+  QuickAccessGrid: () => {
+    const { Text } = require('react-native');
+    const React = require('react');
+    return React.createElement(Text, null, 'quick-access');
+  },
+}));
+const mockUseDiscoverHome = jest.fn((_enabled: boolean) => ({ home: null as unknown, refresh: jest.fn() }));
+jest.mock('../../hooks/useDiscoverHome', () => ({
+  useDiscoverHome: (enabled: boolean) => mockUseDiscoverHome(enabled),
+}));
 jest.mock('../../components/PlaylistCard', () => ({ PlaylistCard: stubCard('playlist') }));
 jest.mock('../../components/GenreChipSection', () => ({ GenreChipSection: () => null }));
 jest.mock('../../components/ResumeBookmarksSection', () => ({
@@ -430,5 +449,39 @@ describe('HomeScreen — the Downloaded sections are SQL-ordered', () => {
     const r = render(<HomeScreen />);
     await waitFor(() => expect(r.queryByTestId('playlist:a-zulu')).not.toBeNull());
     expect(idsFor(r, 'playlist')).toEqual(['z-alpha', 'a-zulu']);
+  });
+});
+
+describe('HomeScreen — Spotify-style shortcuts and Discover rows', () => {
+  beforeEach(() => {
+    filterBarStore.setState({ downloadedOnly: false, favoritesOnly: false });
+    mockUseDiscoverHome.mockReset();
+    mockUseDiscoverHome.mockReturnValue({ home: { sections: [] }, refresh: jest.fn() });
+  });
+
+  it('shows shortcuts, mixes and releases above My listening and charts last', () => {
+    const r = render(<HomeScreen />);
+    const tree = JSON.stringify(r.toJSON());
+    expect(mockUseDiscoverHome).toHaveBeenLastCalledWith(true);
+    expect(tree.indexOf('quick-access')).toBeLessThan(tree.indexOf('discover:mixes,releases'));
+    expect(tree.indexOf('discover:mixes,releases')).toBeLessThan(tree.indexOf('My Listening'));
+    expect(tree.indexOf('My Listening')).toBeLessThan(tree.indexOf('discover:charts'));
+  });
+
+  it('turns Discover off offline and hides shortcuts under a filter', () => {
+    offlineModeStore.setState({ offlineMode: true });
+    mockUseDiscoverHome.mockReturnValue({ home: null, refresh: jest.fn() });
+    const r = render(<HomeScreen />);
+    expect(mockUseDiscoverHome).toHaveBeenLastCalledWith(false);
+    expect(r.queryByText(/^discover:/)).toBeNull();
+    r.unmount();
+
+    offlineModeStore.setState({ offlineMode: false });
+    filterBarStore.setState({ favoritesOnly: true });
+    albumListsStore.setState({ recentlyPlayed: [curated('a1')] as never });
+    favoritesStore.setState({ albumIds: new Set(['a1']) });
+    const r2 = render(<HomeScreen />);
+    expect(mockUseDiscoverHome).toHaveBeenLastCalledWith(false);
+    expect(r2.queryByText('quick-access')).toBeNull();
   });
 });

@@ -21,12 +21,15 @@ import { useTranslation } from 'react-i18next';
 
 import { AlbumCard } from '../components/AlbumCard';
 import { AnimatedNumber } from '../components/AnimatedNumber';
+import { DiscoverHomeSections } from '../components/DiscoverHomeSections';
 import { DownloadedIcon } from '../components/DownloadedIcon';
 import { EmptyState } from '../components/EmptyState';
 import { GenreChipSection } from '../components/GenreChipSection';
 import { PlaylistCard } from '../components/PlaylistCard';
+import { QuickAccessGrid } from '../components/QuickAccessGrid';
 import { ResumeBookmarksSection } from '../components/ResumeBookmarksSection';
 import WaveformLogo from '../components/WaveformLogo';
+import { useDiscoverHome } from '../hooks/useDiscoverHome';
 import { computeStreaks, dateKey } from '../hooks/usePlaybackAnalytics';
 import { useTheme } from '../hooks/useTheme';
 import type { AlbumID3, Playlist } from '../services/subsonicService';
@@ -501,6 +504,8 @@ export function HomeScreen() {
   );
 
   const hasAnyFilters = downloadedOnly || favoritesOnly;
+  // Discover rows are remote Deezer content: shown only online and with no library filter on.
+  const { home: discoverHome } = useDiscoverHome(!offlineMode && !hasAnyFilters);
 
   // Playlists download atomically (no partial state), so the read carries no gate; it
   // comes back A-Z on the stored `sort_title`. Never-reaped source, independent of the
@@ -558,6 +563,8 @@ export function HomeScreen() {
           contentContainerStyle={[styles.scrollContent, { paddingTop: headerHeight + 16 }]}
           showsVerticalScrollIndicator={false}
         >
+          {!hasAnyFilters && <QuickAccessGrid albums={recentlyPlayed} />}
+          {discoverHome && <DiscoverHomeSections home={discoverHome} ids={['mixes', 'releases']} />}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Pressable
@@ -691,6 +698,7 @@ export function HomeScreen() {
               />
             );
           })}
+          {discoverHome && <DiscoverHomeSections home={discoverHome} ids={['charts']} />}
         </ScrollView>
       )}
     </View>
