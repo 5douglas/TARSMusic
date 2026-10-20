@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { DiscoverHome } from '../../services/discoverService';
 
@@ -9,14 +9,10 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('../../hooks/useTheme', () => ({
   useTheme: () => ({ colors: { textPrimary: '#fff', textSecondary: '#888', primary: '#1D9BF0', green: '#0f0' } }),
 }));
-const mockHome = jest.fn();
-jest.mock('../../services/discoverService', () => ({
-  fetchDiscoverHome: (...args: unknown[]) => mockHome(...args),
-  queueDiscoverDownload: jest.fn(),
-}));
+jest.mock('../../services/discoverService', () => ({ queueDiscoverDownload: jest.fn() }));
 jest.mock('../../services/discoverPreviewService', () => ({ toggleDiscoverPreview: jest.fn() }));
 
-import { DiscoverHomeView } from '../DiscoverHomeView';
+import { DiscoverHomeSections } from '../DiscoverHomeSections';
 
 const home: DiscoverHome = {
   updated: '',
@@ -44,18 +40,14 @@ const home: DiscoverHome = {
 };
 
 beforeEach(() => {
-  mockHome.mockReset();
   mockPush.mockReset();
 });
 
-describe('DiscoverHomeView', () => {
-  it('renders each section as cards and opens them', async () => {
-    mockHome.mockResolvedValue(home);
-    render(<DiscoverHomeView topInset={0} />);
-    expect(screen.getByText('Building playlist…')).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('New releases')).toBeTruthy());
-    expect(screen.getByText('Mixes for you')).toBeTruthy();
-    expect(screen.getByText('Charts')).toBeTruthy();
+describe('DiscoverHomeSections', () => {
+  it('renders the requested sections in order as cards and opens them', () => {
+    render(<DiscoverHomeSections home={home} ids={['mixes', 'releases', 'charts']} />);
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('Mixes for you')).toBeLessThan(tree.indexOf('New releases'));
     expect(screen.getByText('Jão · album')).toBeTruthy();
     expect(screen.getByText('Like Jão')).toBeTruthy();
     expect(screen.getByText('100 songs')).toBeTruthy();
@@ -72,29 +64,11 @@ describe('DiscoverHomeView', () => {
     });
   });
 
-  it('hides empty sections', async () => {
-    mockHome.mockResolvedValue({ ...home, sections: [{ ...home.sections[1], items: [] }, home.sections[2]] });
-    render(<DiscoverHomeView topInset={0} />);
-    await waitFor(() => expect(screen.getByText('Charts')).toBeTruthy());
+  it('renders only the requested ids and skips empty or missing sections', () => {
+    const sparse = { ...home, sections: [{ ...home.sections[1], items: [] }, home.sections[2]] };
+    render(<DiscoverHomeSections home={sparse} ids={['mixes', 'charts', 'releases']} />);
+    expect(screen.getByText('Charts')).toBeTruthy();
     expect(screen.queryByText('Mixes for you')).toBeNull();
-  });
-
-  it('shows the error state and retries with refresh', async () => {
-    mockHome.mockResolvedValueOnce(null);
-    render(<DiscoverHomeView topInset={0} />);
-    await waitFor(() => expect(screen.getByText('Could not load this playlist')).toBeTruthy());
-    mockHome.mockResolvedValueOnce(home);
-    await act(async () => fireEvent.press(screen.getByText('Retry')));
-    expect(mockHome).toHaveBeenLastCalledWith(true);
-    expect(screen.getByText('New releases')).toBeTruthy();
-  });
-
-  it('keeps the loaded home when a refresh fails', async () => {
-    mockHome.mockResolvedValueOnce(home).mockResolvedValueOnce(null);
-    const { UNSAFE_getByType } = render(<DiscoverHomeView topInset={0} />);
-    await waitFor(() => expect(screen.getByText('New releases')).toBeTruthy());
-    const { RefreshControl } = require('react-native');
-    await act(async () => UNSAFE_getByType(RefreshControl).props.onRefresh());
-    expect(screen.getByText('New releases')).toBeTruthy();
+    expect(screen.queryByText('New releases')).toBeNull();
   });
 });
