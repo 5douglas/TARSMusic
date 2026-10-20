@@ -787,6 +787,14 @@ export default function RootLayout() {
           })}
         />
         <Stack.Screen
+          name="settings"
+          options={{ ...blurHeaderOptions, title: i18n.t('settings'), headerBackTitle: i18n.t('back') }}
+        />
+        <Stack.Screen
+          name="settings-discover"
+          options={{ ...blurHeaderOptions, title: i18n.t('discoverServer'), headerBackTitle: i18n.t('settings') }}
+        />
+        <Stack.Screen
           name="settings-server"
           options={{ ...blurHeaderOptions, title: i18n.t('serverAccount'), headerBackTitle: i18n.t('settings') }}
         />

@@ -1,13 +1,15 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { HeaderHeightContext } from 'expo-router/react-navigation';
+import { useCallback, useContext, useMemo } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { BottomChrome } from '../components/BottomChrome';
+import { GradientBackground } from '../components/GradientBackground';
 import { SettingsLinkRow } from '../components/settings/SettingsLinkRow';
 import { VersionFooter } from '../components/settings/VersionFooter';
 import { devOptionsStore } from '../store/devOptionsStore';
 import { onboardingStore } from '../store/onboardingStore';
-import { searchStore } from '../store/searchStore';
 
 import type { IoniconsName } from '../utils/iconNames';
 
@@ -20,6 +22,7 @@ const SETTINGS_LINKS: {
   { route: '/settings-server', labelKey: 'serverAccount', subtitleKey: 'serverAccountSubtitle', icon: 'server-outline' },
   { route: '/settings-appearance', labelKey: 'appearanceLayout', subtitleKey: 'appearanceLayoutSubtitle', icon: 'color-palette-outline' },
   { route: '/settings-playback', labelKey: 'soundPlayback', subtitleKey: 'soundPlaybackSubtitle', icon: 'musical-notes-outline' },
+  { route: '/settings-discover', labelKey: 'discoverServer', subtitleKey: 'discoverServerSubtitle', icon: 'compass-outline' },
   { route: '/settings-connectivity', labelKey: 'connectivity', subtitleKey: 'connectivitySubtitle', icon: 'globe-outline' },
   { route: '/settings-storage', labelKey: 'storage', subtitleKey: 'storageSubtitle', icon: 'folder-outline' },
   { route: '/settings-library-data', labelKey: 'libraryData', subtitleKey: 'libraryDataSubtitle', icon: 'library-outline' },
@@ -33,7 +36,7 @@ const DEV_SETTINGS_LINKS: typeof SETTINGS_LINKS = [
 export function SettingsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const headerHeight = searchStore((s) => s.headerHeight);
+  const headerHeight = useContext(HeaderHeightContext) ?? 0;
   const devEnabled = devOptionsStore((s) => s.enabled);
 
   const visibleLinks = useMemo(
@@ -47,6 +50,7 @@ export function SettingsScreen() {
   }, []);
 
   return (
+    <GradientBackground scrollable>
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingTop: headerHeight + 16 }]}
@@ -69,6 +73,8 @@ export function SettingsScreen() {
       />
       <VersionFooter />
     </ScrollView>
+    <BottomChrome withSafeAreaPadding />
+    </GradientBackground>
   );
 }
 

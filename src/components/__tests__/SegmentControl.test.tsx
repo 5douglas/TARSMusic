@@ -7,6 +7,7 @@ jest.mock('../../hooks/useTheme', () => ({
     colors: {
       inputBg: '#282828',
       card: '#1e1e1e',
+      primary: '#1D9BF0',
       textPrimary: '#ffffff',
       textSecondary: '#999999',
     },
@@ -41,27 +42,27 @@ describe('SegmentControl', () => {
     expect(onSelect).toHaveBeenCalledWith('b');
   });
 
-  it('applies active styling to the selected segment', () => {
-    const { getByText } = render(
+  it('fills the selected pill with the primary colour and marks it selected', () => {
+    const { getByText, getByRole } = render(
       <SegmentControl segments={SEGMENTS} selected="b" onSelect={jest.fn()} />
     );
     const activeLabel = getByText('Beta');
-    const flatStyle = Array.isArray(activeLabel.props.style)
-      ? Object.assign({}, ...activeLabel.props.style.filter(Boolean))
-      : activeLabel.props.style;
-    expect(flatStyle.color).toBe('#ffffff');
-    expect(flatStyle.fontWeight).toBe('600');
+    const flatStyle = Object.assign({}, ...[activeLabel.props.style].flat().filter(Boolean));
+    expect(flatStyle.color).toBe('#fff');
+    expect(flatStyle.fontWeight).toBe('700');
+    const pill = getByRole('tab', { name: 'Beta' });
+    expect(pill.props.accessibilityState).toEqual({ selected: true });
   });
 
-  it('applies inactive styling to non-selected segments', () => {
-    const { getByText } = render(
+  it('keeps the other pills on the input background', () => {
+    const { getByText, getByRole } = render(
       <SegmentControl segments={SEGMENTS} selected="b" onSelect={jest.fn()} />
     );
     const inactiveLabel = getByText('Alpha');
-    const flatStyle = Array.isArray(inactiveLabel.props.style)
-      ? Object.assign({}, ...inactiveLabel.props.style.filter(Boolean))
-      : inactiveLabel.props.style;
-    expect(flatStyle.color).toBe('#999999');
+    const flatStyle = Object.assign({}, ...[inactiveLabel.props.style].flat().filter(Boolean));
+    expect(flatStyle.color).toBe('#ffffff');
+    expect(flatStyle.fontWeight).toBe('500');
+    expect(getByRole('tab', { name: 'Alpha' }).props.accessibilityState).toEqual({ selected: false });
   });
 
   it('works with two segments', () => {
