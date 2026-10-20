@@ -4,8 +4,6 @@
  */
 import { discoverSettingsStore } from '../store/discoverSettingsStore';
 
-export type DiscoverPlaylistKind = 'new-releases' | 'recommended' | 'charts-br' | 'charts-global';
-
 export interface DiscoverItem {
   id: number;
   type: 'track';
@@ -73,22 +71,58 @@ export interface DiscoverSearchResult {
   items: Array<DiscoverItem | DiscoverAlbum | DiscoverArtist>;
 }
 
-/** An album (its tracks) or an artist (top tracks + discography). */
+/** An album (its tracks), an artist (top tracks + discography), a mix or a chart playlist. */
 export interface DiscoverBrowse extends DiscoverPlaylist {
-  type: 'album' | 'artist';
-  cover: string | null;
-  link: string;
+  type?: 'album' | 'artist' | 'mix';
+  cover?: string | null;
+  link?: string;
   album?: DiscoverAlbum;
   artist?: DiscoverArtist;
   albums?: DiscoverAlbum[];
 }
 
-const PLAYLIST_PATHS: Record<DiscoverPlaylistKind, string> = {
-  'new-releases': '/playlists/new-releases',
-  recommended: '/playlists/recommended',
-  'charts-br': '/playlists/charts?country=BR',
-  'charts-global': '/playlists/charts?country=GLOBAL',
-};
+/** A mix (seeded by one artist) or a chart playlist; `path` is its backend playlist path. */
+export interface DiscoverPlaylistCard {
+  id: string;
+  type: 'mix' | 'chart';
+  title: string;
+  cover: string | null;
+  cover_small: string | null;
+  path: string;
+  artist?: string;
+  count?: number;
+}
+
+export type DiscoverCard = DiscoverAlbum | DiscoverPlaylistCard;
+
+export interface DiscoverHome {
+  updated: string;
+  scanning: boolean;
+  sections: Array<{ id: 'releases' | 'mixes' | 'charts'; title: string; items: DiscoverCard[] }>;
+}
+
+export interface DiscoverQueueItem {
+  uuid: string;
+  title: string;
+  artist: string;
+  type: string;
+  status: 'downloading' | 'inQueue' | 'failed' | 'withErrors' | 'completed';
+  cover: string | null;
+  progress: number;
+  downloaded: number;
+  failed: number;
+  size: number;
+}
+
+export interface DiscoverQueue {
+  counts: { active: number; queued: number; failed: number; completed: number };
+  active: DiscoverQueueItem[];
+  queued: DiscoverQueueItem[];
+  failed: DiscoverQueueItem[];
+  completed: DiscoverQueueItem[];
+}
+
+export type DiscoverQueueAction = 'remove' | 'retry' | 'clear-finished' | 'cancel-all';
 
 function connection(): { baseUrl: string; token: string } | null {
   const { baseUrl, token } = discoverSettingsStore.getState();
@@ -99,8 +133,8 @@ export function isDiscoverConfigured(): boolean {
   return connection() !== null;
 }
 
-/** GETs a backend path; null when unconfigured, on HTTP errors, or when the body has no `items`. */
-async function getItems<T extends { items: unknown[] }>(path: string, refresh: boolean): Promise<T | null> {
+/** GETs a backend path; null when unconfigured, on HTTP errors, or when `valid` rejects the body. */
+async function getJson<T>(path: string, refresh: boolean, valid: (data: T) => boolean): Promise<T | null> {
   const conn = connection();
   if (!conn) return null;
   const url = `${conn.baseUrl}${path}${refresh ? `${path.includes('?') ? '&' : '?'}refresh=1` : ''}`;
@@ -108,18 +142,43 @@ async function getItems<T extends { items: unknown[] }>(path: string, refresh: b
     const res = await fetch(url, { headers: { Authorization: `Bearer ${conn.token}` } });
     if (!res.ok) return null;
     const data = (await res.json()) as T;
-    return Array.isArray(data?.items) ? data : null;
+    return data && valid(data) ? data : null;
   } catch {
     // Network failure: the screen shows its error state and offers retry.
     return null;
   }
 }
 
-export function fetchDiscoverPlaylist(
-  kind: DiscoverPlaylistKind,
-  refresh = false,
-): Promise<DiscoverPlaylist | null> {
-  return getItems<DiscoverPlaylist>(PLAYLIST_PATHS[kind], refresh);
+function getItems<T extends { items: unknown[] }>(path: string, refresh: boolean): Promise<T | null> {
+  return getJson<T>(path, refresh, (d) => Array.isArray(d.items));
+}
+
+/** POSTs JSON; resolves the parsed body, or null when unconfigured, on HTTP errors or offline. */
+async function postJson<T>(path: string, body: object): Promise<T | null> {
+  const conn = connection();
+  if (!conn) return null;
+  try {
+    const res = await fetch(`${conn.baseUrl}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${conn.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    // Network failure: the caller reports the action as failed.
+    return null;
+  }
+}
+
+export function fetchDiscoverHome(refresh = false): Promise<DiscoverHome | null> {
+  return getJson<DiscoverHome>('/home', refresh, (d) => Array.isArray(d.sections));
+}
+
+/** A mix or chart playlist by the `path` its home card carries. */
+export function fetchDiscoverPlaylist(path: string, refresh = false): Promise<DiscoverBrowse | null> {
+  if (!path.startsWith('/playlists/')) return Promise.resolve(null);
+  return getItems<DiscoverBrowse>(path, refresh);
 }
 
 export function searchDiscover(
@@ -142,21 +201,18 @@ export function fetchDiscoverBrowse(
 
 /** Queues a Deezer track/album link in deemix. Resolves true when the backend accepted it. */
 export async function queueDiscoverDownload(deezerUrl: string): Promise<boolean> {
-  const conn = connection();
-  if (!conn) return false;
-  try {
-    const res = await fetch(`${conn.baseUrl}/download`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${conn.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: deezerUrl }),
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { queued?: boolean };
-    return data.queued === true;
-  } catch {
-    // Network failure: reported to the user as a failed download.
-    return false;
-  }
+  const data = await postJson<{ queued?: boolean }>('/download', { url: deezerUrl });
+  return data?.queued === true;
+}
+
+export function fetchDownloadQueue(): Promise<DiscoverQueue | null> {
+  return getJson<DiscoverQueue>('/download/queue', false, (d) => Array.isArray(d.active) && !!d.counts);
+}
+
+/** Removes or retries one deemix queue entry, or clears finished / cancels everything. */
+export async function runQueueAction(action: DiscoverQueueAction, uuid?: string): Promise<boolean> {
+  const data = await postJson<{ ok?: boolean }>(`/download/${action}`, uuid ? { uuid } : {});
+  return data?.ok === true;
 }
 
 /**

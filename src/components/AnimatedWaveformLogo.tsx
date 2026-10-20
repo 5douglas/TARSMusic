@@ -8,6 +8,8 @@ import {
   useRef,
 } from 'react';
 import { StyleSheet, View } from 'react-native';
+
+import { BAR_HEIGHTS, SLAB_GAP_RATIO, SLAB_SPLITS, Slab } from './WaveformLogo';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -21,13 +23,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-/**
- * Bar height proportions – identical to WaveformLogo.tsx so the animated
- * version is a pixel-perfect stand-in for the static one.
- */
-const BAR_HEIGHTS = [0.30, 0.55, 0.80, 0.50, 1.00, 0.45, 0.90, 0.60, 0.35];
-
-const GAP_RATIO = 0.35;
+const GAP_RATIO = 0.55;
 const BAR_COUNT = BAR_HEIGHTS.length;
 
 /** How much each bar stretches at the peak of a ripple (1 = no change). */
@@ -79,14 +75,16 @@ const BarView = memo(function BarView({
   scale,
   barWidth,
   barHeight,
-  pillRadius,
+  split,
+  blockGap,
   color,
   marginLeft,
 }: {
   scale: SharedValue<number>;
   barWidth: number;
   barHeight: number;
-  pillRadius: number;
+  split: number;
+  blockGap: number;
   color: string;
   marginLeft: number;
 }) {
@@ -95,18 +93,9 @@ const BarView = memo(function BarView({
   }));
 
   return (
-    <Animated.View
-      style={[
-        {
-          width: barWidth,
-          height: barHeight,
-          borderRadius: pillRadius,
-          backgroundColor: color,
-          marginLeft,
-        },
-        animStyle,
-      ]}
-    />
+    <Animated.View style={[{ marginLeft }, animStyle]}>
+      <Slab width={barWidth} height={barHeight} split={split} blockGap={blockGap} color={color} marginLeft={0} />
+    </Animated.View>
   );
 });
 
@@ -120,18 +109,12 @@ const AnimatedWaveformLogo = forwardRef<WaveformHandle, Props>(function Animated
 ) {
   const barWidth = size / (BAR_COUNT + (BAR_COUNT - 1) * GAP_RATIO);
   const gap = barWidth * GAP_RATIO;
-  const pillRadius = barWidth / 2;
 
   const s0 = useSharedValue(1);
   const s1 = useSharedValue(1);
   const s2 = useSharedValue(1);
   const s3 = useSharedValue(1);
-  const s4 = useSharedValue(1);
-  const s5 = useSharedValue(1);
-  const s6 = useSharedValue(1);
-  const s7 = useSharedValue(1);
-  const s8 = useSharedValue(1);
-  const scales = useMemo(() => [s0, s1, s2, s3, s4, s5, s6, s7, s8], [s0, s1, s2, s3, s4, s5, s6, s7, s8]);
+  const scales = useMemo(() => [s0, s1, s2, s3], [s0, s1, s2, s3]);
 
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
@@ -210,7 +193,8 @@ const AnimatedWaveformLogo = forwardRef<WaveformHandle, Props>(function Animated
           scale={scales[i]}
           barWidth={barWidth}
           barHeight={size * h}
-          pillRadius={pillRadius}
+          split={SLAB_SPLITS[i]}
+          blockGap={size * SLAB_GAP_RATIO}
           color={color}
           marginLeft={i === 0 ? 0 : gap}
         />

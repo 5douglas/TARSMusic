@@ -7,7 +7,12 @@ import { queueDiscoverDownload } from '../services/discoverService';
 import { playbackToastStore } from '../store/playbackToastStore';
 import { themedAlertStore } from '../store/themedAlertStore';
 
-import type { DiscoverAlbum, DiscoverArtist, DiscoverItem } from '../services/discoverService';
+import type {
+  DiscoverAlbum,
+  DiscoverArtist,
+  DiscoverItem,
+  DiscoverPlaylistCard,
+} from '../services/discoverService';
 
 /** Preview, confirm-then-download and open handlers shared by the Discover screens. */
 export function useDiscoverActions() {
@@ -54,10 +59,13 @@ export function useDiscoverActions() {
   );
 
   const handleOpen = useCallback(
-    (entity: DiscoverAlbum | DiscoverArtist) => {
+    (entity: DiscoverAlbum | DiscoverArtist | DiscoverPlaylistCard) => {
       router.push({
         pathname: '/discover-browse',
-        params: { kind: entity.type, id: String(entity.id), title: entity.title },
+        params:
+          entity.type === 'mix' || entity.type === 'chart'
+            ? { kind: 'playlist', path: entity.path, title: entity.title }
+            : { kind: entity.type, id: String(entity.id), title: entity.title },
       });
     },
     [router],
