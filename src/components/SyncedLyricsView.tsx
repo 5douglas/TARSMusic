@@ -32,6 +32,11 @@ interface SyncedLyricsViewProps {
 }
 
 const USER_SCROLL_LOCKOUT_MS = 3000;
+/** Light a line this early so its highlight animation lands as the line is sung. */
+export const LINE_LEAD_MS = 150;
+/** Jitter allowance: a position this close behind the current line's start keeps it active
+ *  instead of flicking back to the previous line. A larger jump back is a seek. */
+const BACKWARD_TOLERANCE_MS = 400;
 const INTERLUDE_MIN_GAP_MS = 5000;
 /** Spacer height so the first/last line can land at the active-slot
  *  position even at song start/end. */
@@ -43,20 +48,41 @@ const SPACER_HEIGHT = 400;
 const ACTIVE_LINE_VIEWPORT_RATIO = 0.35;
 
 /**
+ * Index of the line active at `ms` (lead already applied by the caller), -1 before the first
+ * line. Holds `prev` when `ms` is only slightly behind its start, so clock jitter between the
+ * extrapolated and the reported position never flicks the highlight backwards.
+ */
+export function pickActiveLine(lineStarts: readonly number[], ms: number, prev: number): number {
+  if (lineStarts.length === 0 || ms < lineStarts[0]) {
+    return prev === 0 && ms >= lineStarts[0] - BACKWARD_TOLERANCE_MS ? 0 : -1;
+  }
+  let lo = 0;
+  let hi = lineStarts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >>> 1;
+    if (lineStarts[mid] <= ms) lo = mid;
+    else hi = mid - 1;
+  }
+  if (lo === prev - 1 && ms >= lineStarts[prev] - BACKWARD_TOLERANCE_MS) return prev;
+  return lo;
+}
+
+/**
  * Apple-Music-style synced lyrics view.
  *
  * Keep-it-simple architecture:
  *
- *   1. Subscribe to `playerStore` — position updates naturally at 250 ms
- *      (rate of `PlaybackProgressUpdated` polling in `playerService`).
- *   2. On every update, binary-search the active line index and set React
- *      state. A shared-value mirror feeds the per-line worklet opacity.
+ *   1. While foregrounded, a rAF loop extrapolates the playback position between
+ *      the 500 ms progress events (`progressUpdateIntervalMs` in `playerBootstrap`)
+ *      and picks the active line from it, `LINE_LEAD_MS` early. Backgrounded,
+ *      the loop stops and the progress events pick the line instead.
+ *   2. The active index is React state; a shared-value mirror feeds the
+ *      per-line worklet opacity.
  *   3. When the active index changes, ask React Native where that line's
  *      <View> is *relative to the ScrollView* via `measureLayout`, then
  *      scroll so the line's vertical centre sits at the viewport centre.
  *
- * No Reanimated worklet-thread scroll. No rAF polling. No per-line offset
- * table. The native measurement does the geometry for us.
+ * No Reanimated worklet-thread scroll. No per-line offset table. The native measurement does the geometry for us.
  *
  * Uses a regular `ScrollView` + `useRef` because Reanimated 4's
  * `useAnimatedRef` on `Animated.ScrollView` keeps `.current` null, making
@@ -93,28 +119,25 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
     [lines, offsetMs],
   );
 
-  // Derive activeIndex from playerStore. The store ticks at ~250 ms via
-  // `PlaybackProgressUpdated`, which is ample precision for a line-level
-  // scroll — sub-line timing is carried by the per-line worklet animation.
+  // Active line from the reported position. Only used while the rAF clock below is
+  // stopped (backgrounded, or before it starts); otherwise the clock owns the index,
+  // since the 500 ms events lag it and would pull the highlight back.
+  const activeIndexRef = useRef(-1);
+  const clockRunningRef = useRef(false);
+  const applyActiveIndex = useCallback((idx: number) => {
+    if (activeIndexRef.current === idx) return;
+    activeIndexRef.current = idx;
+    setActiveIndex(idx);
+  }, []);
   useEffect(() => {
     const compute = () => {
-      const ms = playerStore.getState().position * 1000;
-      let idx = -1;
-      if (lineStarts.length > 0 && ms >= lineStarts[0]) {
-        let lo = 0;
-        let hi = lineStarts.length - 1;
-        while (lo < hi) {
-          const mid = (lo + hi + 1) >>> 1;
-          if (lineStarts[mid] <= ms) lo = mid;
-          else hi = mid - 1;
-        }
-        idx = lo;
-      }
-      setActiveIndex((prev) => (prev === idx ? prev : idx));
+      if (clockRunningRef.current) return;
+      const ms = playerStore.getState().position * 1000 + LINE_LEAD_MS;
+      applyActiveIndex(pickActiveLine(lineStarts, ms, activeIndexRef.current));
     };
     compute();
     return playerStore.subscribe(compute);
-  }, [lineStarts]);
+  }, [lineStarts, applyActiveIndex]);
 
   // Mirror activeIndex into the shared value for the per-line worklets.
   useEffect(() => {
@@ -276,15 +299,19 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
       const s = playerStore.getState();
       const elapsedSec =
         s.playbackState === 'playing' ? (Date.now() - sampledAt) / 1000 : 0;
-      extrapolatedMs.value = (sampledSec + elapsedSec) * 1000;
+      const ms = (sampledSec + elapsedSec) * 1000;
+      extrapolatedMs.value = ms;
+      applyActiveIndex(pickActiveLine(lineStarts, ms + LINE_LEAD_MS, activeIndexRef.current));
       rafId = requestAnimationFrame(tick);
     };
     const start = () => {
       if (rafId != null) return;
+      clockRunningRef.current = true;
       resample();
       tick();
     };
     const stop = () => {
+      clockRunningRef.current = false;
       if (rafId != null) {
         cancelAnimationFrame(rafId);
         rafId = null;
@@ -311,7 +338,7 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
       appSub.remove();
       stop();
     };
-  }, [extrapolatedMs]);
+  }, [extrapolatedMs, lineStarts, applyActiveIndex]);
 
   return (
     <View style={styles.container} onLayout={handleContainerLayout}>

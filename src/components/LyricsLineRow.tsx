@@ -28,7 +28,8 @@ interface LyricsLineRowProps {
  * Scale ramp:   1.0 / 0.96 when active vs. not.
  * Weight crossfade via two stacked Animated.Text layers (600 + 800).
  */
-const SPRING = { damping: 18, stiffness: 140, mass: 0.8 } as const;
+// Near-critically damped and stiff: settles in ~250 ms so the highlight keeps up with the singer.
+const SPRING = { damping: 28, stiffness: 300, mass: 0.8 } as const;
 
 export const LyricsLineRow = memo(function LyricsLineRow({
   index,
