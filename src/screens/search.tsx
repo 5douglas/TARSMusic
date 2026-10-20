@@ -3,6 +3,7 @@ import { useIsFocused } from "expo-router/react-navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { AlbumRow } from '../components/AlbumRow';
+import { DiscoverSearchResults } from '../components/DiscoverSearchResults';
 import { EmptyState } from '../components/EmptyState';
 import { ArtistRow } from '../components/ArtistRow';
 import { RecentSearches } from '../components/RecentSearches';
@@ -25,6 +27,7 @@ import {
   type Child,
 } from '../services/subsonicService';
 import { listDownloadedAlbumIds } from '../db/repository/downloads';
+import { discoverSettingsStore } from '../store/discoverSettingsStore';
 import { favoritesStore } from '../store/favoritesStore';
 import { filterBarStore } from '../store/filterBarStore';
 import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
@@ -172,6 +175,12 @@ export function SearchScreen() {
     (downloadedOnly || favoritesOnly) &&
     (results.artists.length > 0 || results.albums.length > 0 || results.songs.length > 0);
 
+  // Deezer results join the library's only online with no library filter on: they are
+  // neither downloaded nor favourites, so a filter would hide them anyway.
+  const discoverConfigured = discoverSettingsStore((s) => !!s.baseUrl && !!s.token);
+  const showDeezer = discoverConfigured && !offlineMode && !downloadedOnly && !favoritesOnly;
+  const deezer = showDeezer ? <DiscoverSearchResults query={query.trim()} /> : null;
+
   // "Nothing to show" is only meaningful once the downloaded set has answered — otherwise
   // entering the filter renders "No results found" over results that are about to appear.
   const busy = loading || downloadedUnknown;
@@ -300,8 +309,23 @@ export function SearchScreen() {
     );
   }
 
-  // Query present, no results, nothing in flight: no-results placeholder.
+  // Query present, no library results, nothing in flight: say so, with the Deezer matches
+  // below when they apply, else the no-results placeholder.
   if (!hasResults && !busy) {
+    if (deezer) {
+      return (
+        <ScrollView
+          contentContainerStyle={[styles.listContent, { paddingTop: headerHeight + 16 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <Text style={[styles.noLibraryResults, { color: colors.textSecondary }]}>
+            {t('noResultsFor', { query })}
+          </Text>
+          {deezer}
+        </ScrollView>
+      );
+    }
     return (
       <View style={[styles.container, { paddingTop: headerHeight }]}>
         <EmptyState
@@ -347,6 +371,7 @@ export function SearchScreen() {
         refreshing={refreshing}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        ListFooterComponent={deezer}
       />
     </View>
   );
@@ -388,6 +413,10 @@ const styles = StyleSheet.create({
   },
   loadingStripText: {
     fontSize: 13,
+  },
+  noLibraryResults: {
+    fontSize: 14,
+    marginLeft: 4,
   },
   sectionTitle: {
     fontSize: 12,

@@ -1181,19 +1181,14 @@
   "discoverConnectHint": "Enter the address and token of your discover service.",
   "discoverServerUrl": "Discover server URL",
   "discoverToken": "Token",
-  "discoverLoading": "Building playlist…",
   "discoverLoadFailed": "Could not load this playlist",
   "discoverLoadFailedHint": "Check the connection, address and token.",
   "discoverEditConnection": "Edit connection",
   "discoverEmpty": "Nothing here yet",
-  "discoverSearchPlaceholder": "Search Deezer for songs, albums, artists",
-  "discoverSearchHint": "Find new music to add to your library",
-  "discoverNoResults": "No results",
   "discoverTopTracks": "Top tracks",
   "discoverDownloadAlbum": "Download album",
   "discoverFans_one": "{{count}} fan",
   "discoverFans_other": "{{count}} fans",
-  "discoverExplore": "Explore",
   "discoverMixes": "Mixes for you",
   "discoverCharts": "Charts",
   "discoverMixSubtitle": "Like {{artist}}",
@@ -1214,5 +1209,6 @@
   "discoverServer": "Discover",
   "discoverServerSubtitle": "Server for new releases, mixes, charts and downloads",
   "discoverConnected": "Connected to Discover",
-  "discoverOpenSettings": "Open Discover settings"
+  "discoverOpenSettings": "Open Discover settings",
+  "discoverNotInLibrary": "Not in your library"
 }
