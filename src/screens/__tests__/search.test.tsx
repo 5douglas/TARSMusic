@@ -33,6 +33,13 @@ jest.mock('../../components/ArtistRow', () => ({ ArtistRow: stubRow('artist') })
 jest.mock('../../components/AlbumRow', () => ({ AlbumRow: stubRow('album') }));
 jest.mock('../../components/SongRow', () => ({ SongRow: stubRow('song') }));
 jest.mock('../../components/RecentSearches', () => ({ RecentSearches: () => null }));
+jest.mock('../../components/DiscoverSearchResults', () => ({
+  DiscoverSearchResults: ({ query }: { query: string }) => {
+    const { Text } = require('react-native');
+    const React = require('react');
+    return React.createElement(Text, null, `deezer:${query}`);
+  },
+}));
 
 import React from 'react';
 import { act, render, waitFor } from '@testing-library/react-native';
@@ -45,6 +52,8 @@ import { favoritesStore } from '../../store/favoritesStore';
 import { filterBarStore } from '../../store/filterBarStore';
 import { layoutPreferencesStore } from '../../store/layoutPreferencesStore';
 import { musicCacheStore } from '../../store/musicCacheStore';
+import { discoverSettingsStore } from '../../store/discoverSettingsStore';
+import { offlineModeStore } from '../../store/offlineModeStore';
 import { searchStore } from '../../store/searchStore';
 import { SearchScreen } from '../search';
 
@@ -293,5 +302,43 @@ describe('SearchScreen — "no results" vs "filtered away"', () => {
     act(() => filterBarStore.setState({ favoritesOnly: false }));
     expect(r.queryByText('Nothing matches your filters')).toBeNull();
     expect(rowIds(r)).toEqual(expect.arrayContaining(['artist:ar1', 'album:al1']));
+  });
+});
+
+describe('SearchScreen — Deezer results below the library', () => {
+  beforeEach(() => {
+    discoverSettingsStore.setState({ baseUrl: 'https://d.example.com', token: 'tok' });
+    offlineModeStore.setState({ offlineMode: false });
+  });
+
+  it('adds the Deezer section after the library results', () => {
+    searchStore.setState({ query: ' jao ' });
+    const r = render(<SearchScreen />);
+    expect(r.getByText('deezer:jao')).toBeTruthy();
+  });
+
+  it('still offers Deezer when the library has nothing', () => {
+    searchStore.setState({ query: 'zzz', results: { artists: [], albums: [], songs: [] } });
+    const r = render(<SearchScreen />);
+    expect(r.getByText('deezer:zzz')).toBeTruthy();
+    expect(r.getByText('No results for "zzz"')).toBeTruthy();
+  });
+
+  it('leaves Deezer out offline, under a filter, or when Discover is not set up', () => {
+    offlineModeStore.setState({ offlineMode: true });
+    const r1 = render(<SearchScreen />);
+    expect(r1.queryByText(/^deezer:/)).toBeNull();
+    r1.unmount();
+    offlineModeStore.setState({ offlineMode: false });
+    filterBarStore.setState({ favoritesOnly: true });
+    const r2 = render(<SearchScreen />);
+    expect(r2.queryByText(/^deezer:/)).toBeNull();
+    r2.unmount();
+    filterBarStore.setState({ favoritesOnly: false });
+    discoverSettingsStore.setState({ token: null });
+    searchStore.setState({ query: 'zzz', results: { artists: [], albums: [], songs: [] } });
+    const r3 = render(<SearchScreen />);
+    expect(r3.queryByText(/^deezer:/)).toBeNull();
+    expect(r3.getByText('No results found')).toBeTruthy();
   });
 });
