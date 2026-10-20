@@ -5,7 +5,10 @@ import { discoverSettingsStore } from '../../store/discoverSettingsStore';
 import {
   discoverPreviewUrl,
   fetchDiscoverBrowse,
+  fetchDiscoverHome,
   fetchDiscoverPlaylist,
+  fetchDownloadQueue,
+  runQueueAction,
   searchDiscover,
   isDiscoverConfigured,
   queueDiscoverDownload,
@@ -32,39 +35,82 @@ describe('isDiscoverConfigured', () => {
 });
 
 describe('fetchDiscoverPlaylist', () => {
-  it('requests the playlist with the bearer token', async () => {
+  it('requests the playlist path with the bearer token', async () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => playlist });
-    await expect(fetchDiscoverPlaylist('recommended')).resolves.toEqual(playlist);
-    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/playlists/recommended`, {
+    await expect(fetchDiscoverPlaylist('/playlists/mix/5')).resolves.toEqual(playlist);
+    expect(mockFetch).toHaveBeenCalledWith(`${BASE}/playlists/mix/5`, {
       headers: { Authorization: 'Bearer secret' },
     });
   });
 
   it('appends refresh to paths with and without a query', async () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => playlist });
-    await fetchDiscoverPlaylist('new-releases', true);
-    await fetchDiscoverPlaylist('charts-br', true);
-    await fetchDiscoverPlaylist('charts-global');
+    await fetchDiscoverPlaylist('/playlists/mix/5', true);
+    await fetchDiscoverPlaylist('/playlists/charts?country=BR', true);
     expect(mockFetch.mock.calls.map((c) => c[0])).toEqual([
-      `${BASE}/playlists/new-releases?refresh=1`,
+      `${BASE}/playlists/mix/5?refresh=1`,
       `${BASE}/playlists/charts?country=BR&refresh=1`,
-      `${BASE}/playlists/charts?country=GLOBAL`,
     ]);
+  });
+
+  it('refuses paths outside /playlists without calling fetch', async () => {
+    await expect(fetchDiscoverPlaylist('/download/cancel-all')).resolves.toBeNull();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('returns null when unconfigured without calling fetch', async () => {
     discoverSettingsStore.setState({ baseUrl: null });
-    await expect(fetchDiscoverPlaylist('recommended')).resolves.toBeNull();
+    await expect(fetchDiscoverPlaylist('/playlists/mix/5')).resolves.toBeNull();
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('returns null on HTTP errors, malformed bodies and network failures', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 401 });
-    await expect(fetchDiscoverPlaylist('recommended')).resolves.toBeNull();
+    await expect(fetchDiscoverPlaylist('/playlists/mix/5')).resolves.toBeNull();
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ error: 'x' }) });
-    await expect(fetchDiscoverPlaylist('recommended')).resolves.toBeNull();
+    await expect(fetchDiscoverPlaylist('/playlists/mix/5')).resolves.toBeNull();
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => null });
+    await expect(fetchDiscoverPlaylist('/playlists/mix/5')).resolves.toBeNull();
     mockFetch.mockRejectedValueOnce(new Error('offline'));
-    await expect(fetchDiscoverPlaylist('recommended')).resolves.toBeNull();
+    await expect(fetchDiscoverPlaylist('/playlists/mix/5')).resolves.toBeNull();
+  });
+});
+
+describe('fetchDiscoverHome', () => {
+  it('returns the sections and rejects bodies without them', async () => {
+    const home = { updated: '', scanning: false, sections: [] };
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => home });
+    await expect(fetchDiscoverHome(true)).resolves.toEqual(home);
+    expect(mockFetch.mock.calls[0][0]).toBe(`${BASE}/home?refresh=1`);
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    await expect(fetchDiscoverHome()).resolves.toBeNull();
+  });
+});
+
+describe('download queue', () => {
+  const queue = { counts: { active: 0, queued: 0, failed: 0, completed: 0 }, active: [], queued: [], failed: [], completed: [] };
+
+  it('fetches the grouped queue', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => queue });
+    await expect(fetchDownloadQueue()).resolves.toEqual(queue);
+    expect(mockFetch.mock.calls[0][0]).toBe(`${BASE}/download/queue`);
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) });
+    await expect(fetchDownloadQueue()).resolves.toBeNull();
+  });
+
+  it('posts queue actions with and without a uuid', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    await expect(runQueueAction('retry', 'track_1_3')).resolves.toBe(true);
+    await expect(runQueueAction('clear-finished')).resolves.toBe(true);
+    expect(mockFetch.mock.calls[0]).toEqual([`${BASE}/download/retry`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ uuid: 'track_1_3' }) })]);
+    expect(mockFetch.mock.calls[1]).toEqual([`${BASE}/download/clear-finished`, expect.objectContaining({ body: '{}' })]);
+  });
+
+  it('reports failed queue actions', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+    await expect(runQueueAction('remove', 'track_1_3')).resolves.toBe(false);
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: false }) });
+    await expect(runQueueAction('remove', 'track_1_3')).resolves.toBe(false);
   });
 });
 

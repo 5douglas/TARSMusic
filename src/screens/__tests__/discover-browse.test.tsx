@@ -38,7 +38,7 @@ jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-let mockParams: { kind: string; id: string } = { kind: 'artist', id: '5' };
+let mockParams: { kind: string; id?: string; path?: string } = { kind: 'artist', id: '5' };
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -62,9 +62,11 @@ jest.mock('../../components/GradientBackground', () => {
 });
 
 const mockBrowse = jest.fn();
+const mockPlaylist = jest.fn();
 const mockQueueDownload = jest.fn();
 jest.mock('../../services/discoverService', () => ({
   fetchDiscoverBrowse: (...args: unknown[]) => mockBrowse(...args),
+  fetchDiscoverPlaylist: (...args: unknown[]) => mockPlaylist(...args),
   queueDiscoverDownload: (...args: unknown[]) => mockQueueDownload(...args),
 }));
 const mockStopPreview = jest.fn();
@@ -99,6 +101,7 @@ const albumPage: DiscoverBrowse = {
 
 beforeEach(() => {
   mockBrowse.mockReset();
+  mockPlaylist.mockReset();
   mockPush.mockReset();
   mockStopPreview.mockReset();
   mockFocused = true;
@@ -152,6 +155,25 @@ describe('DiscoverBrowseScreen', () => {
     await act(async () => fireEvent.press(screen.getByTestId('refresh')));
     expect(mockBrowse).toHaveBeenLastCalledWith('album', 9, true);
     expect(screen.getByText('Aurora')).toBeTruthy();
+  });
+
+  it('loads mix and chart playlists by their path', async () => {
+    mockParams = { kind: 'playlist', path: '/playlists/mix/5' };
+    mockPlaylist.mockResolvedValue({ ...base, type: 'mix', title: 'Mix Jão', description: 'Parecido com Jão', count: 1, items: [track] });
+    render(<DiscoverBrowseScreen />);
+    await waitFor(() => expect(screen.getByText('Mix Jão')).toBeTruthy());
+    expect(mockPlaylist).toHaveBeenCalledWith('/playlists/mix/5', false);
+    expect(mockBrowse).not.toHaveBeenCalled();
+    expect(screen.getByText('Aurora')).toBeTruthy();
+    expect(screen.queryByText('Download album')).toBeNull();
+  });
+
+  it('treats a missing playlist path as a failed load', async () => {
+    mockParams = { kind: 'playlist' };
+    mockPlaylist.mockResolvedValue(null);
+    render(<DiscoverBrowseScreen />);
+    await waitFor(() => expect(screen.getByText('Could not load this playlist')).toBeTruthy());
+    expect(mockPlaylist).toHaveBeenCalledWith('', false);
   });
 
   it('shows the empty state for a page with no tracks', async () => {

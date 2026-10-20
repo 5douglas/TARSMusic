@@ -15,6 +15,7 @@ import { useTheme } from '../hooks/useTheme';
 import { stopDiscoverPreview } from '../services/discoverPreviewService';
 import {
   fetchDiscoverBrowse,
+  fetchDiscoverPlaylist,
   type DiscoverAlbum,
   type DiscoverBrowse,
   type DiscoverItem,
@@ -39,29 +40,29 @@ function buildRows(data: DiscoverBrowse, t: (key: string) => string): Row[] {
   return rows;
 }
 
-/** A Deezer album (its tracks) or artist (top tracks + discography) reached from Discover search. */
+/** A Deezer album, artist (top tracks + discography), mix or chart playlist opened from Discover. */
 export function DiscoverBrowseScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
-  const { kind, id } = useLocalSearchParams<{ kind: string; id: string }>();
+  const { kind, id, path } = useLocalSearchParams<{ kind: string; id?: string; path?: string }>();
   const { handlePreview, handleTrackDownload, handleAlbumDownload, handleOpen } = useDiscoverActions();
   const playingId = discoverPreviewStore((s) => s.playingId);
   const [data, setData] = useState<DiscoverBrowse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const browseKind = kind === 'artist' ? 'artist' : 'album';
-  const numericId = Number(id);
-
   const load = useCallback(
     async (refresh: boolean) => {
-      const res = await fetchDiscoverBrowse(browseKind, numericId, refresh);
+      const res =
+        kind === 'playlist'
+          ? await fetchDiscoverPlaylist(path ?? '', refresh)
+          : await fetchDiscoverBrowse(kind === 'artist' ? 'artist' : 'album', Number(id), refresh);
       if (res || !refresh) setData(res);
     },
-    [browseKind, numericId],
+    [kind, id, path],
   );
 
   useEffect(() => {
@@ -114,7 +115,7 @@ export function DiscoverBrowseScreen() {
     <View style={styles.header}>
       <Image
         source={data.cover ?? undefined}
-        style={[styles.headerCover, data.type === 'artist' && styles.round]}
+        style={[styles.headerCover, (data.type === 'artist' || data.type === 'mix') && styles.round]}
       />
       <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={2}>
         {data.title}
