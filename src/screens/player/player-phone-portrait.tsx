@@ -889,7 +889,7 @@ const styles = StyleSheet.create({
   heroImageWrap: {
     width: '100%',
     aspectRatio: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: 'rgba(0,0,0,0.06)',
     shadowColor: '#000',
@@ -932,7 +932,7 @@ const styles = StyleSheet.create({
   },
   trackTitle: {
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   trackArtist: {
     fontSize: 16,
