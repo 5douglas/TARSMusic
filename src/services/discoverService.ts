@@ -199,6 +199,17 @@ export function fetchDiscoverBrowse(
   return getItems<DiscoverBrowse>(`/browse/${kind}/${id}`, refresh);
 }
 
+export interface DiscoverArtistMissing {
+  artist: DiscoverArtist;
+  count: number;
+  items: DiscoverAlbum[];
+}
+
+/** Deezer releases of a library artist (matched by name) that the library does not have. */
+export function fetchArtistMissing(name: string): Promise<DiscoverArtistMissing | null> {
+  return getItems<DiscoverArtistMissing>(`/artist-missing?name=${encodeURIComponent(name)}`, false);
+}
+
 /** Queues a Deezer track/album link in deemix. Resolves true when the backend accepted it. */
 export async function queueDiscoverDownload(deezerUrl: string): Promise<boolean> {
   const data = await postJson<{ queued?: boolean }>('/download', { url: deezerUrl });

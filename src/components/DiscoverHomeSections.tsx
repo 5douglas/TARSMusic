@@ -17,7 +17,8 @@ const SECTION_TITLE_KEYS = {
 
 const CARD_SIZE = 150;
 
-const HomeCard = memo(function HomeCard({
+/** One release, mix or chart card; also used by the artist page's Deezer row. */
+export const DiscoverCardTile = memo(function DiscoverCardTile({
   card,
   onOpen,
 }: {
@@ -75,7 +76,7 @@ export function DiscoverHomeSections({ home, ids }: { home: DiscoverHome; ids: r
   const { handleOpen } = useDiscoverActions();
 
   const renderCard = useCallback(
-    ({ item }: { item: DiscoverCard }) => <HomeCard card={item} onOpen={handleOpen} />,
+    ({ item }: { item: DiscoverCard }) => <DiscoverCardTile card={item} onOpen={handleOpen} />,
     [handleOpen],
   );
 

@@ -4,6 +4,7 @@ const mockFetch = jest.fn();
 import { discoverSettingsStore } from '../../store/discoverSettingsStore';
 import {
   discoverPreviewUrl,
+  fetchArtistMissing,
   fetchDiscoverBrowse,
   fetchDiscoverHome,
   fetchDiscoverPlaylist,
@@ -84,6 +85,15 @@ describe('fetchDiscoverHome', () => {
     expect(mockFetch.mock.calls[0][0]).toBe(`${BASE}/home?refresh=1`);
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
     await expect(fetchDiscoverHome()).resolves.toBeNull();
+  });
+});
+
+describe('fetchArtistMissing', () => {
+  it('looks the artist up by encoded name', async () => {
+    const body = { artist: {}, count: 0, items: [] };
+    mockFetch.mockResolvedValue({ ok: true, json: async () => body });
+    await expect(fetchArtistMissing('Jão & Cia')).resolves.toEqual(body);
+    expect(mockFetch.mock.calls[0][0]).toBe(`${BASE}/artist-missing?name=J%C3%A3o%20%26%20Cia`);
   });
 });
 
