@@ -15,6 +15,7 @@ import { skipToNext, togglePlayPause } from '@/services/playerService';
 import { playbackSettingsStore } from '@/store/playbackSettingsStore';
 import { playerStore } from '@/store/playerStore';
 
+import { mixHexColors } from '@/utils/colors';
 import { absoluteFill } from '@/utils/styles';
 const MINI_PLAYER_HEIGHT = 56;
 /** Matches the placeholder cover art background (rgb 150,150,150). */
@@ -74,42 +75,31 @@ export function PlayerPhoneMini() {
     return `${hex}${a}`;
   };
 
-  // 2-stop vertical gradient: the extracted primary (the dominant/vibrant cover
-  // colour, lightness-clamped) → theme background.
+  // Spotify-style card tinted by the cover: the extracted primary (dominant/vibrant cover
+  // colour, lightness-clamped) mixed into the theme background, fading in once extracted.
   const extractedTop = primary ?? colors.card;
   const topColor = queueLoading ? PLACEHOLDER_BG : extractedTop;
-  const gradientColors: readonly [string, string, ...string[]] = [
-    withAlpha(topColor, 0.65),
-    withAlpha(colors.background, 0.65),
-  ];
+  const tint = topColor.length === 7 ? mixHexColors(colors.background, topColor, 0.55) : topColor;
+  const gradientColors: readonly [string, string, ...string[]] = [tint, withAlpha(tint, 0.92)];
   const gradientLocations: readonly [number, number, ...number[]] = [0, 1];
 
   return (
-    <View style={[styles.container, { backgroundColor: withAlpha(colors.card, 0.65) }]}>
-      {/* Progress bar */}
-      <View style={styles.progressTrack}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              backgroundColor: colors.primary,
-              opacity: 0.65,
-              width: `${progress * 100}%`,
-            },
-          ]}
-        />
-      </View>
-
-      {/* Gradient overlay */}
+    <View style={[styles.container, { backgroundColor: colors.card }]}>
+      {/* Cover tint */}
       <Animated.View style={[absoluteFill, gradientAnimatedStyle]} pointerEvents="none">
         <LinearGradient
           colors={gradientColors}
           locations={gradientLocations}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
           style={absoluteFill}
         />
       </Animated.View>
+
+      {/* Thin progress line along the bottom edge */}
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+      </View>
 
       {/* Tappable area: cover art + track info */}
       <Pressable
@@ -188,19 +178,26 @@ const styles = StyleSheet.create({
     height: MINI_PLAYER_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
+    marginHorizontal: 8,
+    marginBottom: 4,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   progressTrack: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 5,
+    bottom: 0,
+    left: 8,
+    right: 8,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     zIndex: 1,
   },
   progressFill: {
     height: '100%',
+    borderRadius: 1,
+    backgroundColor: '#fff',
   },
   touchable: {
     flex: 1,
@@ -211,7 +208,7 @@ const styles = StyleSheet.create({
   cover: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 4,
     backgroundColor: 'rgba(0,0,0,0.06)',
   },
   info: {
