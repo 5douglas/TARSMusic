@@ -24,6 +24,7 @@ import { MoreOptionsButton } from '../components/MoreOptionsButton';
 import { closeOpenRow } from '../components/SwipeableRow';
 import { TrackRow } from '../components/TrackRow';
 import { DetailScreenBackground } from '../components/DetailScreenBackground';
+import { DiscoverMoreFromArtist } from '../components/DiscoverMoreFromArtist';
 import { PlayAllButton, ShufflePlayButton } from '../components/DetailHeroButtons';
 import { useDownloadStatus } from '../hooks/useDownloadStatus';
 import { useDetailFetch } from '../hooks/useDetailFetch';
@@ -375,6 +376,11 @@ export function AlbumDetailScreen() {
           drawDistance={LIST_DRAW_DISTANCE}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={listEmpty}
+          ListFooterComponent={
+            album?.artist ? (
+              <DiscoverMoreFromArtist name={album.artist} style={styles.moreFromArtist} />
+            ) : null
+          }
           onScrollBeginDrag={closeOpenRow}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={listContentContainerStyle}
@@ -397,6 +403,10 @@ export function AlbumDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  moreFromArtist: {
+    paddingHorizontal: 16,
+    marginTop: 24,
+  },
   container: {
     flex: 1,
   },

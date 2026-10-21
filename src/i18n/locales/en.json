@@ -1210,5 +1210,6 @@
   "discoverServerSubtitle": "Server for new releases, mixes, charts and downloads",
   "discoverConnected": "Connected to Discover",
   "discoverOpenSettings": "Open Discover settings",
-  "discoverNotInLibrary": "Not in your library"
+  "discoverNotInLibrary": "Not in your library",
+  "discoverMoreFromArtist": "More from {{artist}} on Deezer"
 }

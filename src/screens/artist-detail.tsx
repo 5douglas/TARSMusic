@@ -22,6 +22,7 @@ import { ArtistCard } from '../components/ArtistCard';
 import { CachedImage } from '../components/CachedImage';
 import { BottomChrome } from '../components/BottomChrome';
 import { MoreOptionsButton } from '../components/MoreOptionsButton';
+import { DiscoverMoreFromArtist } from '../components/DiscoverMoreFromArtist';
 import { SectionTitle } from '../components/SectionTitle';
 import { SongCard } from '../components/SongCard';
 import { closeOpenRow } from '../components/SwipeableRow';
@@ -427,6 +428,9 @@ export function ArtistDetailScreen() {
                 />
               </View>
             )}
+
+            {/* ---- Deezer releases missing from the library ---- */}
+            <DiscoverMoreFromArtist name={artist.name} style={styles.section} />
 
             {/* ---- Albums section header (list items follow in FlashList) ---- */}
             {albums.length > 0 && (
