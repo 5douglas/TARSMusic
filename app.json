@@ -52,7 +52,8 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "REQUEST_INSTALL_PACKAGES"
       ],
       "predictiveBackGestureEnabled": false,
       "versionCode": 80000186,
