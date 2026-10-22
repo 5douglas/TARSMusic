@@ -1,13 +1,14 @@
 import { useRouter } from 'expo-router';
 import { HeaderHeightContext } from 'expo-router/react-navigation';
 import { useCallback, useContext, useMemo } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { Platform, ScrollView, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { BottomChrome } from '../components/BottomChrome';
 import { GradientBackground } from '../components/GradientBackground';
 import { SettingsLinkRow } from '../components/settings/SettingsLinkRow';
 import { VersionFooter } from '../components/settings/VersionFooter';
+import { checkForUpdateInteractive } from '../services/appUpdateService';
 import { devOptionsStore } from '../store/devOptionsStore';
 import { onboardingStore } from '../store/onboardingStore';
 
@@ -71,6 +72,14 @@ export function SettingsScreen() {
         icon="help-circle-outline"
         onPress={handleShowOnboarding}
       />
+      {Platform.OS === 'android' && (
+        <SettingsLinkRow
+          label={t('appUpdateCheck')}
+          subtitle={t('appUpdateCheckSubtitle')}
+          icon="cloud-download-outline"
+          onPress={() => { void checkForUpdateInteractive(); }}
+        />
+      )}
       <VersionFooter />
     </ScrollView>
     <BottomChrome withSafeAreaPadding />

@@ -43,6 +43,7 @@ import { offlineModeStore } from './offlineModeStore';
 import { pendingScrobbleStore } from './pendingScrobbleStore';
 import { playbackSettingsStore } from './playbackSettingsStore';
 import { ratingStore } from './ratingStore';
+import { personalMixStore } from './personalMixStore';
 import { recentSearchStore } from './recentSearchStore';
 import { scanStatusStore } from './scanStatusStore';
 import { scrobbleExclusionStore } from './scrobbleExclusionStore';
@@ -94,6 +95,7 @@ const allStores = [
   musicCacheStore,
   offlineModeStore,
   pendingScrobbleStore,
+  personalMixStore,
   playbackSettingsStore,
   ratingStore,
   recentSearchStore,

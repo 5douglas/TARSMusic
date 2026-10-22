@@ -22,18 +22,18 @@ import { discoverSettingsStore } from '../../store/discoverSettingsStore';
 import { themedAlertStore } from '../../store/themedAlertStore';
 
 beforeEach(() => {
-  discoverSettingsStore.setState({ baseUrl: null, token: null });
+  discoverSettingsStore.setState({ baseUrl: null, token: null, lastfmApiKey: null });
   themedAlertStore.setState({ visible: false, buttons: [] });
 });
 
 describe('SettingsDiscoverScreen', () => {
   it('saves a new connection only when both fields are filled', () => {
     render(<SettingsDiscoverScreen />);
-    fireEvent.press(screen.getByText('Save'));
+    fireEvent.press(screen.getAllByText('Save')[0]);
     expect(discoverSettingsStore.getState().baseUrl).toBeNull();
     fireEvent.changeText(screen.getByLabelText('Discover server URL'), 'https://d.example.com/');
     fireEvent.changeText(screen.getByLabelText('Token'), 'abc');
-    fireEvent.press(screen.getByText('Save'));
+    fireEvent.press(screen.getAllByText('Save')[0]);
     expect(discoverSettingsStore.getState()).toMatchObject({ baseUrl: 'https://d.example.com', token: 'abc' });
     expect(screen.getByText('Connected to Discover')).toBeTruthy();
     expect(screen.getByText('https://d.example.com')).toBeTruthy();
@@ -47,5 +47,13 @@ describe('SettingsDiscoverScreen', () => {
     act(() => alert.buttons.find((b) => b.text === 'OK')?.onPress?.());
     expect(discoverSettingsStore.getState().baseUrl).toBeNull();
     expect(screen.getByText('Connect to Discover')).toBeTruthy();
+  });
+
+  it('saves a Last.fm API key', () => {
+    discoverSettingsStore.setState({ baseUrl: 'https://d.example.com', token: 'abc' });
+    render(<SettingsDiscoverScreen />);
+    fireEvent.changeText(screen.getByLabelText('Last.fm API key'), ' key123 ');
+    fireEvent.press(screen.getByText('Save'));
+    expect(discoverSettingsStore.getState().lastfmApiKey).toBe('key123');
   });
 });
