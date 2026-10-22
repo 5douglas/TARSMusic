@@ -55,6 +55,7 @@ import { SleepTimerSheet } from '../components/SleepTimerSheet';
 import { PlaybackToast } from '../components/PlaybackToast';
 import { ProcessingOverlay } from '../components/ProcessingOverlay';
 import { useDownloadBackgroundNotification } from '../hooks/useDownloadBackgroundNotification';
+import { useAppUpdateCheck } from '../hooks/useAppUpdateCheck';
 import { useDownloadKeepAwake } from '../hooks/useDownloadKeepAwake';
 import { useLayoutMode } from '../hooks/useLayoutMode';
 import { useTheme } from '../hooks/useTheme';
@@ -390,6 +391,7 @@ export default function RootLayout() {
   useMigrationGateKeepAwake();
   useMigrationGateBackgroundNotification();
   useLibrarySyncBackgroundNotification();
+  useAppUpdateCheck(!startupBlocked && rehydrated && isLoggedIn);
 
   // --- Global SSL cert prompt driven by certPromptStore ---
   const certPromptVisible = certPromptStore((s) => s.visible);
@@ -780,6 +782,14 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="discover-browse"
+          options={({ route }) => ({
+            ...blurHeaderOptions,
+            title: (route.params as { title?: string } | undefined)?.title ?? '',
+            headerBackTitle: i18n.t('back'),
+          })}
+        />
+        <Stack.Screen
+          name="mix"
           options={({ route }) => ({
             ...blurHeaderOptions,
             title: (route.params as { title?: string } | undefined)?.title ?? '',

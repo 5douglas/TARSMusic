@@ -18,6 +18,8 @@ export function SettingsDiscoverScreen() {
   const token = discoverSettingsStore((s) => s.token);
   const [url, setUrl] = useState(baseUrl ?? '');
   const [newToken, setNewToken] = useState('');
+  const lastfmApiKey = discoverSettingsStore((s) => s.lastfmApiKey);
+  const [newLastfmKey, setNewLastfmKey] = useState(lastfmApiKey ?? '');
   const connected = !!baseUrl && !!token;
   const canSave = !!url.trim() && !!newToken.trim();
 
@@ -84,6 +86,32 @@ export function SettingsDiscoverScreen() {
             </Pressable>
           </View>
         )}
+        <View style={[styles.gap, styles.section]}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{t('lastfmStatsTitle')}</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('lastfmStatsHint')}</Text>
+          <TextInput
+            value={newLastfmKey}
+            onChangeText={setNewLastfmKey}
+            placeholder={t('lastfmApiKey')}
+            placeholderTextColor={colors.textSecondary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={inputStyle}
+            accessibilityLabel={t('lastfmApiKey')}
+          />
+          <Pressable
+            onPress={() => discoverSettingsStore.getState().setLastfmApiKey(newLastfmKey)}
+            disabled={newLastfmKey.trim() === (lastfmApiKey ?? '')}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: colors.primary },
+              (pressed || newLastfmKey.trim() === (lastfmApiKey ?? '')) && styles.pressed,
+            ]}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.buttonLabel, { color: '#fff' }]}>{t('save')}</Text>
+          </Pressable>
+        </View>
       </ScrollView>
       <BottomChrome withSafeAreaPadding />
     </GradientBackground>
@@ -97,6 +125,9 @@ const styles = StyleSheet.create({
   },
   gap: {
     gap: 12,
+  },
+  section: {
+    marginTop: 32,
   },
   title: {
     fontSize: 20,

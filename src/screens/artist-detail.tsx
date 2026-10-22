@@ -13,6 +13,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { LIST_DRAW_DISTANCE } from '../constants/layout';
 import Ionicons from "@react-native-vector-icons/ionicons/static";
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -23,8 +24,8 @@ import { CachedImage } from '../components/CachedImage';
 import { BottomChrome } from '../components/BottomChrome';
 import { MoreOptionsButton } from '../components/MoreOptionsButton';
 import { DiscoverMoreFromArtist } from '../components/DiscoverMoreFromArtist';
+import { PopularTrackRow } from '../components/PopularTrackRow';
 import { SectionTitle } from '../components/SectionTitle';
-import { SongCard } from '../components/SongCard';
 import { closeOpenRow } from '../components/SwipeableRow';
 import { DetailScreenBackground } from '../components/DetailScreenBackground';
 import { PlayAllButton, ShufflePlayButton } from '../components/DetailHeroButtons';
@@ -35,6 +36,12 @@ import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { useTransitionComplete } from '../hooks/useTransitionComplete';
 import { refreshCoverArt } from '../services/imageCacheService';
+import {
+  fetchArtistStats,
+  formatCount,
+  playsForTitle,
+  type ArtistStats,
+} from '../services/artistStatsService';
 import { PillToggle } from '../components/PillToggle';
 import { playAllByArtist, playMoreByArtist, toggleStar } from '../services/moreOptionsService';
 import { shuffleArray } from '../utils/arrayHelpers';
@@ -60,9 +67,13 @@ import {
   type Child,
 } from '../services/subsonicService';
 
-const HERO_PADDING = 24;
-const HERO_IMAGE_SIZE = 180;
 const HERO_COVER_SIZE = 600;
+const BANNER_MAX_HEIGHT = 420;
+const POPULAR_COLLAPSED = 5;
+const POPULAR_EXPANDED = 10;
+/** Darkens the banner's lower half so the white artist name stays legible on any photo. */
+const BANNER_SCRIM: readonly [string, string, string] = ['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.65)'];
+const BANNER_SCRIM_LOCATIONS: readonly [number, number, number] = [0, 0.35, 1];
 const HEADER_BAR_HEIGHT = 44;
 const CARD_WIDTH = 88;
 const HORIZONTAL_GAP = 10;
@@ -77,7 +88,7 @@ export function ArtistDetailScreen() {
   const offlineMode = offlineModeStore((s) => s.offlineMode);
   const artistPlayMode = playbackSettingsStore((s) => s.artistPlayMode);
   const { width: screenWidth } = useWindowDimensions();
-  const heroImageSize = Math.min(Math.max(HERO_IMAGE_SIZE, screenWidth * 0.35), 280);
+  const bannerHeight = Math.min(screenWidth * 0.9, BANNER_MAX_HEIGHT);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -93,6 +104,8 @@ export function ArtistDetailScreen() {
   const [topSongs, setTopSongs] = useState<Child[]>([]);
   const [biography, setBiography] = useState<string | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [stats, setStats] = useState<ArtistStats | null>(null);
+  const [popularExpanded, setPopularExpanded] = useState(false);
   const [albumSortDesc, setAlbumSortDesc] = useState(
     () => layoutPreferencesStore.getState().artistAlbumSortOrder === 'newest',
   );
@@ -166,6 +179,16 @@ export function ArtistDetailScreen() {
       .finally(() => { if (alive) setTopSongsSettled(true); });
     return () => { alive = false; };
   }, [id, refreshNonce]);
+
+  // Public listener / play counts. Keyed on the name: both Last.fm and Deezer match by it.
+  const artistName = artist?.name;
+  useEffect(() => {
+    setStats(null);
+    if (!artistName || offlineMode) return;
+    let alive = true;
+    void fetchArtistStats(artistName).then((res) => { if (alive) setStats(res); });
+    return () => { alive = false; };
+  }, [artistName, offlineMode, refreshNonce]);
 
   /* ---- Header right: more options button ---- */
   useEffect(() => {
@@ -248,21 +271,35 @@ export function ArtistDetailScreen() {
 
   const albumKeyExtractor = useCallback((item: AlbumID3) => item.id, []);
 
-  const topSongsRenderItem = useCallback(
-    ({ item }: { item: Child }) => (
-      <SongCard
-        song={item}
-        width={CARD_WIDTH}
-        songs={topSongs}
-      />
-    ),
-    [topSongs],
+  const popularSongs = useMemo(
+    () => topSongs.slice(0, popularExpanded ? POPULAR_EXPANDED : POPULAR_COLLAPSED),
+    [topSongs, popularExpanded],
   );
 
-  const topSongsKeyExtractor = useCallback(
-    (item: Child, index: number) => `${item.id}-${index}`,
-    [],
+  // Public Last.fm plays when the key is set and Last.fm knows the artist's tracks; otherwise
+  // the user's own plays, labelled as theirs so the two are never mistaken for each other.
+  const hasPublicPlays = !!stats && Object.keys(stats.trackPlays).length > 0;
+  const popularPlaysLabel = useCallback(
+    (song: Child): string | null => {
+      if (hasPublicPlays) {
+        const plays = playsForTitle(stats, song.title);
+        return plays != null ? formatCount(plays) : null;
+      }
+      return song.playCount ? t('artistYourPlays', { count: song.playCount, formatted: formatCount(song.playCount) }) : null;
+    },
+    [hasPublicPlays, stats, t],
   );
+
+  // Last.fm listeners when a key is set, otherwise Deezer fans; null until either arrives.
+  const listenersLine = useMemo(() => {
+    if (stats?.listeners != null) {
+      return t('artistListeners', { count: stats.listeners, formatted: formatCount(stats.listeners) });
+    }
+    if (stats?.fans != null) {
+      return t('artistFans', { count: stats.fans, formatted: formatCount(stats.fans) });
+    }
+    return null;
+  }, [stats, t]);
 
   const similarArtistsRenderItem = useCallback(
     ({ item }: { item: (typeof similarArtists)[number] }) => (
@@ -292,24 +329,29 @@ export function ArtistDetailScreen() {
     if (!artist) return null;
     return (
       <>
-        {/* ---- Hero ---- */}
-        <View style={styles.hero}>
+        {/* ---- Hero: full-width banner with the name over it, Spotify style ---- */}
+        <View style={[styles.banner, { height: bannerHeight + insets.top }]}>
           <CachedImage
             coverArtId={artist.coverArt}
             size={HERO_COVER_SIZE}
             fallbackUri={heroFallbackUrl}
-            style={[styles.heroImage, { width: heroImageSize, height: heroImageSize, borderRadius: heroImageSize / 2 }]}
+            style={styles.bannerImage}
             resizeMode="cover"
           />
-          <Text style={[styles.artistName, { color: colors.textPrimary }]}>
+          <LinearGradient
+            colors={BANNER_SCRIM}
+            locations={BANNER_SCRIM_LOCATIONS}
+            style={styles.bannerImage}
+            pointerEvents="none"
+          />
+          <Text style={styles.artistName} numberOfLines={2} adjustsFontSizeToFit>
             {artist.name}
           </Text>
-          <View style={styles.meta}>
-            <Ionicons name="disc-outline" size={14} color={colors.primary} />
-            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-              {t('albumCount', { count: artist.albumCount ?? 0 })}
-            </Text>
-          </View>
+        </View>
+        <View style={styles.meta}>
+          <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+            {listenersLine ?? t('albumCount', { count: artist.albumCount ?? 0 })}
+          </Text>
         </View>
         <View style={styles.heroButtons}>
           <PillToggle
@@ -354,6 +396,54 @@ export function ArtistDetailScreen() {
         {/* Heavy sections deferred until after the navigation animation */}
         {ready && (
           <>
+            {/* ---- Popular: numbered rows with play counts ---- */}
+            {popularSongs.length > 0 && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
+                  {t('artistPopular')}
+                </Text>
+                {popularSongs.map((song, index) => (
+                  <PopularTrackRow
+                    key={`${song.id}-${index}`}
+                    song={song}
+                    rank={index + 1}
+                    playsLabel={popularPlaysLabel(song)}
+                    songs={topSongs}
+                  />
+                ))}
+                {topSongs.length > POPULAR_COLLAPSED && (
+                  <Pressable
+                    onPress={() => setPopularExpanded((prev) => !prev)}
+                    style={({ pressed }) => [styles.seeMore, pressed && styles.pressed]}
+                    hitSlop={8}
+                  >
+                    <Text style={[styles.seeMoreText, { color: colors.primary }]}>
+                      {popularExpanded ? t('showLess') : t('artistSeeMore')}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+
+            {/* ---- Similar Artists ---- */}
+            {similarArtists.length > 0 && (
+              <View style={styles.section}>
+                <SectionTitle title={t('artistFansAlsoLike')} color={colors.label} />
+                <FlashList
+                  data={similarArtists}
+                  renderItem={similarArtistsRenderItem}
+                  keyExtractor={similarArtistsKeyExtractor}
+                  drawDistance={LIST_DRAW_DISTANCE}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.horizontalList}
+                  ItemSeparatorComponent={() => (
+                    <View style={{ width: HORIZONTAL_GAP }} />
+                  )}
+                />
+              </View>
+            )}
+
             {/* ---- Biography ---- */}
             {/* The bio is the slowest part — it can fall through to MusicBrainz — so show
                 the section with a spinner while it resolves rather than leaving a gap that
@@ -386,46 +476,6 @@ export function ArtistDetailScreen() {
                     {bioExpanded ? t('showLess') : t('readMore')}
                   </Text>
                 </Pressable>
-              </View>
-            )}
-
-            {/* ---- Top Songs ---- */}
-            {topSongs.length > 0 && (
-              <View style={styles.section}>
-                <SectionTitle title={t('topSongs')} color={colors.label} />
-                {/* Uncapped: the fetch is already bounded by the list-length setting, so what
-                    renders matches what Play/Shuffle queue from. */}
-                <FlashList
-                  data={topSongs}
-                  renderItem={topSongsRenderItem}
-                  keyExtractor={topSongsKeyExtractor}
-                  drawDistance={LIST_DRAW_DISTANCE}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.horizontalList}
-                  ItemSeparatorComponent={() => (
-                    <View style={{ width: HORIZONTAL_GAP }} />
-                  )}
-                />
-              </View>
-            )}
-
-            {/* ---- Similar Artists ---- */}
-            {similarArtists.length > 0 && (
-              <View style={styles.section}>
-                <SectionTitle title={t('similarArtists')} color={colors.label} />
-                <FlashList
-                  data={similarArtists}
-                  renderItem={similarArtistsRenderItem}
-                  keyExtractor={similarArtistsKeyExtractor}
-                  drawDistance={LIST_DRAW_DISTANCE}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.horizontalList}
-                  ItemSeparatorComponent={() => (
-                    <View style={{ width: HORIZONTAL_GAP }} />
-                  )}
-                />
               </View>
             )}
 
@@ -464,7 +514,12 @@ export function ArtistDetailScreen() {
   }, [
     artist,
     heroFallbackUrl,
-    heroImageSize,
+    bannerHeight,
+    insets.top,
+    listenersLine,
+    popularSongs,
+    popularExpanded,
+    popularPlaysLabel,
     ready,
     biography,
     bioExpanded,
@@ -476,8 +531,6 @@ export function ArtistDetailScreen() {
     colors.textSecondary,
     colors.label,
     colors.primary,
-    topSongsRenderItem,
-    topSongsKeyExtractor,
     similarArtistsRenderItem,
     similarArtistsKeyExtractor,
     artistPlayMode,
@@ -538,11 +591,6 @@ export function ArtistDetailScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.content,
-            // paddingTop on both platforms, never contentInset+contentOffset:
-            // Fabric recycles RCTScrollViewComponentView across screen pushes and
-            // ignores contentOffset on a recycled instance, leaving the hero partly
-            // scrolled off the top. See album-detail.tsx.
-            { paddingTop: insets.top + HEADER_BAR_HEIGHT },
           ]}
           refreshControl={
             offlineMode ? undefined : (
@@ -591,34 +639,35 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
 
-  /* Hero */
-  hero: {
+  /* Hero banner — runs under the transparent header, so it includes the top inset */
+  banner: {
     width: '100%',
-    paddingTop: HERO_PADDING / 2,
-    paddingBottom: HERO_PADDING,
-    alignItems: 'center',
-  },
-  heroImage: {
-    width: HERO_IMAGE_SIZE,
-    height: HERO_IMAGE_SIZE,
-    borderRadius: HERO_IMAGE_SIZE / 2,
+    justifyContent: 'flex-end',
     backgroundColor: 'rgba(128,128,128,0.12)',
   },
+  bannerImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+  },
   artistName: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginTop: 16,
-    textAlign: 'center',
-    paddingHorizontal: 24,
+    color: '#fff',
+    fontSize: 44,
+    fontWeight: '900',
+    letterSpacing: -1,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   meta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
   metaText: {
     fontSize: 14,
-    marginLeft: 4,
+    fontWeight: '500',
   },
   heroButtons: {
     flexDirection: 'row',
@@ -636,6 +685,21 @@ const styles = StyleSheet.create({
   section: {
     paddingHorizontal: 16,
     marginTop: 20,
+  },
+
+  sectionHeading: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  seeMore: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingLeft: 34,
+  },
+  seeMoreText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   /* Biography */

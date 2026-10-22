@@ -25,6 +25,7 @@ import { DiscoverHomeSections } from '../components/DiscoverHomeSections';
 import { DownloadedIcon } from '../components/DownloadedIcon';
 import { EmptyState } from '../components/EmptyState';
 import { GenreChipSection } from '../components/GenreChipSection';
+import { PersonalMixesSection } from '../components/PersonalMixesSection';
 import { PlaylistCard } from '../components/PlaylistCard';
 import { QuickAccessGrid } from '../components/QuickAccessGrid';
 import { ResumeBookmarksSection } from '../components/ResumeBookmarksSection';
@@ -564,6 +565,7 @@ export function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           {!hasAnyFilters && <QuickAccessGrid albums={recentlyPlayed} />}
+          {!hasAnyFilters && !offlineMode && <PersonalMixesSection />}
           {discoverHome && <DiscoverHomeSections home={discoverHome} ids={['mixes', 'releases']} />}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
