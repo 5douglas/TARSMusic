@@ -26,12 +26,21 @@ describe('discoverSettingsStore', () => {
     expect(discoverSettingsStore.getState()).toMatchObject({ baseUrl: null, token: null });
   });
 
-  it('persists only baseUrl and token', () => {
+  it('persists only baseUrl, token and the Last.fm key', () => {
     const partialize = discoverSettingsStore.persist.getOptions().partialize!;
     discoverSettingsStore.getState().setConnection('https://d.example.com', 'tok');
+    discoverSettingsStore.getState().setLastfmApiKey('key');
     expect(partialize(discoverSettingsStore.getState())).toEqual({
       baseUrl: 'https://d.example.com',
       token: 'tok',
+      lastfmApiKey: 'key',
     });
+  });
+
+  it('stores a blank Last.fm key as none', () => {
+    discoverSettingsStore.getState().setLastfmApiKey(' abc ');
+    expect(discoverSettingsStore.getState().lastfmApiKey).toBe('abc');
+    discoverSettingsStore.getState().setLastfmApiKey('  ');
+    expect(discoverSettingsStore.getState().lastfmApiKey).toBeNull();
   });
 });
