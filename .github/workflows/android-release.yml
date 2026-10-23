@@ -1,0 +1,145 @@
+name: Android release APK
+
+# Builds the release APK and publishes it as a GitHub release, which the in-app updater
+# (src/services/appUpdateService.ts) picks up.
+#
+#   git tag v8.2.0 && git push origin v8.2.0
+#
+# or run it by hand from the Actions tab with a version. The tag's version becomes
+# expo.version; versionCode is app.json's plus the run number, so every build installs
+# over the previous one.
+#
+# Signing: Android only installs an update signed with the same key as the installed app.
+# With the ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS /
+# ANDROID_KEY_PASSWORD secrets set, the APK is signed with that keystore. Without them it
+# keeps the debug signature from the Expo prebuild template.
+#
+# On a pull request that changes this file it only builds and uploads the APK as an
+# artifact, to check the build without publishing anything.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish, e.g. 8.2.0'
+        required: true
+  pull_request:
+    paths: ['.github/workflows/android-release.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Same as the production profile in eas.json.
+      EXPO_USE_PRECOMPILED_MODULES: '0'
+      VERSION_INPUT: ${{ github.event.inputs.version }}
+      KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [ -n "$VERSION_INPUT" ]; then
+            VERSION="${VERSION_INPUT#v}"
+          else
+            VERSION="$(node -p "require('./app.json').expo.version")"
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::Version '$VERSION' is not like 8.2.0"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp version into app.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const app = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            app.expo.version = process.env.VERSION;
+            app.expo.android.versionCode += Number(process.env.RUN_NUMBER);
+            fs.writeFileSync("app.json", JSON.stringify(app, null, 2) + "\n");
+            console.log(app.expo.version, app.expo.android.versionCode);
+          '
+
+      - run: npm ci
+
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+
+      - name: Sign with the release keystore
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n1)apksigner"
+          "$APKSIGNER" sign \
+            --ks "$RUNNER_TEMP/release.keystore" \
+            --ks-pass env:KEYSTORE_PASSWORD \
+            --ks-key-alias "$KEY_ALIAS" \
+            --key-pass env:KEY_PASSWORD \
+            "$APK"
+          "$APKSIGNER" verify --print-certs "$APK" | head -n 3
+          rm "$RUNNER_TEMP/release.keystore"
+
+      - name: Name the APK
+        id: apk
+        run: |
+          OUT="TARSMusic-${{ steps.version.outputs.version }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$OUT"
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.path }}
+          path: ${{ steps.apk.outputs.path }}
+          retention-days: 14
+
+      - name: Publish GitHub release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.version }}
+          APK: ${{ steps.apk.outputs.path }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" --title "TARSMusic ${TAG#v}" --generate-notes --target "$GITHUB_SHA"
+          fi
