@@ -191,7 +191,8 @@ export function SearchableHeader({ route }: BottomTabHeaderProps) {
         </View>
       </View>
       )}
-      <FilterBar routeName={route.name} />
+      {/* Your Library has its own Spotify chips under the header, so no filter bar there. */}
+      {!isLibrary && <FilterBar routeName={route.name} />}
     </>
   );
 

@@ -52,9 +52,6 @@ export default function TabLayout() {
             borderTopColor: 'transparent',
           },
           headerTransparent: true,
-          // Freeze the tabs you are not looking at: their trees stop re-rendering on store
-          // updates (playback progress, sync, downloads) until you switch back to them.
-          freezeOnBlur: true,
           sceneStyle: { backgroundColor: 'transparent' },
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.textSecondary,
