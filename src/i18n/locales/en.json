@@ -1282,5 +1282,10 @@
   "profileStatStreak": "Day streak",
   "profileTopArtists": "Top artists",
   "profileTopTracks": "Top tracks",
-  "profileView": "View profile"
+  "profileView": "View profile",
+  "playingFromAlbum": "Playing from album",
+  "lyricsShowAll": "Show lyrics",
+  "playerAboutAlbum": "About the album",
+  "playerNextInQueue": "Next in queue",
+  "playerOpenQueue": "Open queue"
 }

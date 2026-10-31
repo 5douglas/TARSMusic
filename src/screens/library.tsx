@@ -238,14 +238,21 @@ export function LibraryScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>{content}</View>
-      <View style={[styles.overlay, { top: headerHeight }]}>
+      {/* On Android the backdrop reaches up under the header too, so nothing in the list
+          shows through a banner slot between the header and the chips. */}
+      <View
+        style={[
+          styles.overlay,
+          Platform.OS === 'ios' ? { top: headerHeight } : { top: 0, paddingTop: headerHeight },
+        ]}
+      >
         {Platform.OS === 'ios' ? (
           <BlurView tint={theme === 'dark' ? 'dark' : 'light'} intensity={80} style={StyleSheet.absoluteFill} />
         ) : (
           <LinearGradient
             colors={backdropColors}
             locations={GRADIENT_LOCATIONS}
-            style={[styles.backdrop, { top: -headerHeight, height: windowHeight }]}
+            style={[styles.backdrop, { top: 0, height: windowHeight }]}
             pointerEvents="none"
           />
         )}
