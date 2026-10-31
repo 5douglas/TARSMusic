@@ -119,6 +119,14 @@
       "./plugins/with-carplay-appearance-fix",
       "expo-notifications",
       "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TARSMusic uses your photos to set your profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "expo-localization",
       "expo-status-bar",
       "@react-native-vector-icons/ionicons",
