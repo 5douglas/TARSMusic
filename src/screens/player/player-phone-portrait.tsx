@@ -5,8 +5,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -34,7 +36,8 @@ import { MarqueeText } from '@/components/MarqueeText';
 import { MoreOptionsButton } from '@/components/MoreOptionsButton';
 import { PlaybackRateButton } from '@/components/PlaybackRateButton';
 import { PlayerProgressBar } from '@/components/PlayerProgressBar';
-import { PlayerTabBar, type PlayerTab } from '@/components/PlayerTabBar';
+import { PlayerLyricsCard } from '@/components/PlayerLyricsCard';
+import { type PlayerTab } from '@/components/PlayerTabBar';
 import { RepeatButton } from '@/components/RepeatButton';
 import { ShuffleButton } from '@/components/ShuffleButton';
 import { ShuffleOverlay } from '@/components/ShuffleOverlay';
@@ -82,6 +85,9 @@ const TAB_SLIDE_DISTANCE = 12;
 /** Static content inset for the queue list — module-scope so FlashList isn't
  *  handed a fresh object on every parent re-render. */
 const QUEUE_CONTENT_CONTAINER_STYLE = { paddingBottom: 12 } as const;
+
+/** Tracks previewed in the "Next in queue" card under the player. */
+const UP_NEXT_COUNT = 3;
 
 export function PlayerPhonePortrait() {
   const { colors } = useTheme();
@@ -202,17 +208,52 @@ export function PlayerPhonePortrait() {
     transform: [{ translateY: interpolate(lyricsOpacity.value, [0, 1], [TAB_SLIDE_DISTANCE, 0]) }],
   }));
 
+  // Queue, lyrics and album info open over the player, Spotify style: back (the header
+  // chevron or the Android back button) returns to the player before it closes it.
+  const onBack = useCallback(() => {
+    if (activeTab !== 'player') setActiveTab('player');
+    else onClose();
+  }, [activeTab, onClose]);
+
+  useEffect(() => {
+    if (activeTab === 'player') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setActiveTab('player');
+      return true;
+    });
+    return () => sub.remove();
+  }, [activeTab]);
+
+  /* ---- Header title: "Playing from album" over the album, or the open panel ---- */
+  useEffect(() => {
+    if (!currentTrack) return;
+    const eyebrow =
+      activeTab === 'player' ? t('playingFromAlbum') : activeTab === 'lyrics' ? currentTrack.artist ?? '' : '';
+    const title =
+      activeTab === 'player'
+        ? currentTrack.album ?? ''
+        : activeTab === 'lyrics'
+          ? currentTrack.title
+          : activeTab === 'queue'
+            ? t('queue')
+            : t('albumInfo');
+    navigation.setOptions({
+      headerTitleAlign: 'center',
+      headerTitle: () => <PlayerHeaderTitle eyebrow={eyebrow} title={title} color={colors.textPrimary} />,
+    });
+  }, [activeTab, currentTrack, navigation, colors.textPrimary, t]);
+
   /* ---- Header: dismiss button + more options ---- */
   useEffect(() => {
     if (Platform.OS === 'ios') return;
     navigation.setOptions({
       headerLeft: () => (
         <GHPressable
-          onPress={onClose}
+          onPress={onBack}
           hitSlop={12}
           style={({ pressed }) => [{ opacity: 1 }, pressed && styles.pressed]}
         >
-          <Ionicons name="chevron-down" size={28} color={colors.textPrimary} />
+          <Ionicons name={activeTab === 'player' ? 'chevron-down' : 'chevron-back'} size={28} color={colors.textPrimary} />
         </GHPressable>
       ),
       headerRight: () =>
@@ -225,7 +266,7 @@ export function PlayerPhonePortrait() {
           />
         ) : null,
     });
-  }, [currentTrack, navigation, onClose, colors.textPrimary]);
+  }, [currentTrack, navigation, onBack, activeTab, colors.textPrimary]);
 
   const onClearConfirmed = useCallback(() => {
     onClose();
@@ -246,6 +287,29 @@ export function PlayerPhonePortrait() {
     overlayStyle,
     spinStyle,
   } = useShuffleOverlay();
+
+  // Spotify paints the lyrics in a deeper shade of the cover colour.
+  const lyricsBackground = useMemo(
+    () => mixHexColors(gradientColors[0], '#000000', 0.3),
+    [gradientColors],
+  );
+  const lyricsColors = useMemo(
+    () => ({ ...colors, textPrimary: '#ffffff', textSecondary: 'rgba(255,255,255,0.7)', background: lyricsBackground }),
+    [colors, lyricsBackground],
+  );
+  const openQueue = useCallback(() => setActiveTab('queue'), []);
+  const openLyrics = useCallback(() => setActiveTab('lyrics'), []);
+  const openInfo = useCallback(() => setActiveTab('info'), []);
+
+  // The first screenful of the scrolling player is the classic player; the cards follow.
+  // Seeded from the window so the first frame already lays out; onLayout then corrects it.
+  const { height: windowHeight } = useWindowDimensions();
+  const [panelHeight, setPanelHeight] = useState(() => windowHeight - insets.top - HEADER_BAR_HEIGHT);
+  const foldHeight = Math.max(panelHeight - insets.bottom, 0);
+  const upNext = useMemo(
+    () => queue.slice((currentTrackIndex ?? -1) + 1, (currentTrackIndex ?? -1) + 1 + UP_NEXT_COUNT),
+    [queue, currentTrackIndex],
+  );
 
   const gradientAnimatedStyle = useAnimatedStyle(() => ({
     opacity: gradientOpacity.value,
@@ -311,7 +375,7 @@ export function PlayerPhonePortrait() {
       {Platform.OS === 'ios' && (
         <>
           <Stack.Toolbar placement="left">
-            <Stack.Toolbar.Button icon="chevron.down" onPress={onClose} />
+            <Stack.Toolbar.Button icon={activeTab === 'player' ? 'chevron.down' : 'chevron.left'} onPress={onBack} />
           </Stack.Toolbar>
           <Stack.Toolbar placement="right">
             <Stack.Toolbar.Button
@@ -336,6 +400,12 @@ export function PlayerPhonePortrait() {
           />
         </Animated.View>
 
+        {/* Full-screen lyrics colour, faded in with the lyrics panel */}
+        <Animated.View
+          style={[absoluteFill, { backgroundColor: lyricsBackground }, !visibleTabs.has('lyrics') && styles.hiddenTab, lyricsAnimatedStyle]}
+          pointerEvents="none"
+        />
+
         {/* Content area with tab switching */}
         <View style={styles.contentArea}>
           {/* Player tab — vertically centered across full area */}
@@ -347,15 +417,42 @@ export function PlayerPhonePortrait() {
               playerAnimatedStyle,
             ]}
             pointerEvents={activeTab === 'player' ? 'auto' : 'none'}
+            onLayout={(e) => setPanelHeight(e.nativeEvent.layout.height)}
           >
-            <PlayerContent
-              currentTrack={currentTrack}
-              colors={colors}
-              queueLoading={queueLoading}
-              handleSeek={handleSeek}
-              handleShuffle={handleShuffle}
-              shuffling={shuffling}
-            />
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+            >
+              <View style={{ height: foldHeight }}>
+                <PlayerContent
+                  currentTrack={currentTrack}
+                  colors={colors}
+                  queueLoading={queueLoading}
+                  handleSeek={handleSeek}
+                  handleShuffle={handleShuffle}
+                  shuffling={shuffling}
+                  onOpenQueue={openQueue}
+                />
+              </View>
+              <PlayerLyricsCard
+                lyrics={lyricsEntry}
+                loading={lyricsLoading}
+                backgroundColor={lyricsBackground}
+                onExpand={openLyrics}
+              />
+              {currentTrack.albumId && !offlineMode && (
+                <AboutAlbumCard currentTrack={currentTrack} colors={colors} onPress={openInfo} />
+              )}
+              {upNext.length > 0 && (
+                <UpNextCard
+                  tracks={upNext}
+                  firstIndex={(currentTrackIndex ?? -1) + 1}
+                  colors={colors}
+                  onPlay={handleQueueItemPress}
+                  onOpenQueue={openQueue}
+                />
+              )}
+            </ScrollView>
           </Animated.View>
 
           {/* Queue tab — below header */}
@@ -410,20 +507,18 @@ export function PlayerPhonePortrait() {
             {mountedTabs.has('lyrics') && currentTrack && (
               <LyricsTab
                 currentTrack={currentTrack}
-                colors={colors}
+                colors={lyricsColors}
                 entry={lyricsEntry}
                 loading={lyricsLoading}
                 error={lyricsError}
                 handleRetry={handleRetryLyrics}
               />
             )}
+            {mountedTabs.has('lyrics') && <LyricsMiniControls colors={lyricsColors} onSeek={handleSeek} />}
           </Animated.View>
         </View>
 
-        {/* Tab bar */}
-        <View style={{ paddingBottom: insets.bottom }}>
-          <PlayerTabBar activeTab={activeTab} onSelect={setActiveTab} colors={colors} offlineMode={offlineMode} />
-        </View>
+        <View style={{ height: activeTab === 'player' ? 0 : insets.bottom }} />
 
         {/* Shuffle overlay */}
         <ShuffleOverlay
@@ -448,6 +543,7 @@ interface PlayerContentProps {
   handleSeek: (seconds: number) => void;
   handleShuffle: () => void;
   shuffling: boolean;
+  onOpenQueue: () => void;
 }
 
 const PlayerContent = memo(function PlayerContent({
@@ -457,6 +553,7 @@ const PlayerContent = memo(function PlayerContent({
   handleSeek,
   handleShuffle,
   shuffling,
+  onOpenQueue,
 }: PlayerContentProps) {
   const { t } = useTranslation();
   const songCoverArtId = currentTrack?.coverArt ?? undefined;
@@ -564,7 +661,6 @@ const PlayerContent = memo(function PlayerContent({
             >
               {currentTrack.artist ?? t('unknownArtist')}
             </Text>
-            <CastButton />
           </View>
           <FavoriteButton trackId={currentTrack.id} style={styles.favoriteButton} />
         </View>
@@ -657,37 +753,192 @@ const PlayerContent = memo(function PlayerContent({
         </View>
       </View>
 
-      {/* Secondary controls row — dropped on the smallest tier
-          (m.showSecondaryRow === false) so the transport controls clear the nav
-          bar. When present, its own middle spacer keeps both rows
-          evenly distributed; when absent, the two remaining spacers center the
-          single primary row. */}
-      {m.showSecondaryRow && (
-        <>
-          <View style={styles.playerSpacer} />
-          <View style={styles.secondaryControls}>
-            <View style={[styles.controlSideLeft, styles.secondaryLeftInset]}>
-              {showSleepTimer && <SleepTimerButton />}
+      {/* Spotify's bottom row: devices on the left, the queue on the right. Sleep timer,
+          speed and skip-interval sit between them when there is room. */}
+      <View style={styles.playerSpacer} />
+      <View style={styles.secondaryControls}>
+        <View style={[styles.controlSideLeft, styles.bottomRowSide]}>
+          <CastButton />
+          {m.showSecondaryRow && showSleepTimer && <SleepTimerButton />}
+        </View>
+        {m.showSecondaryRow && (
+          <View style={[styles.secondaryCenterRow, { width: secondaryCenterWidth }]}>
+            {showSkipInterval && <SkipIntervalButton direction="backward" size={32} />}
+            <View style={styles.secondaryRateSlot}>
+              <PlaybackRateButton />
             </View>
-            <View style={[styles.secondaryCenterRow, { width: secondaryCenterWidth }]}>
-              {showSkipInterval && (
-                <SkipIntervalButton direction="backward" size={32} />
-              )}
-              <View style={styles.secondaryRateSlot}>
-                <PlaybackRateButton />
-              </View>
-              {showSkipInterval && (
-                <SkipIntervalButton direction="forward" size={32} />
-              )}
-            </View>
-            <View style={styles.controlSideRight}>
-              <BookmarkButton style={styles.favoriteButton} />
-            </View>
+            {showSkipInterval && <SkipIntervalButton direction="forward" size={32} />}
           </View>
-        </>
-      )}
+        )}
+        <View style={[styles.controlSideRight, styles.bottomRowSide]}>
+          {m.showSecondaryRow && <BookmarkButton />}
+          <Pressable
+            onPress={onOpenQueue}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={t('queue')}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Ionicons name="list" size={24} color={colors.textPrimary} />
+          </Pressable>
+        </View>
+      </View>
 
       <View style={styles.playerSpacer} />
+    </View>
+  );
+});
+
+/* ------------------------------------------------------------------ */
+/*  Header title, cards under the player, lyrics mini controls         */
+/* ------------------------------------------------------------------ */
+
+const PlayerHeaderTitle = memo(function PlayerHeaderTitle({
+  eyebrow,
+  title,
+  color,
+}: {
+  eyebrow: string;
+  title: string;
+  color: string;
+}) {
+  return (
+    <View style={styles.headerTitle}>
+      {!!eyebrow && (
+        <Text style={[styles.headerEyebrow, { color }]} numberOfLines={1}>
+          {eyebrow}
+        </Text>
+      )}
+      <Text style={[styles.headerTitleText, { color }]} numberOfLines={1}>
+        {title}
+      </Text>
+    </View>
+  );
+});
+
+const AboutAlbumCard = memo(function AboutAlbumCard({
+  currentTrack,
+  colors,
+  onPress,
+}: {
+  currentTrack: Child;
+  colors: ThemeColors;
+  onPress: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.infoCard, { backgroundColor: colors.card }, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel={t('albumInfo')}
+    >
+      <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{t('playerAboutAlbum')}</Text>
+      <View style={styles.aboutRow}>
+        <CachedImage
+          coverArtId={currentTrack.coverArt ?? undefined}
+          albumId={currentTrack.albumId}
+          size={150}
+          style={styles.aboutCover}
+          resizeMode="cover"
+        />
+        <View style={styles.aboutText}>
+          <Text style={[styles.aboutName, { color: colors.textPrimary }]} numberOfLines={2}>
+            {currentTrack.album}
+          </Text>
+          <Text style={[styles.aboutArtist, { color: colors.textSecondary }]} numberOfLines={1}>
+            {currentTrack.artist}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+      </View>
+    </Pressable>
+  );
+});
+
+const UpNextCard = memo(function UpNextCard({
+  tracks,
+  firstIndex,
+  colors,
+  onPlay,
+  onOpenQueue,
+}: {
+  tracks: Child[];
+  firstIndex: number;
+  colors: ThemeColors;
+  onPlay: (index: number) => void;
+  onOpenQueue: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
+      <View style={styles.cardHeaderRow}>
+        <Text style={[styles.cardTitle, styles.cardTitleInline, { color: colors.textPrimary }]}>
+          {t('playerNextInQueue')}
+        </Text>
+        <Pressable onPress={onOpenQueue} hitSlop={8} accessibilityRole="button">
+          <Text style={[styles.cardLink, { color: colors.textSecondary }]}>{t('playerOpenQueue')}</Text>
+        </Pressable>
+      </View>
+      {tracks.map((track, i) => (
+        <Pressable
+          key={`${track.id}-${i}`}
+          onPress={() => onPlay(firstIndex + i)}
+          style={({ pressed }) => [styles.upNextRow, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <CachedImage
+            coverArtId={track.coverArt ?? undefined}
+            albumId={track.albumId}
+            size={150}
+            style={styles.upNextCover}
+            resizeMode="cover"
+          />
+          <View style={styles.aboutText}>
+            <Text style={[styles.upNextTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+              {track.title}
+            </Text>
+            <Text style={[styles.aboutArtist, { color: colors.textSecondary }]} numberOfLines={1}>
+              {track.artist}
+            </Text>
+          </View>
+        </Pressable>
+      ))}
+    </View>
+  );
+});
+
+/** Progress and play/pause under the full-screen lyrics, as in Spotify. */
+const LyricsMiniControls = memo(function LyricsMiniControls({
+  colors,
+  onSeek,
+}: {
+  colors: ThemeColors;
+  onSeek: (seconds: number) => void;
+}) {
+  const { isPlaying, isBuffering } = usePlaybackState();
+  const position = playerStore((s) => s.position);
+  const duration = playerStore((s) => s.duration);
+  const bufferedPosition = playerStore((s) => s.bufferedPosition);
+  return (
+    <View style={styles.lyricsControls}>
+      <View style={styles.lyricsProgress}>
+      <PlayerProgressBar
+        position={position}
+        duration={duration}
+        bufferedPosition={bufferedPosition}
+        colors={colors}
+        onSeek={onSeek}
+        isBuffering={isBuffering}
+      />
+      </View>
+      <Pressable
+        onPress={togglePlayPause}
+        style={({ pressed }) => [styles.lyricsPlayButton, pressed && styles.playPausePressed]}
+        accessibilityRole="button"
+      >
+        <Ionicons name={isPlaying ? 'pause' : 'play'} size={28} color="#000" style={!isPlaying ? styles.playIcon : undefined} />
+      </Pressable>
     </View>
   );
 });
@@ -1058,5 +1309,103 @@ const styles = StyleSheet.create({
   },
   lyricsContainer: {
     flex: 1,
+  },
+  bottomRowSide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  headerTitle: {
+    alignItems: 'center',
+    maxWidth: 240,
+  },
+  headerEyebrow: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    opacity: 0.85,
+  },
+  headerTitleText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  infoCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  cardTitleInline: {
+    marginBottom: 0,
+  },
+  cardLink: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  aboutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  aboutCover: {
+    width: 64,
+    height: 64,
+    borderRadius: 6,
+  },
+  aboutText: {
+    flex: 1,
+    minWidth: 0,
+    marginHorizontal: 12,
+  },
+  aboutName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  aboutArtist: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  upNextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  upNextCover: {
+    width: 44,
+    height: 44,
+    borderRadius: 4,
+  },
+  upNextTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  lyricsControls: {
+    paddingHorizontal: HERO_PADDING,
+    paddingTop: 8,
+    paddingBottom: 8,
+    alignItems: 'center',
+  },
+  lyricsProgress: {
+    alignSelf: 'stretch',
+  },
+  lyricsPlayButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
   },
 });
