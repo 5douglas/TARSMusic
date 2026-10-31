@@ -6,7 +6,7 @@ import type { BottomTabHeaderProps } from "expo-router/build/react-navigation/bo
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Dimensions,
@@ -20,11 +20,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CreatePlaylistSheet } from './CreatePlaylistSheet';
 import { FilterBar } from './FilterBar';
 import { DARK_MIX, GRADIENT_LOCATIONS, GRADIENT_MIX_CURVE, LIGHT_MIX } from './GradientBackground';
+import { ProfileAvatar } from './ProfileAvatar';
 import { useTheme } from '../hooks/useTheme';
 import { mixHexColors } from '../utils/colors';
 import { offlineModeStore } from '../store/offlineModeStore';
+import { profileStore } from '../store/profileStore';
 import { recentSearchStore } from '../store/recentSearchStore';
 import { searchStore } from '../store/searchStore';
 
@@ -106,23 +109,49 @@ export function SearchableHeader({ route }: BottomTabHeaderProps) {
     };
   }, []);
 
-  // Spotify-style top row: profile button (opens Settings) and the tab's title.
+  // Spotify-style top row: the profile picture (opens the profile menu), the tab's title,
+  // and on Your Library the search and "+" (new playlist) actions.
   const titleKey = route.name === 'library' ? 'yourLibrary' : route.name === 'search' ? 'search' : null;
+  const isLibrary = route.name === 'library';
+  const [createVisible, setCreateVisible] = useState(false);
+  const closeCreate = useCallback(() => setCreateVisible(false), []);
   const topRow = (
     <View style={styles.titleRow}>
       <Pressable
-        onPress={() => router.push('/settings')}
+        onPress={() => profileStore.getState().openMenu()}
         hitSlop={8}
-        style={[styles.profileButton, { backgroundColor: colors.primary }]}
         accessibilityRole="button"
-        accessibilityLabel={t('settings')}
+        accessibilityLabel={t('profileMenu')}
       >
-        <Ionicons name="person" size={16} color="#fff" />
+        <ProfileAvatar size={32} />
       </Pressable>
       {titleKey && (
         <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
           {t(titleKey)}
         </Text>
+      )}
+      {isLibrary && (
+        <>
+          <Pressable
+            onPress={() => router.navigate('/search')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('search')}
+          >
+            <Ionicons name="search" size={24} color={colors.textPrimary} />
+          </Pressable>
+          {!offlineMode && (
+            <Pressable
+              onPress={() => setCreateVisible(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('newPlaylist')}
+            >
+              <Ionicons name="add" size={28} color={colors.textPrimary} />
+            </Pressable>
+          )}
+          <CreatePlaylistSheet visible={createVisible} onClose={closeCreate} />
+        </>
       )}
     </View>
   );
@@ -222,13 +251,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingTop: 8,
-  },
-  profileButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   title: {
     flex: 1,
