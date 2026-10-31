@@ -40,18 +40,24 @@ jest.mock('@/hooks/useThemedAlert', () => ({
   }),
 }));
 
-jest.mock('expo-router', () => ({
+const mockSetOptions = jest.fn();
+jest.mock('expo-router', () => {
+  const { Pressable } = require('react-native');
+  return {
   Stack: {
     Toolbar: Object.assign(
       ({ children }: { children: React.ReactNode }) => <>{children}</>,
       {
-        Button: () => null,
+        Button: ({ icon, onPress }: { icon: string; onPress?: () => void }) => (
+          <Pressable accessibilityLabel={`toolbar ${icon}`} onPress={onPress} />
+        ),
       },
     ),
   },
-  useNavigation: () => ({ setOptions: jest.fn() }),
+  useNavigation: () => ({ setOptions: mockSetOptions }),
   useRouter: () => ({ back: jest.fn() }),
-}));
+  };
+});
 
 jest.mock('expo-linear-gradient', () => {
   const { View } = require('react-native');
@@ -276,7 +282,21 @@ const MOCK_QUEUE: Child[] = [
   { ...MOCK_TRACK, id: 'track-3', title: 'Third Song' } as Child,
 ];
 
+/** Presses the header back control: the iOS toolbar chevron, or Android's headerLeft. */
+function pressHeaderBack(r: ReturnType<typeof render>) {
+  const { Platform } = require('react-native');
+  if (Platform.OS === 'ios') {
+    fireEvent.press(r.getByLabelText('toolbar chevron.left'));
+    return;
+  }
+  const calls = mockSetOptions.mock.calls.filter(([o]) => o.headerLeft);
+  const headerLeft = calls[calls.length - 1][0].headerLeft as () => React.ReactElement<{ onPress: () => void }>;
+  headerLeft().props.onPress();
+}
+
 beforeEach(() => {
+  mockSetOptions.mockClear();
+  (lyricsStore.getState() as { entries: Record<string, unknown> }).entries = {};
   fetchLyrics.mockClear();
   appStateStore.setState({ isActive: true });
   playerStore.setState({
@@ -301,31 +321,32 @@ describe('PlayerPhonePortrait', () => {
   });
 
   it('renders player content by default (player tab)', () => {
-    const { getByText, queryByText } = render(<PlayerPhonePortrait />);
+    const { getByText, getAllByText, queryByText } = render(<PlayerPhonePortrait />);
 
     // Hero player content visible
     expect(getByText('Test Song')).toBeTruthy();
-    expect(getByText('Test Artist')).toBeTruthy();
+    // The artist also shows on the album card and the up-next rows
+    expect(getAllByText('Test Artist').length).toBeGreaterThanOrEqual(1);
 
-    // Queue items should NOT be visible (queue tab is not active)
-    // The FlashList is mounted but hidden via opacity
-    // Tab bar should be visible with all icons
-    expect(getByText('musical-notes')).toBeTruthy();
-    expect(getByText('playlist-music')).toBeTruthy();
-    expect(getByText('information-outline')).toBeTruthy();
-    expect(getByText('comment-quote-outline')).toBeTruthy();
+    // Spotify layout: no tab bar; the queue button sits in the bottom row and the
+    // cards under the player preview the album and what plays next.
+    expect(queryByText('musical-notes')).toBeNull();
+    expect(getByText('Next in queue')).toBeTruthy();
+    expect(getByText('About the album')).toBeTruthy();
+    // No lyrics for this track, so no lyrics card.
+    expect(queryByText('Show lyrics')).toBeNull();
   });
 
   it('switches to queue tab when queue icon pressed', () => {
-    const { getByLabelText, getByText } = render(<PlayerPhonePortrait />);
+    const { getByLabelText, getAllByText } = render(<PlayerPhonePortrait />);
 
     act(() => {
       fireEvent.press(getByLabelText('Queue'));
     });
 
-    // Queue should show items after mounting
-    expect(getByText('Second Song')).toBeTruthy();
-    expect(getByText('Third Song')).toBeTruthy();
+    // The queue lists them as well as the "Next in queue" card
+    expect(getAllByText('Second Song')).toHaveLength(2);
+    expect(getAllByText('Third Song')).toHaveLength(2);
   });
 
   it('shows queue header with shuffle, share, clear actions', () => {
@@ -358,10 +379,15 @@ describe('PlayerPhonePortrait', () => {
   });
 
   it('switches to lyrics tab and mounts LyricsContent', () => {
+    (lyricsStore.getState() as { entries: Record<string, unknown> }).entries = {
+      'track-1': { synced: false, lines: [{ startMs: 0, text: 'First line' }], offsetMs: 0, source: 'structured' },
+    };
     const { getByLabelText, getByText } = render(<PlayerPhonePortrait />);
+    // The card under the player previews the lyrics
+    expect(getByText('First line')).toBeTruthy();
 
     act(() => {
-      fireEvent.press(getByLabelText('Lyrics'));
+      fireEvent.press(getByLabelText('Show lyrics'));
     });
 
     expect(getByText('LyricsContent')).toBeTruthy();
@@ -377,18 +403,25 @@ describe('PlayerPhonePortrait', () => {
     expect(getByText('AlbumInfoContent')).toBeTruthy();
   });
 
-  it('returns to player tab when Now Playing pressed', () => {
-    const { getByLabelText, getAllByText } = render(<PlayerPhonePortrait />);
+  it('returns to the player from the queue with the header back button', () => {
+    const r = render(<PlayerPhonePortrait />);
+    const { getByLabelText, getAllByText } = r;
 
     // Switch to queue
     act(() => {
       fireEvent.press(getByLabelText('Queue'));
     });
+    const lastTitle = () => {
+      const calls = mockSetOptions.mock.calls.filter(([o]) => o.headerTitle);
+      return calls[calls.length - 1][0].headerTitle().props.title;
+    };
+    expect(lastTitle()).toBe('Queue');
 
-    // Switch back to player
+    // Back goes to the player instead of closing it
     act(() => {
-      fireEvent.press(getByLabelText('Now Playing'));
+      pressHeaderBack(r);
     });
+    expect(lastTitle()).toBe('Test Album');
 
     // Player content should be visible (may appear in queue too, so check at least one exists)
     expect(getAllByText('Test Song').length).toBeGreaterThanOrEqual(1);
@@ -515,7 +548,7 @@ describe('PlayerPhonePortrait', () => {
   });
 
   it('renders all queue items in queue tab', () => {
-    const { getByLabelText, getByText, getAllByText } = render(<PlayerPhonePortrait />);
+    const { getByLabelText, getAllByText } = render(<PlayerPhonePortrait />);
 
     act(() => {
       fireEvent.press(getByLabelText('Queue'));
@@ -523,8 +556,8 @@ describe('PlayerPhonePortrait', () => {
 
     // Track titles appear in queue (first track may also appear in player content)
     expect(getAllByText('Test Song').length).toBeGreaterThanOrEqual(1);
-    expect(getByText('Second Song')).toBeTruthy();
-    expect(getByText('Third Song')).toBeTruthy();
+    expect(getAllByText('Second Song')).toHaveLength(2);
+    expect(getAllByText('Third Song')).toHaveLength(2);
   });
 
   it('auto-dismisses when currentTrack becomes null after being populated', () => {
@@ -542,14 +575,15 @@ describe('PlayerPhonePortrait', () => {
   });
 
   it('invokes skipToTrack when queue item pressed', () => {
-    const { getByLabelText, getByText } = render(<PlayerPhonePortrait />);
+    const { getByLabelText, getAllByText } = render(<PlayerPhonePortrait />);
 
     act(() => {
       fireEvent.press(getByLabelText('Queue'));
     });
 
     // Press the "Second Song" queue item (rendered by mocked QueueItemRow)
-    fireEvent.press(getByText('Second Song'));
+    const rows = getAllByText('Second Song');
+    fireEvent.press(rows[rows.length - 1]);
   });
 
   it('invokes seekTo when progress bar seeks', () => {
@@ -560,21 +594,28 @@ describe('PlayerPhonePortrait', () => {
   });
 
   it('preserves mounted tabs when switching between them', () => {
-    const { getByLabelText, getByText } = render(<PlayerPhonePortrait />);
+    (lyricsStore.getState() as { entries: Record<string, unknown> }).entries = {
+      'track-1': { synced: false, lines: [{ startMs: 0, text: 'First line' }], offsetMs: 0, source: 'structured' },
+    };
+    const r = render(<PlayerPhonePortrait />);
+    const { getByLabelText, getByText, getAllByText } = r;
 
     // Mount queue tab
     act(() => {
       fireEvent.press(getByLabelText('Queue'));
     });
-    expect(getByText('Second Song')).toBeTruthy();
+    expect(getAllByText('Second Song')).toHaveLength(2);
 
-    // Mount lyrics tab
+    // Back to the player, then mount the lyrics
     act(() => {
-      fireEvent.press(getByLabelText('Lyrics'));
+      pressHeaderBack(r);
+    });
+    act(() => {
+      fireEvent.press(getByLabelText('Show lyrics'));
     });
     expect(getByText('LyricsContent')).toBeTruthy();
 
     // Queue items should still be rendered (mounted)
-    expect(getByText('Second Song')).toBeTruthy();
+    expect(getAllByText('Second Song')).toHaveLength(2);
   });
 });
