@@ -69,6 +69,8 @@ import { moreOptionsStore } from './moreOptionsStore';
 import { playbackToastStore } from './playbackToastStore';
 import { playerStore } from './playerStore';
 import { processingOverlayStore } from './processingOverlayStore';
+import { libraryViewStore } from './libraryViewStore';
+import { profileStore } from './profileStore';
 import { searchStore } from './searchStore';
 import { setRatingStore } from './setRatingStore';
 
@@ -96,6 +98,8 @@ const allStores = [
   offlineModeStore,
   pendingScrobbleStore,
   personalMixStore,
+  libraryViewStore,
+  profileStore,
   playbackSettingsStore,
   ratingStore,
   recentSearchStore,

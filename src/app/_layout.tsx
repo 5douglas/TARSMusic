@@ -46,6 +46,7 @@ import { PlayerTabletLandscape } from '../components/player/PlayerTabletLandscap
 import { PlayerTabletSplitview } from '../components/player/PlayerTabletSplitview';
 import { SplitLayout } from '../components/SplitLayout';
 import { MbidSearchSheet } from '../components/MbidSearchSheet';
+import { ProfileMenu } from '../components/ProfileMenu';
 import { MoreOptionsSheet } from '../components/MoreOptionsSheet';
 import { RoutePickerSheet } from '../components/RoutePicker';
 import { OnboardingGuide } from '../components/OnboardingGuide';
@@ -865,6 +866,25 @@ export default function RootLayout() {
           options={{ ...blurHeaderOptions, title: i18n.t('myListening'), headerBackTitle: i18n.t('back') }}
         />
         <Stack.Screen
+          name="profile"
+          options={{
+            title: '',
+            headerTransparent: true,
+            headerStyle: { backgroundColor: 'transparent' },
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: 'transparent' },
+            headerBackTitle: i18n.t('back'),
+          }}
+        />
+        <Stack.Screen
+          name="liked-songs"
+          options={{ ...blurHeaderOptions, title: i18n.t('likedSongsTitle'), headerBackTitle: i18n.t('back') }}
+        />
+        <Stack.Screen
+          name="discover-downloads"
+          options={{ ...blurHeaderOptions, title: i18n.t('deemixDownloads'), headerBackTitle: i18n.t('back') }}
+        />
+        <Stack.Screen
           name="tuned-in"
           options={{ ...blurHeaderOptions, title: i18n.t('tunedIn'), headerBackTitle: i18n.t('back') }}
         />
@@ -898,6 +918,9 @@ export default function RootLayout() {
 
       {/* Global more-options bottom sheet driven by moreOptionsStore */}
       <MoreOptionsSheet />
+
+      {/* Spotify-style profile side menu, opened from the avatar in the tab headers */}
+      <ProfileMenu />
 
       {/* Global create-share bottom sheet driven by createShareStore */}
       <CreateShareSheet />

@@ -24,6 +24,7 @@ const SETTINGS_LINKS: {
   { route: '/settings-appearance', labelKey: 'appearanceLayout', subtitleKey: 'appearanceLayoutSubtitle', icon: 'color-palette-outline' },
   { route: '/settings-playback', labelKey: 'soundPlayback', subtitleKey: 'soundPlaybackSubtitle', icon: 'musical-notes-outline' },
   { route: '/settings-discover', labelKey: 'discoverServer', subtitleKey: 'discoverServerSubtitle', icon: 'compass-outline' },
+  { route: '/discover-downloads', labelKey: 'deemixDownloads', subtitleKey: 'deemixDownloadsSubtitle', icon: 'cloud-download-outline' },
   { route: '/settings-connectivity', labelKey: 'connectivity', subtitleKey: 'connectivitySubtitle', icon: 'globe-outline' },
   { route: '/settings-storage', labelKey: 'storage', subtitleKey: 'storageSubtitle', icon: 'folder-outline' },
   { route: '/settings-library-data', labelKey: 'libraryData', subtitleKey: 'libraryDataSubtitle', icon: 'library-outline' },
