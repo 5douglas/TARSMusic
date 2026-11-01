@@ -1,150 +1,76 @@
 <div align="center">
 
-# Substreamer
+# TARSMusic
 
-**Stream your music library on iOS and Android — free and open source.**
+**Seu próprio "Spotify" para a sua biblioteca de música no Navidrome.**
 
-<a href="https://apps.apple.com/us/app/substreamer/id1012991665"><img src="https://img.shields.io/badge/App_Store-0D96F6?style=for-the-badge&logo=app-store&logoColor=white" alt="Download on the App Store"></a>
-<a href="https://play.google.com/store/apps/details?id=com.ghenry22.substream2"><img src="https://img.shields.io/badge/Google_Play-414141?style=for-the-badge&logo=google-play&logoColor=white" alt="Get it on Google Play"></a>
-
-[![Tests](https://github.com/ghenry22/substreamer/actions/workflows/tests.yml/badge.svg)](https://github.com/ghenry22/substreamer/actions/workflows/tests.yml)
-![Coverage](./badges/coverage.svg)
-![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey)
+[![Release](https://img.shields.io/github/v/release/5douglas/TARSMusic?label=APK&logo=android)](https://github.com/5douglas/TARSMusic/releases/latest)
+![Platform](https://img.shields.io/badge/platform-Android-3DDC84)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Crowdin](https://badges.crowdin.net/substreamer/localized.svg)](https://crowdin.com/project/substreamer)
-[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?style=social)](https://github.com/sponsors/ghenry22)
-![GitHub Stars](https://img.shields.io/github/stars/ghenry22/substreamer?style=social)
-
-<img src="docs/assets/images/screenshots/hero_diagonal.jpg" alt="Substreamer app preview" width="700">
 
 </div>
 
-> [!IMPORTANT]
-> **Navidrome users:** Navidrome 0.64.0 re-encodes internal IDs stored in older formats, which can
-> leave Substreamer's locally cached library out of sync with your server.
-> [More info](SERVERS.md#note-for-navidrome-users-song-ids-changed-in-0640).
+TARSMusic é um app Android para ouvir a sua biblioteca de música hospedada no
+[Navidrome](https://www.navidrome.org/) (ou outro servidor compatível com a API Subsonic),
+com o visual e o jeito de usar do Spotify, mantendo o azul do TARSMusic.
 
-## Screenshots
+É um fork do [Substreamer](https://github.com/ghenry22/substreamer), de Gaven Henry, com
+interface redesenhada e recursos próprios.
 
-<p align="center">
-  <img src="docs/assets/images/screenshots/home.jpg" alt="Home Screen" width="180">
-  &nbsp;
-  <img src="docs/assets/images/screenshots/library_albums_grid.jpg" alt="Library" width="180">
-  &nbsp;
-  <img src="docs/assets/images/screenshots/player.jpg" alt="Now Playing" width="180">
-  &nbsp;
-  <img src="docs/assets/images/screenshots/album_detail.jpg" alt="Album Detail" width="180">
-</p>
+## Download
 
-## Highlights
+Baixe o APK mais recente em **[Releases](https://github.com/5douglas/TARSMusic/releases/latest)**.
 
-**Playback** — Background audio, lock screen controls, adjustable playback speed, shuffle and repeat modes, queue management.
+Depois de instalado, o próprio app avisa quando sai uma versão nova (Configurações ›
+*Check for updates*, ou o menu do perfil). No Android 12 ou mais novo a atualização se
+instala sozinha: o app fecha e é só abrir de novo. Na primeira vez o Android pode pedir para
+permitir instalações do TARSMusic.
 
-**Offline Use** — Download albums and playlists for offline listening, background download queue with progress and automatic recovery, automatic offline mode (if you leave wifi or if you leave your home wifi network specifically), manual offline mode switch at any time, configurable storage limits and visibility of storage use, configurable download Quality.
+## O que tem no TARSMusic
 
-**Ratings & Favorites** — 5-star ratings for songs, albums, artists (server support dependant), star albums, artists, and songs, dedicated favorites view with filtering, download favorites and keep them in sync with new changes.
+**Visual do Spotify**
+- Início com atalhos, mixes e lançamentos; Buscar; Sua Biblioteca com filtros, ordenação e grade.
+- Player com a linha da letra embaixo da capa, prévia da letra no tom da capa, letra em tela
+  cheia sincronizada, card do álbum e próximas da fila.
+- Página do artista com ouvintes, Populares (com número de plays), Discografia
+  (Lançamentos populares, Álbuns, Singles e EPs, Compilações), Fãs também curtem e Sobre.
+- Página de álbum, single e EP com tipo, ano, duração e "Mais de" o artista.
+- Menu do perfil com foto e estatísticas de audição.
 
-**Scrobbling** — Automatic scrobble submission to your server with offline support. Scrobbles are queued locally when offline and submitted automatically when you reconnect.
+**Descobrir música**
+- Mix diário e mixes por artista feitos a partir do que você ouve.
+- Integração com um servidor *Discover* próprio: novos lançamentos e paradas do Deezer,
+  e download pelo deemix direto para a biblioteca (Configurações › Discover).
+- Estatísticas públicas de artista e música pelo Last.fm (com chave de API) ou Deezer.
 
-**Listening Analytics** — Listening history, activity heatmaps, top artists, albums, and songs by play count, most active hours, listening streaks
+**Herdado do Substreamer**
+- Reprodução em segundo plano, controles na tela de bloqueio, fila, shuffle e repeat.
+- Downloads para ouvir offline, modo offline automático, scrobbles, favoritos e avaliações.
+- Playlists, compartilhamento, histórico de audição e correção de metadados (MusicBrainz).
 
-**Search** — Quick search access on any main screen, Full search for more results from your entire library, automatically switches to seaching your downloaded content when in offline mode.
+## Servidor
 
-**Playlist Management** - Add any song to any playlist or create a new one on the fly, remove or re-order tracks in any saved playlist, quick access to save Artist Top Songs as a new playlist or save your current player queue as a new playlist.
+O app funciona com qualquer servidor da API Subsonic; o recomendado é o
+[Navidrome](https://www.navidrome.org/). Detalhes de configuração de servidores estão em
+[SERVERS.md](SERVERS.md).
 
-**Sharing** - full support for sharing albums or playlists (server support dependant), allows you to set a server address override in case you have a different public address for people to access what you share with them, quick copy to clipboard so you can share it anywhere.  Full share management functionality in settings.
+## Gerar o APK
 
-**Metadata** - Allow MusicBrainz ID (MBID) overrides to be set in app for both artists and albums, users can search on the detail screen to easily correct an incorrect match or choose the right MBID if the server does not provide one.
+O APK é gerado pelo GitHub Actions ([android-release.yml](.github/workflows/android-release.yml)):
+rode o workflow **Android release APK** com a versão (ex.: `8.3.3`) ou envie uma tag `v8.3.3`.
+Ele publica o APK como release, que é de onde o app baixa as atualizações.
 
-**Metadata Management** - The storage and data section in settings gives you access to a wealth of information, you can browse, refresh or remove any offline metadata, cached images or downloaded music, pending and completed scrobbles and more.  Great for the curious or for when something funky happens and you just want to know what or quickly fix it!
+Para desenvolver localmente:
 
-**Tablet Interface** — A beautiful landscape-optimized UI designed to make the most of larger screens. Multi-pane layouts, expanded album art, and spacious controls give you a rich, immersive experience on tablets.
+```bash
+npm ci
+npx tsc --noEmit -p .   # tipos
+npx jest                # testes
+npx expo run:android    # app no emulador ou no celular
+```
 
-**Appearance** — Light, dark, and system theme modes, custom accent colors, list and grid layout toggles and default settings, alphabetical quick-scroll for large libraries.
+## Créditos e licença
 
-**Backup** - Substreamer does a few things that are outside what the subsonic API accomodates (MBID Overrides, Listening history and analytics) to deal with this we need to keep some detail locally with your app and we don't want it to be lost if you have to re-install the app or get a new device (No one wants to break their listening streak!).  This data is automatically set to be included in your devices native cloud backups.
-
-## Integrations
-
-<div align="center">
-  <a href="https://github.com/NeptuneHub/AudioMuse-AI">
-    <img src="docs/assets/images/audiomuse-ai.png" alt="AudioMuse-AI logo" width="120">
-  </a>
-</div>
-
-### AudioMuse-AI
-
-Substreamer supports [AudioMuse-AI](https://github.com/NeptuneHub/AudioMuse-AI) for AI-powered playlist generation. When AudioMuse-AI is enabled on your server, the **"Play more like this"** option on any song and the **"Play similar artists"** option on any artist will leverage AudioMuse-AI's sonic analysis to deliver smarter, more relevant recommendations — all generated locally from your own library with no external APIs.
-
-## Compatible Servers
-
-Substreamer works with any server implementing the [Subsonic API](http://www.subsonic.org/pages/api.jsp). Features are automatically adjusted based on what each server supports.
-
-### Verified
-
-Tested and actively supported. Features are gated based on each server's capabilities.
-
-| Server | Notes |
-|--------|-------|
-| [Navidrome](https://www.navidrome.org/) | Recommended. Full API support including OpenSubsonic extensions. |
-| [Subsonic](http://www.subsonic.org/) | The original Subsonic server. Tested against the official demo. |
-| [Gonic](https://github.com/sentriz/gonic) | Lightweight, OpenSubsonic compatible. Some features limited (no shares, no scan). |
-| [MiniMediaSonicServer](https://github.com/MusicMoveArr/MiniMediaSonicServer) | C#/PostgreSQL server with OpenSubsonic support. No shares, scan, or transcoding. |
-| [Nextcloud Music](https://github.com/owncloud/music) | Nextcloud app. Requires legacy authentication (toggle in Advanced options on login). No shares or scan. |
-| [Ampache](https://ampache.org/) | Subsonic API compatibility mode. Requires legacy authentication (toggle in Advanced options on login). No shares or scan. |
-
-### Compatible
-
-Expected to work based on API version support. Not regularly tested.
-
-| Server | Notes |
-|--------|-------|
-| [Airsonic-Advanced](https://github.com/airsonic-advanced/airsonic-advanced) | Community fork of Airsonic. Classic Subsonic API. |
-
-### Untested
-
-These servers implement the Subsonic API but have not been tested with Substreamer. They may work but your experience may vary.
-
-| Server | Notes |
-|--------|-------|
-| [Funkwhale](https://funkwhale.audio/) | Subsonic API compatibility mode. |
-| [Supysonic](https://github.com/spl0k/supysonic) | Python-based, lightweight. |
-
-## Server Configuration
-
-[**SERVERS.md**](SERVERS.md) is a living reference for server-specific configuration that the Subsonic API spec doesn't cover:
-
-- **Authentication** — exact step-by-step setup for the two servers that need a generated API key plus Legacy authentication: **Nextcloud Music** (where to find the APIKEY generator inside the Music app) and **Ampache** (how to enable the Subsonic backend, where the admin UI hides API key generation, and which `ampache.cfg.php` settings actually matter).
-- **Custom transcoding profiles** — the exact ffmpeg commands behind each audio quality preset (MP3, AAC, Opus, Opus ReplayGain, Opus Car mode, Ogg Vorbis, FLAC, plus the proposed cross-platform `mp3_rg` and `mp3_car`), with copy-paste-ready setup steps for Navidrome, Gonic, Ampache, and Airsonic-Advanced.
-- **Client codec support** — which formats actually play on iOS vs Android, and the gotchas (e.g. Opus on iOS only works inside MP4 containers, not the Ogg containers every server outputs by default).
-- **Advanced ffmpeg recipes** — drop-in static binaries, custom Docker images, and from-source builds for the rare cases where the bundled ffmpeg isn't enough (e.g. Ampache + `libfdk_aac`).
-
-If you're setting up Nextcloud Music or Ampache, or you want to use the ReplayGain / Car-mode audio presets, this is where to look.
-
-## Getting Started
-
-1. **Set up a server** — Install a Subsonic-compatible server to host your music. [Navidrome](https://www.navidrome.org/docs/installation/) is a great place to start.
-
-2. **Download Substreamer** — Get the app for free on the [App Store](https://apps.apple.com/us/app/substreamer/id1012991665) or [Google Play](https://play.google.com/store/apps/details?id=com.ghenry22.substream2).
-
-3. **Connect** — Open the app, enter your server URL and credentials, and start streaming.
-
-## Translations
-
-Substreamer is available in multiple languages thanks to community translators. Help translate the app into your language or improve existing translations on [Crowdin](https://crowdin.com/project/substreamer).
-
-[![Crowdin](https://badges.crowdin.net/substreamer/localized.svg)](https://crowdin.com/project/substreamer)
-
-Currently supported languages: English, French, German, Spanish, Italian. More languages are welcome — just start translating on Crowdin and we'll add it to the app.
-
-## Community
-
-- **Reddit:** [r/substreamer](https://www.reddit.com/r/substreamer/)
-- **Bug reports & feature requests:** [GitHub Issues](https://github.com/ghenry22/substreamer/issues)
-- **Contributing:** Pull requests are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
-
-## License
-
-Substreamer is licensed under the [GNU General Public License v3.0](LICENSE).
-
-You are free to use, modify, and distribute this software under the terms of the GPL-3.0. Any derivative works must also be distributed under the same license. See the [LICENSE](LICENSE) file for the full text.
+TARSMusic é baseado no [Substreamer](https://github.com/ghenry22/substreamer) © Gaven Henry e
+colaboradores. Assim como o original, é distribuído sob a
+[GNU General Public License v3.0](LICENSE).
