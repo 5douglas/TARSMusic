@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help improve Substreamer
+about: Report a bug to help improve TARSMusic
 title: ''
 labels: bug
 assignees: ''

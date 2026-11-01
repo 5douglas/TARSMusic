@@ -1,6 +1,6 @@
-# Contributing to Substreamer
+# Contributing to TARSMusic
 
-Thank you for your interest in contributing to Substreamer! This guide covers everything you need to get started.
+Thank you for your interest in contributing to TARSMusic (a fork of [Substreamer](https://github.com/ghenry22/substreamer))! This guide covers everything you need to get started.
 
 ## AI Coding Tools
 
@@ -19,8 +19,8 @@ When working with Claude Code, you can share your terminal output so the AI can 
 ## Quick Start
 
 ```bash
-git clone https://github.com/ghenry22/substreamer.git
-cd substreamer
+git clone https://github.com/5douglas/TARSMusic.git
+cd TARSMusic
 npm install
 npx expo start
 ```
@@ -131,7 +131,7 @@ Select GitHub.com, HTTPS, and authenticate via browser.
 ### 9. Project Dependencies
 
 ```bash
-cd substreamer
+cd TARSMusic
 npm install
 ```
 
