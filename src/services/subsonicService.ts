@@ -190,6 +190,29 @@ export function buildPingApi(url: string): SubsonicAPI | null {
   });
 }
 
+/**
+ * A one-shot client that sends its parameters as a POST form body, for requests too large
+ * for a URL (the server backup stored in a playlist comment). Null without a session.
+ */
+export function buildPostApi(): SubsonicAPI | null {
+  if (offlineModeStore.getState().offlineMode) return null;
+  const { isLoggedIn, serverUrl, username, password, legacyAuth } = authStore.getState();
+  if (!isLoggedIn || !serverUrl || !username || !password) return null;
+  return new SubsonicAPI({
+    url: normalizeServerUrl(serverUrl),
+    auth: { username, password },
+    legacyAuth,
+    reuseSalt: true,
+    crypto: reactNativeCrypto,
+    clientName: SUBSONIC_CLIENT_NAME,
+    clientVersion: SUBSONIC_API_VERSION,
+    post: true,
+  });
+}
+
+/** Name of the private playlist whose comment holds the app's server backup. */
+export const SERVER_BACKUP_PLAYLIST_NAME = 'TARSMusic backup (não apagar)';
+
 export type { AlbumID3, AlbumInfo, AlbumWithSongsID3, ArtistID3, ArtistInfo2, ArtistWithAlbumsID3, Child, Genre, Playlist, PlaylistWithSongs, ScanStatus, Share };
 
 // ------------------------------------------------------------------ //
@@ -803,7 +826,8 @@ export async function getAllPlaylists(): Promise<Playlist[]> {
   if (!api) return [];
   const response = await api.getPlaylists();
   throwIfSubsonicFailure(response, 'getPlaylists');
-  return response.playlists?.playlist ?? [];
+  // The server backup lives in a playlist of its own; it is not music, so keep it out of the library.
+  return (response.playlists?.playlist ?? []).filter((p) => p.name !== SERVER_BACKUP_PLAYLIST_NAME);
 }
 
 /**

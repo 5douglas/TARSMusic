@@ -1,11 +1,13 @@
 jest.mock('../../store/persistence/kvStorage', () => require('../../store/persistence/__mocks__/kvStorage'));
 
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { type LyricsData } from '../../services/subsonicService';
 
 const { LyricsContent } = require('../LyricsContent');
+
+jest.mock('expo-localization', () => ({ getLocales: () => [{ languageCode: 'pt' }] }));
 
 jest.mock('../SyncedLyricsView', () => {
   const { Text } = require('react-native');
@@ -240,5 +242,31 @@ describe('LyricsContent', () => {
 
     expect(getByText("Couldn't load lyrics.")).toBeTruthy();
     expect(queryByText('No lyrics available for this track.')).toBeNull();
+  });
+
+  it('shows the translation under each line after tapping Translate, and hides it with Original', async () => {
+    const { lyricsTranslationStore } = require('../../store/lyricsTranslationStore');
+    lyricsTranslationStore.getState().setEnabled(false);
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [[['alfa\n', 'alpha\n'], ['beta-pt', 'beta']], null, 'en'],
+    });
+    (global as unknown as { fetch: unknown }).fetch = fetchMock;
+
+    const { getByText, queryByText } = render(
+      <LyricsContent lyricsData={UNSYNCED} lyricsLoading={false} lyricsError={null} colors={COLORS} />,
+    );
+    expect(queryByText('alfa')).toBeNull();
+
+    await act(async () => {
+      fireEvent.press(getByText('Translate'));
+    });
+    await waitFor(() => expect(getByText('alfa')).toBeTruthy());
+    expect(getByText('beta-pt')).toBeTruthy();
+    expect(getByText('alpha')).toBeTruthy();
+
+    fireEvent.press(getByText('Original'));
+    expect(queryByText('alfa')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

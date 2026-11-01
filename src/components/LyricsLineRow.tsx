@@ -17,6 +17,8 @@ import Animated, {
 interface LyricsLineRowProps {
   index: number;
   text: string;
+  /** Translation shown under the line, a little smaller and dimmer. */
+  translation?: string | null;
   activeIndex: SharedValue<number>;
   textColor: string;
   disabled?: boolean;
@@ -36,6 +38,7 @@ const FADE = { duration: 450, easing: Easing.out(Easing.cubic) } as const;
 export const LyricsLineRow = memo(function LyricsLineRow({
   index,
   text,
+  translation,
   activeIndex,
   textColor,
   disabled,
@@ -117,6 +120,11 @@ export const LyricsLineRow = memo(function LyricsLineRow({
             {text}
           </Animated.Text>
         </View>
+        {!!translation && translation !== text && (
+          <Animated.Text style={[styles.translation, { color: textColor }]}>
+            {translation}
+          </Animated.Text>
+        )}
       </Animated.View>
     </Pressable>
   );
@@ -157,5 +165,12 @@ const styles = StyleSheet.create({
   },
   textOverlay: {
     ...absoluteFill,
+  },
+  translation: {
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: '600',
+    marginTop: 4,
+    opacity: 0.7,
   },
 });

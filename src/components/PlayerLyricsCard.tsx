@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useLyricsActiveLine } from '../hooks/useLyricsActiveLine';
+import { useLyricsTranslation } from '../hooks/useLyricsTranslation';
 import { type LyricsData } from '../services/subsonicService';
 
 /** Height of the visible window of lines. */
@@ -43,6 +44,7 @@ export const PlayerLyricsCard = memo(function PlayerLyricsCard({
   const active = useLyricsActiveLine(lyrics);
   const hasLines = !!lyrics && lyrics.lines.length > 0;
   const lines = hasLines ? (synced ? lyrics.lines : lyrics.lines.slice(0, UNSYNCED_LINES)) : [];
+  const { translations } = useLyricsTranslation(lyrics?.lines);
 
   const activeSV = useSharedValue(synced ? -1 : -2);
   const translateY = useSharedValue(0);
@@ -99,6 +101,7 @@ export const PlayerLyricsCard = memo(function PlayerLyricsCard({
                 key={i}
                 index={i}
                 text={line.text}
+                translation={translations?.[i]}
                 activeSV={activeSV}
                 onLayoutTop={onLineLayout}
               />
@@ -120,11 +123,13 @@ export const PlayerLyricsCard = memo(function PlayerLyricsCard({
 const CardLine = memo(function CardLine({
   index,
   text,
+  translation,
   activeSV,
   onLayoutTop,
 }: {
   index: number;
   text: string;
+  translation?: string | null;
   /** Line being sung; -1 before the first, -2 for unsynced lyrics (all lines lit). */
   activeSV: SharedValue<number>;
   onLayoutTop: (index: number, y: number) => void;
@@ -139,9 +144,16 @@ const CardLine = memo(function CardLine({
     return { opacity: withTiming(target, FADE_TIMING) };
   }, [index]);
   return (
-    <Animated.Text onLayout={handleLayout} style={[styles.line, style]} numberOfLines={3}>
-      {text || '♪'}
-    </Animated.Text>
+    <Animated.View onLayout={handleLayout} style={[styles.lineWrap, style]}>
+      <Text style={styles.line} numberOfLines={3}>
+        {text || '♪'}
+      </Text>
+      {!!translation && translation !== text && (
+        <Text style={styles.lineTranslation} numberOfLines={2}>
+          {translation}
+        </Text>
+      )}
+    </Animated.View>
   );
 });
 
@@ -169,12 +181,22 @@ const styles = StyleSheet.create({
     height: undefined,
     maxHeight: VIEWPORT_HEIGHT,
   },
+  lineWrap: {
+    paddingVertical: 6,
+  },
   line: {
     color: '#fff',
     fontSize: 22,
     fontWeight: '800',
     lineHeight: 30,
-    paddingVertical: 6,
+  },
+  lineTranslation: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 21,
+    marginTop: 2,
+    opacity: 0.7,
   },
   spinner: {
     paddingVertical: 24,
