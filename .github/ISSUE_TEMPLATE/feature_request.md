@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an idea for Substreamer
+about: Suggest an idea for TARSMusic
 title: ''
 labels: enhancement
 assignees: ''
