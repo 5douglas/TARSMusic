@@ -8,8 +8,9 @@ import {
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
+  Easing,
   useDerivedValue,
-  withSpring,
+  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 
@@ -25,11 +26,12 @@ interface LyricsLineRowProps {
 
 /**
  * Opacity ramp: 1.0 / 0.65 / 0.45 / 0.30 / 0.20 by |distance| 0,1,2,3,≥4.
- * Scale ramp:   1.0 / 0.96 when active vs. not.
+ * Scale ramp:   1.0 / 0.97 when active vs. not.
  * Weight crossfade via two stacked Animated.Text layers (600 + 800).
  */
-// Near-critically damped and stiff: settles in ~250 ms so the highlight keeps up with the singer.
-const SPRING = { damping: 28, stiffness: 300, mass: 0.8 } as const;
+// A soft ease-out, like Spotify: the line glows in over ~450 ms instead of snapping. The
+// line is lit LINE_LEAD_MS early, so the fade still lands as it is sung.
+const FADE = { duration: 450, easing: Easing.out(Easing.cubic) } as const;
 
 export const LyricsLineRow = memo(function LyricsLineRow({
   index,
@@ -56,19 +58,19 @@ export const LyricsLineRow = memo(function LyricsLineRow({
   const opacity = useDerivedValue(() => {
     const d = Math.abs(index - activeIndex.value);
     const target = d === 0 ? 1 : d === 1 ? 0.65 : d === 2 ? 0.45 : d === 3 ? 0.30 : 0.20;
-    return withSpring(target, SPRING);
+    return withTiming(target, FADE);
   }, [index]);
 
   // Scale: 1.0 active, 0.96 otherwise.
   const scale = useDerivedValue(() => {
     const d = Math.abs(index - activeIndex.value);
-    return withSpring(d === 0 ? 1 : 0.96, SPRING);
+    return withTiming(d === 0 ? 1 : 0.97, FADE);
   }, [index]);
 
   // Weight crossfade opacity for the "active" (800) layer.
   const activeLayerOpacity = useDerivedValue(() => {
     const isActive = Math.abs(index - activeIndex.value) === 0 ? 1 : 0;
-    return withSpring(isActive, SPRING);
+    return withTiming(isActive, FADE);
   }, [index]);
 
   const containerStyle = useAnimatedStyle(() => ({

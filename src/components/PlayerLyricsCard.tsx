@@ -1,40 +1,31 @@
-import Ionicons from '@react-native-vector-icons/ionicons/static';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 
+import { useLyricsActiveLine } from '../hooks/useLyricsActiveLine';
 import { type LyricsData } from '../services/subsonicService';
-import { playerStore } from '../store/playerStore';
 
-/** Lines shown in the card: one already sung, the current one and the next few. */
-const LINES_BEFORE = 1;
-const LINES_SHOWN = 7;
-
-/** Index of the line being sung at `positionMs`, or -1 before the first line. */
-export function activeLyricsLine(lines: { startMs: number }[], offsetMs: number, positionMs: number): number {
-  let active = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startMs + offsetMs <= positionMs) active = i;
-    else break;
-  }
-  return active;
-}
-
-/** The lines the card shows and which of them is active (-1 when none is). */
-export function lyricsCardWindow(
-  lyrics: LyricsData,
-  positionMs: number,
-): { lines: string[]; activeInWindow: number } {
-  const texts = lyrics.lines.map((l) => l.text);
-  if (!lyrics.synced) return { lines: texts.slice(0, LINES_SHOWN), activeInWindow: -1 };
-  const active = activeLyricsLine(lyrics.lines, lyrics.offsetMs, positionMs);
-  const start = Math.max(0, Math.min(active - LINES_BEFORE, texts.length - LINES_SHOWN));
-  return { lines: texts.slice(start, start + LINES_SHOWN), activeInWindow: active - start };
-}
+/** Height of the visible window of lines. */
+const VIEWPORT_HEIGHT = 300;
+/** Where the line being sung sits in the window, from its top. */
+const ACTIVE_ANCHOR = 72;
+/** Unsynced lyrics only show their start. */
+const UNSYNCED_LINES = 7;
+const SCROLL_TIMING = { duration: 550, easing: Easing.out(Easing.cubic) } as const;
+const FADE_TIMING = { duration: 350, easing: Easing.out(Easing.quad) } as const;
 
 /**
- * Spotify's lyrics card under the player: a block in the cover's colour that follows the
- * song, current line in white. Tapping it opens the full-screen lyrics.
+ * Spotify's lyrics preview under the player: a card in the cover's colour whose lines glide
+ * up as the song plays, the sung line in white and the rest dimmed, with "Show lyrics" to
+ * open the full screen. The line comes from `useLyricsActiveLine`, which keeps it in time
+ * with the audio between the player's position reports.
  */
 export const PlayerLyricsCard = memo(function PlayerLyricsCard({
   lyrics,
@@ -49,51 +40,108 @@ export const PlayerLyricsCard = memo(function PlayerLyricsCard({
 }) {
   const { t } = useTranslation();
   const synced = !!lyrics?.synced;
-  // Only synced lyrics need the position; a whole-second tick is plenty for a preview.
-  const positionMs = playerStore((s) => (synced ? Math.floor(s.position) * 1000 : 0));
+  const active = useLyricsActiveLine(lyrics);
+  const hasLines = !!lyrics && lyrics.lines.length > 0;
+  const lines = hasLines ? (synced ? lyrics.lines : lyrics.lines.slice(0, UNSYNCED_LINES)) : [];
 
-  const view = useMemo(
-    () => (lyrics && lyrics.lines.length > 0 ? lyricsCardWindow(lyrics, positionMs) : null),
-    [lyrics, positionMs],
+  const activeSV = useSharedValue(synced ? -1 : -2);
+  const translateY = useSharedValue(0);
+  const lineTops = useRef<number[]>([]);
+
+  const scrollTo = useCallback(
+    (index: number, animated: boolean) => {
+      const top = index >= 0 ? lineTops.current[index] : 0;
+      if (top == null) return;
+      const target = index >= 0 ? Math.min(0, ACTIVE_ANCHOR - top) : 0;
+      translateY.value = animated ? withTiming(target, SCROLL_TIMING) : target;
+    },
+    [translateY],
   );
 
-  if (!loading && !view) return null;
+  useEffect(() => {
+    activeSV.value = synced ? active : -2;
+    if (synced) scrollTo(active, true);
+  }, [active, synced, activeSV, scrollTo]);
+
+  // A new song starts at the top.
+  useEffect(() => {
+    lineTops.current = [];
+    translateY.value = 0;
+  }, [lyrics, translateY]);
+
+  const onLineLayout = useCallback(
+    (index: number, y: number) => {
+      lineTops.current[index] = y;
+      // The line being sung laid out after it became active (opening mid-song): jump to it.
+      if (index === active && synced) scrollTo(index, false);
+    },
+    [active, synced, scrollTo],
+  );
+
+  const contentStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+
+  if (!loading && !hasLines) return null;
 
   return (
     <Pressable
       onPress={onExpand}
-      disabled={!view}
+      disabled={!hasLines}
       style={({ pressed }) => [styles.card, { backgroundColor }, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={t('lyricsShowAll')}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('lyrics')}</Text>
-        <Ionicons name="expand-outline" size={20} color="#fff" />
-      </View>
-      {view ? (
-        view.lines.map((line, i) => (
-          <Text
-            key={`${i}-${line}`}
-            style={[
-              styles.line,
-              view.activeInWindow >= 0 && i > view.activeInWindow && styles.upcoming,
-              view.activeInWindow >= 0 && i < view.activeInWindow && styles.past,
-            ]}
-            numberOfLines={2}
-          >
-            {line || '♪'}
-          </Text>
-        ))
+      <Text style={styles.title}>{t('lyricsPreview')}</Text>
+      {hasLines ? (
+        <View style={[styles.viewport, !synced && styles.viewportUnsynced]}>
+          <Animated.View style={contentStyle}>
+            {lines.map((line, i) => (
+              <CardLine
+                key={i}
+                index={i}
+                text={line.text}
+                activeSV={activeSV}
+                onLayoutTop={onLineLayout}
+              />
+            ))}
+          </Animated.View>
+        </View>
       ) : (
         <ActivityIndicator color="#fff" style={styles.spinner} />
       )}
-      {view && (
+      {hasLines && (
         <View style={styles.showButton}>
           <Text style={styles.showLabel}>{t('lyricsShowAll')}</Text>
         </View>
       )}
     </Pressable>
+  );
+});
+
+const CardLine = memo(function CardLine({
+  index,
+  text,
+  activeSV,
+  onLayoutTop,
+}: {
+  index: number;
+  text: string;
+  /** Line being sung; -1 before the first, -2 for unsynced lyrics (all lines lit). */
+  activeSV: SharedValue<number>;
+  onLayoutTop: (index: number, y: number) => void;
+}) {
+  const handleLayout = useCallback(
+    (e: LayoutChangeEvent) => onLayoutTop(index, e.nativeEvent.layout.y),
+    [index, onLayoutTop],
+  );
+  const style = useAnimatedStyle(() => {
+    const a = activeSV.value;
+    const target = a === -2 || index === a ? 1 : index < a ? 0.75 : 0.5;
+    return { opacity: withTiming(target, FADE_TIMING) };
+  }, [index]);
+  return (
+    <Animated.Text onLayout={handleLayout} style={[styles.line, style]} numberOfLines={3}>
+      {text || '♪'}
+    </Animated.Text>
   );
 });
 
@@ -105,46 +153,43 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   pressed: {
-    opacity: 0.85,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    opacity: 0.9,
   },
   title: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '800',
+    marginBottom: 12,
+  },
+  viewport: {
+    height: VIEWPORT_HEIGHT,
+    overflow: 'hidden',
+  },
+  viewportUnsynced: {
+    height: undefined,
+    maxHeight: VIEWPORT_HEIGHT,
   },
   line: {
     color: '#fff',
     fontSize: 22,
     fontWeight: '800',
     lineHeight: 30,
-    marginBottom: 4,
-  },
-  past: {
-    color: 'rgba(255,255,255,0.7)',
-  },
-  upcoming: {
-    color: 'rgba(0,0,0,0.55)',
+    paddingVertical: 6,
   },
   spinner: {
     paddingVertical: 24,
   },
   showButton: {
     alignSelf: 'flex-start',
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    marginTop: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: '#fff',
   },
   showLabel: {
-    color: '#fff',
-    fontSize: 13,
+    color: '#000',
+    fontSize: 14,
     fontWeight: '700',
   },
 });
