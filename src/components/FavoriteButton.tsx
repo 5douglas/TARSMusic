@@ -11,6 +11,8 @@ import { offlineModeStore } from '../store/offlineModeStore';
 export interface FavoriteButtonProps {
   trackId: string;
   size?: number;
+  /** `heart` (default) or Spotify's `add`: a (+) that turns into a filled check once saved. */
+  variant?: 'heart' | 'add';
   /** Container padding/spacing — varies per player surface. */
   style?: StyleProp<ViewStyle>;
 }
@@ -19,6 +21,7 @@ export interface FavoriteButtonProps {
 export const FavoriteButton = memo(function FavoriteButton({
   trackId,
   size = 24,
+  variant = 'heart',
   style,
 }: FavoriteButtonProps) {
   const { t } = useTranslation();
@@ -43,11 +46,19 @@ export const FavoriteButton = memo(function FavoriteButton({
         offlineMode && styles.disabled,
       ]}
     >
-      <Ionicons
-        name={starred ? 'heart' : 'heart-outline'}
-        size={size}
-        color={starred ? colors.red : colors.textSecondary}
-      />
+      {variant === 'add' ? (
+        <Ionicons
+          name={starred ? 'checkmark-circle' : 'add-circle-outline'}
+          size={size}
+          color={starred ? colors.primary : colors.textPrimary}
+        />
+      ) : (
+        <Ionicons
+          name={starred ? 'heart' : 'heart-outline'}
+          size={size}
+          color={starred ? colors.red : colors.textSecondary}
+        />
+      )}
     </Pressable>
   );
 });

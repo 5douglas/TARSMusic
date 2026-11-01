@@ -7,6 +7,8 @@ jest.mock('react-native-reanimated', () => {
     useDerivedValue: (fn: () => unknown) => ({ value: fn() }),
     useAnimatedStyle: (fn: () => object) => fn(),
     withSpring: (val: number) => val,
+    withTiming: (val: number) => val,
+    Easing: { out: (e: unknown) => e, cubic: (t: number) => t },
     View,
     Text,
   };

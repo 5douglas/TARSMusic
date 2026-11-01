@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import Animated, {
   Easing,
+  FadeIn,
+  FadeOut,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
@@ -27,14 +29,12 @@ import { useTranslation } from 'react-i18next';
 
 import { AlbumInfoContent } from '@/components/AlbumInfoContent';
 import { LyricsContent } from '@/components/LyricsContent';
-import { BookmarkButton } from '@/components/BookmarkButton';
 import { CachedImage } from '@/components/CachedImage';
 import { CastButton } from '@/components/RoutePicker';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { EmptyState } from '@/components/EmptyState';
 import { MarqueeText } from '@/components/MarqueeText';
 import { MoreOptionsButton } from '@/components/MoreOptionsButton';
-import { PlaybackRateButton } from '@/components/PlaybackRateButton';
 import { PlayerProgressBar } from '@/components/PlayerProgressBar';
 import { PlayerLyricsCard } from '@/components/PlayerLyricsCard';
 import { type PlayerTab } from '@/components/PlayerTabBar';
@@ -67,6 +67,11 @@ import { sanitizeBiographyText } from '@/utils/formatters';
 import { type Child } from '@/services/subsonicService';
 import { usePlayerAlbumInfo } from '@/hooks/usePlayerAlbumInfo';
 import { usePlayerLyrics, type PlayerLyricsResult } from '@/hooks/usePlayerLyrics';
+import { useLyricsActiveLine } from '@/hooks/useLyricsActiveLine';
+import { resolveCoverArtId } from '@/services/imageCacheService';
+import { canUserShare } from '@/services/serverCapabilityService';
+import { type LyricsData } from '@/services/subsonicService';
+import { createShareStore } from '@/store/createShareStore';
 import { playbackSettingsStore } from '@/store/playbackSettingsStore';
 import { moreOptionsStore } from '@/store/moreOptionsStore';
 import { playerStore } from '@/store/playerStore';
@@ -88,6 +93,8 @@ const QUEUE_CONTENT_CONTAINER_STYLE = { paddingBottom: 12 } as const;
 
 /** Tracks previewed in the "Next in queue" card under the player. */
 const UP_NEXT_COUNT = 3;
+/** Room for the sung line Spotify shows between the cover and the title. */
+const COVER_LYRIC_HEIGHT = 56;
 
 export function PlayerPhonePortrait() {
   const { colors } = useTheme();
@@ -432,6 +439,7 @@ export function PlayerPhonePortrait() {
                   handleShuffle={handleShuffle}
                   shuffling={shuffling}
                   onOpenQueue={openQueue}
+                  lyrics={lyricsEntry}
                 />
               </View>
               <PlayerLyricsCard
@@ -544,6 +552,7 @@ interface PlayerContentProps {
   handleShuffle: () => void;
   shuffling: boolean;
   onOpenQueue: () => void;
+  lyrics: LyricsData | null | undefined;
 }
 
 const PlayerContent = memo(function PlayerContent({
@@ -554,6 +563,7 @@ const PlayerContent = memo(function PlayerContent({
   handleShuffle,
   shuffling,
   onOpenQueue,
+  lyrics,
 }: PlayerContentProps) {
   const { t } = useTranslation();
   const songCoverArtId = currentTrack?.coverArt ?? undefined;
@@ -569,6 +579,12 @@ const PlayerContent = memo(function PlayerContent({
   const queueLength = playerStore((s) => s.queue.length);
 
   const showSkipInterval = playbackSettingsStore((s) => s.showSkipIntervalButtons);
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
+  const showCoverLyric = !!lyrics?.synced && lyrics.lines.length > 0;
+  const handleShare = useCallback(async () => {
+    const coverArtId = await resolveCoverArtId({ coverArt: currentTrack.coverArt, albumId: currentTrack.albumId });
+    createShareStore.getState().showSong(currentTrack.id, currentTrack.title, currentTrack.artist ?? undefined, coverArtId);
+  }, [currentTrack]);
   const showSleepTimer = playbackSettingsStore((s) => s.showSleepTimerButton);
   const { canSkipNext, canSkipPrevious } = useCanSkip();
 
@@ -601,11 +617,12 @@ const PlayerContent = memo(function PlayerContent({
   // Scaled to ~90% of the fitted size to give the controls a little more room.
   const heroSize = useMemo(() => {
     const naturalWidth = Math.min(windowWidth - 2 * HERO_PADDING, 464 - 2 * HERO_PADDING);
-    const reserved = insets.top + HEADER_BAR_HEIGHT + insets.bottom + m.reserved;
+    const reserved =
+      insets.top + HEADER_BAR_HEIGHT + insets.bottom + m.reserved + (showCoverLyric ? COVER_LYRIC_HEIGHT : 0);
     const maxHero = windowHeight - reserved;
     const fitted = Math.max(Math.min(naturalWidth, maxHero), m.heroFloor);
     return Math.round(fitted * 0.9);
-  }, [windowHeight, windowWidth, insets.top, insets.bottom, m.reserved, m.heroFloor]);
+  }, [windowHeight, windowWidth, insets.top, insets.bottom, m.reserved, m.heroFloor, showCoverLyric]);
 
   const marqueeStyle = useMemo(
     () => [styles.trackTitle, { color: colors.textPrimary, fontSize: m.titleFont }],
@@ -648,6 +665,9 @@ const PlayerContent = memo(function PlayerContent({
         </View>
       </View>
 
+      {/* The line being sung, between the cover and the title, as in Spotify */}
+      {showCoverLyric && <CoverLyricLine lyrics={lyrics} color={colors.textPrimary} />}
+
       {/* Track info */}
       <View style={[styles.trackInfo, { marginBottom: m.infoMarginBottom }]}>
         <View style={styles.trackInfoRow}>
@@ -662,7 +682,7 @@ const PlayerContent = memo(function PlayerContent({
               {currentTrack.artist ?? t('unknownArtist')}
             </Text>
           </View>
-          <FavoriteButton trackId={currentTrack.id} style={styles.favoriteButton} />
+          <FavoriteButton trackId={currentTrack.id} variant="add" size={30} style={styles.favoriteButton} />
         </View>
       </View>
 
@@ -707,7 +727,7 @@ const PlayerContent = memo(function PlayerContent({
             style={({ pressed }) => [pressed && styles.pressed, !canSkipPrevious && styles.disabled]}
           >
             <Ionicons
-              name="play-back"
+              name="play-skip-back"
               size={m.transportIcon}
               color={canSkipPrevious ? colors.textPrimary : colors.textSecondary}
             />
@@ -740,7 +760,7 @@ const PlayerContent = memo(function PlayerContent({
             style={({ pressed }) => [pressed && styles.pressed, !canSkipNext && styles.disabled]}
           >
             <Ionicons
-              name="play-forward"
+              name="play-skip-forward"
               size={m.transportIcon}
               color={canSkipNext ? colors.textPrimary : colors.textSecondary}
             />
@@ -753,25 +773,32 @@ const PlayerContent = memo(function PlayerContent({
         </View>
       </View>
 
-      {/* Spotify's bottom row: devices on the left, the queue on the right. Sleep timer,
-          speed and skip-interval sit between them when there is room. */}
+      {/* Spotify's bottom row: the playing device on the left, share and the queue on the
+          right. The sleep timer and skip-interval buttons join it when turned on in Settings. */}
       <View style={styles.playerSpacer} />
       <View style={styles.secondaryControls}>
         <View style={[styles.controlSideLeft, styles.bottomRowSide]}>
           <CastButton />
           {m.showSecondaryRow && showSleepTimer && <SleepTimerButton />}
         </View>
-        {m.showSecondaryRow && (
+        {m.showSecondaryRow && showSkipInterval && (
           <View style={[styles.secondaryCenterRow, { width: secondaryCenterWidth }]}>
-            {showSkipInterval && <SkipIntervalButton direction="backward" size={32} />}
-            <View style={styles.secondaryRateSlot}>
-              <PlaybackRateButton />
-            </View>
-            {showSkipInterval && <SkipIntervalButton direction="forward" size={32} />}
+            <SkipIntervalButton direction="backward" size={32} />
+            <SkipIntervalButton direction="forward" size={32} />
           </View>
         )}
         <View style={[styles.controlSideRight, styles.bottomRowSide]}>
-          {m.showSecondaryRow && <BookmarkButton />}
+          {!offlineMode && canUserShare() && (
+            <Pressable
+              onPress={() => { void handleShare(); }}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('share')}
+              style={({ pressed }) => pressed && styles.pressed}
+            >
+              <Ionicons name="share-social-outline" size={24} color={colors.textPrimary} />
+            </Pressable>
+          )}
           <Pressable
             onPress={onOpenQueue}
             hitSlop={10}
@@ -779,7 +806,7 @@ const PlayerContent = memo(function PlayerContent({
             accessibilityLabel={t('queue')}
             style={({ pressed }) => pressed && styles.pressed}
           >
-            <Ionicons name="list" size={24} color={colors.textPrimary} />
+            <Ionicons name="list" size={26} color={colors.textPrimary} />
           </Pressable>
         </View>
       </View>
@@ -792,6 +819,33 @@ const PlayerContent = memo(function PlayerContent({
 /* ------------------------------------------------------------------ */
 /*  Header title, cards under the player, lyrics mini controls         */
 /* ------------------------------------------------------------------ */
+
+/** The synced line being sung, shown under the cover; it fades from one line to the next. */
+const CoverLyricLine = memo(function CoverLyricLine({
+  lyrics,
+  color,
+}: {
+  lyrics: LyricsData | null | undefined;
+  color: string;
+}) {
+  const active = useLyricsActiveLine(lyrics);
+  const text = active >= 0 ? lyrics?.lines[active]?.text ?? '' : '';
+  return (
+    <View style={styles.coverLyric} pointerEvents="none">
+      {text ? (
+        <Animated.Text
+          key={active}
+          entering={FadeIn.duration(320)}
+          exiting={FadeOut.duration(180)}
+          style={[styles.coverLyricText, { color }]}
+          numberOfLines={2}
+        >
+          {text}
+        </Animated.Text>
+      ) : null}
+    </View>
+  );
+});
 
 const PlayerHeaderTitle = memo(function PlayerHeaderTitle({
   eyebrow,
@@ -1189,6 +1243,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 4,
   },
+  coverLyric: {
+    height: COVER_LYRIC_HEIGHT,
+    justifyContent: 'center',
+    paddingHorizontal: HERO_PADDING,
+    maxWidth: 464,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  coverLyricText: {
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
   favoriteButton: {
     paddingLeft: 12,
     paddingVertical: 4,
@@ -1320,11 +1387,9 @@ const styles = StyleSheet.create({
     maxWidth: 240,
   },
   headerEyebrow: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    opacity: 0.85,
+    fontSize: 12,
+    fontWeight: '500',
+    opacity: 0.9,
   },
   headerTitleText: {
     fontSize: 14,
