@@ -1,13 +1,15 @@
 /**
  * In-app updates for the sideloaded Android build: looks up the latest GitHub release of the
  * TARSMusic repo, downloads its APK into the cache and hands it to the system package
- * installer. Android always asks the user to confirm the install (and, the first time, to allow
- * installs from this app); the update only installs over the current app when the APK is
- * signed with the same key.
+ * installer. With the native installer (PackageInstaller session) Android 12+ installs the
+ * update without a confirmation dialog; older builds and Android versions get the system
+ * "Install?" prompt. The first time, Android still asks to allow installs from this app, and
+ * the update only installs over the current app when the APK is signed with the same key.
  */
 import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
+import { AppInstaller } from 'expo-app-installer';
 import { Platform } from 'react-native';
 
 import i18n from '../i18n/i18n';
@@ -86,6 +88,14 @@ export async function downloadAndInstall(update: AppUpdate): Promise<void> {
   try {
     const target = new File(Paths.cache, `TARSMusic-${update.version}.apk`);
     const apk = await File.downloadFileAsync(update.apkUrl, target, { idempotent: true });
+    if (AppInstaller) {
+      overlay.show(i18n.t('appUpdateInstalling'));
+      await AppInstaller.installApk(apk.uri);
+      // Android 12+ replaces the app right away, which closes it; when it asks the user
+      // first, its own dialog is now on screen.
+      overlay.hide();
+      return;
+    }
     overlay.hide();
     await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
       data: apk.contentUri,
@@ -99,7 +109,11 @@ export async function downloadAndInstall(update: AppUpdate): Promise<void> {
 
 /** Offers a found update in a themed alert. */
 export function promptUpdate(update: AppUpdate): void {
-  const message = [i18n.t('appUpdateAvailableBody', { version: update.version }), update.notes]
+  const message = [
+    i18n.t('appUpdateAvailableBody', { version: update.version }),
+    update.notes,
+    i18n.t('updateInstallHint'),
+  ]
     .filter(Boolean)
     .join('\n\n');
   themedAlertStore.getState().show(i18n.t('appUpdateAvailable'), message, [

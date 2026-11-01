@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,7 +17,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AlbumRow } from '../components/AlbumRow';
 import { EmptyState } from '../components/EmptyState';
 import { ArtistCard } from '../components/ArtistCard';
 import { CachedImage } from '../components/CachedImage';
@@ -25,10 +24,10 @@ import { BottomChrome } from '../components/BottomChrome';
 import { MoreOptionsButton } from '../components/MoreOptionsButton';
 import { DiscoverMoreFromArtist } from '../components/DiscoverMoreFromArtist';
 import { PopularTrackRow } from '../components/PopularTrackRow';
-import { SectionTitle } from '../components/SectionTitle';
 import { closeOpenRow } from '../components/SwipeableRow';
 import { DetailScreenBackground } from '../components/DetailScreenBackground';
-import { PlayAllButton, ShufflePlayButton } from '../components/DetailHeroButtons';
+import { PlayAllButton } from '../components/DetailHeroButtons';
+import { ReleaseRow } from '../components/ReleaseRow';
 import { useDetailFetch } from '../hooks/useDetailFetch';
 import { useIsStarred } from '../hooks/useIsStarred';
 import { useLayoutMode } from '../hooks/useLayoutMode';
@@ -42,7 +41,6 @@ import {
   playsForTitle,
   type ArtistStats,
 } from '../services/artistStatsService';
-import { PillToggle } from '../components/PillToggle';
 import { playAllByArtist, playMoreByArtist, toggleStar } from '../services/moreOptionsService';
 import { shuffleArray } from '../utils/arrayHelpers';
 import { playTrack } from '../services/playerService';
@@ -58,7 +56,8 @@ import { subscribeDetailChanged } from '../db/detailNotifier';
 import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { moreOptionsStore } from '../store/moreOptionsStore';
 import { offlineModeStore } from '../store/offlineModeStore';
-import { playbackSettingsStore, type ArtistPlayMode } from '../store/playbackSettingsStore';
+import { playbackSettingsStore } from '../store/playbackSettingsStore';
+import { releaseKind, sortReleasesNewestFirst } from '../utils/releaseType';
 
 import {
   type AlbumID3,
@@ -71,12 +70,21 @@ const HERO_COVER_SIZE = 600;
 const BANNER_MAX_HEIGHT = 420;
 const POPULAR_COLLAPSED = 5;
 const POPULAR_EXPANDED = 10;
+const DISCOGRAPHY_COLLAPSED = 4;
 /** Darkens the banner's lower half so the white artist name stays legible on any photo. */
 const BANNER_SCRIM: readonly [string, string, string] = ['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.65)'];
 const BANNER_SCRIM_LOCATIONS: readonly [number, number, number] = [0, 0.35, 1];
 const HEADER_BAR_HEIGHT = 44;
-const CARD_WIDTH = 88;
-const HORIZONTAL_GAP = 10;
+const CARD_WIDTH = 120;
+const HORIZONTAL_GAP = 12;
+
+type DiscographyFilter = 'popular' | 'album' | 'single' | 'compilation';
+const DISCOGRAPHY_FILTERS: { key: DiscographyFilter; label: string }[] = [
+  { key: 'popular', label: 'discographyPopular' },
+  { key: 'album', label: 'discographyAlbums' },
+  { key: 'single', label: 'discographySinglesEps' },
+  { key: 'compilation', label: 'discographyCompilations' },
+];
 
 /* ------------------------------------------------------------------ */
 /*  Main screen                                                       */
@@ -90,7 +98,6 @@ export function ArtistDetailScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const bannerHeight = Math.min(screenWidth * 0.9, BANNER_MAX_HEIGHT);
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const starred = useIsStarred('artist', id ?? '');
 
@@ -106,9 +113,9 @@ export function ArtistDetailScreen() {
   const [bioExpanded, setBioExpanded] = useState(false);
   const [stats, setStats] = useState<ArtistStats | null>(null);
   const [popularExpanded, setPopularExpanded] = useState(false);
-  const [albumSortDesc, setAlbumSortDesc] = useState(
-    () => layoutPreferencesStore.getState().artistAlbumSortOrder === 'newest',
-  );
+  const albumSortDesc = layoutPreferencesStore((s) => s.artistAlbumSortOrder === 'newest');
+  const [discoFilter, setDiscoFilter] = useState<DiscographyFilter>('popular');
+  const [discoExpanded, setDiscoExpanded] = useState(false);
   const [topSongsSettled, setTopSongsSettled] = useState(false);
   const [bioLoading, setBioLoading] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -190,33 +197,6 @@ export function ArtistDetailScreen() {
     return () => { alive = false; };
   }, [artistName, offlineMode, refreshNonce]);
 
-  /* ---- Header right: more options button ---- */
-  useEffect(() => {
-    if (Platform.OS === 'ios') return;
-    if (!artist) return;
-    navigation.setOptions({
-      headerRight: () => (
-        <View style={styles.headerRight}>
-          {!offlineMode && (
-            <Pressable onPress={handleToggleStar} hitSlop={8} style={styles.starButton}>
-              <Ionicons
-                name={starred ? 'heart' : 'heart-outline'}
-                size={22}
-                color={starred ? colors.red : colors.textPrimary}
-              />
-            </Pressable>
-          )}
-          <MoreOptionsButton
-            onPress={() =>
-              moreOptionsStore.getState().show({ type: 'artist', item: artist })
-            }
-            color={colors.textPrimary}
-          />
-        </View>
-      ),
-    });
-  }, [artist, navigation, colors.textPrimary, colors.red, starred, offlineMode, handleToggleStar]);
-
   /* ---- Data fetching ---- */
   const load = useCallback(async (artistId: string, isRefresh: boolean) => {
     // Base only. The other three parts have their own effect; a pull bumps the nonce so
@@ -249,24 +229,49 @@ export function ArtistDetailScreen() {
   });
 
   /* ---- Derived values ---- */
-  const albums = artist?.album ?? [];
+  const albums = useMemo(() => artist?.album ?? [], [artist?.album]);
 
-  const sortedAlbums = useMemo(() => {
-    if (albums.length === 0) return albums;
-    return [...albums].sort((a, b) => {
-      const yearA = a.year ?? 0;
-      const yearB = b.year ?? 0;
-      return albumSortDesc ? yearB - yearA : yearA - yearB;
-    });
+  // Spotify's discography: "Popular releases" is the latest release followed by the most
+  // played ones; the other chips are the releases of that kind, in the user's sort order.
+  const discography = useMemo(() => {
+    const newest = sortReleasesNewestFirst(albums);
+    const ordered = albumSortDesc ? newest : [...newest].reverse();
+    const byKind: Record<Exclude<DiscographyFilter, 'popular'>, AlbumID3[]> = {
+      album: [],
+      single: [],
+      compilation: [],
+    };
+    for (const a of ordered) {
+      const kind = releaseKind(a);
+      byKind[kind === 'ep' ? 'single' : kind].push(a);
+    }
+    const [latest, ...rest] = newest;
+    const popular = latest
+      ? [latest, ...[...rest].sort((a, b) => (b.playCount ?? 0) - (a.playCount ?? 0))]
+      : [];
+    return { popular, ...byKind, latestId: latest?.id };
   }, [albums, albumSortDesc]);
 
-  const renderAlbumItem = useCallback(
-    ({ item }: { item: AlbumID3 }) => (
-      <View style={styles.albumRowWrap}>
-        <AlbumRow album={item} />
+  const discoChips = useMemo(
+    () => DISCOGRAPHY_FILTERS.filter((f) => f.key === 'popular' || discography[f.key].length > 0),
+    [discography],
+  );
+  const discoAll = discography[discoFilter];
+  const visibleReleases = useMemo(
+    () => (discoExpanded ? discoAll : discoAll.slice(0, DISCOGRAPHY_COLLAPSED)),
+    [discoAll, discoExpanded],
+  );
+
+  const renderReleaseItem = useCallback(
+    ({ item, index }: { item: AlbumID3; index: number }) => (
+      <View style={styles.releaseRowWrap}>
+        <ReleaseRow
+          album={item}
+          latest={discoFilter === 'popular' && index === 0 && item.id === discography.latestId}
+        />
       </View>
     ),
-    [],
+    [discoFilter, discography.latestId],
   );
 
   const albumKeyExtractor = useCallback((item: AlbumID3) => item.id, []);
@@ -313,17 +318,31 @@ export function ArtistDetailScreen() {
     [],
   );
 
-  const playModeOptions = useMemo(
-    (): [{ key: ArtistPlayMode; label: string }, { key: ArtistPlayMode; label: string }] => [
-      { key: 'topSongs', label: t('topSongs') },
-      { key: 'allSongs', label: t('allSongs') },
-    ],
-    [t],
-  );
-
-  const handlePlayModeChange = useCallback((mode: ArtistPlayMode) => {
-    playbackSettingsStore.getState().setArtistPlayMode(mode);
-  }, []);
+  // Top songs arrive after the base, so an unarrived list must not read as an empty one:
+  // that would silently fall through to "more by artist" and play the wrong thing. Only the
+  // topSongs play mode (Settings) depends on it; allSongs needs the base alone.
+  const playDisabled = artistPlayMode === 'topSongs' && !topSongsSettled;
+  const handlePlay = useCallback(() => {
+    if (!artist) return;
+    if (artistPlayMode === 'allSongs') {
+      playAllByArtist(artist.id, artist.name, false);
+    } else if (topSongs.length > 0) {
+      playTrack(topSongs[0], topSongs);
+    } else {
+      playMoreByArtist(artist.id, artist.name);
+    }
+  }, [artist, artistPlayMode, topSongs]);
+  const handleShuffle = useCallback(() => {
+    if (!artist) return;
+    if (artistPlayMode === 'allSongs') {
+      playAllByArtist(artist.id, artist.name, true);
+    } else if (topSongs.length > 1) {
+      const shuffled = shuffleArray(topSongs);
+      playTrack(shuffled[0], shuffled);
+    } else {
+      playMoreByArtist(artist.id, artist.name);
+    }
+  }, [artist, artistPlayMode, topSongs]);
 
   const listHeader = useMemo(() => {
     if (!artist) return null;
@@ -353,44 +372,41 @@ export function ArtistDetailScreen() {
             {listenersLine ?? t('albumCount', { count: artist.albumCount ?? 0 })}
           </Text>
         </View>
-        <View style={styles.heroButtons}>
-          <PillToggle
-            options={playModeOptions}
-            selected={artistPlayMode}
-            onSelect={handlePlayModeChange}
-            colors={colors}
+
+        {/* ---- Actions: Follow + more on the left, shuffle + big play on the right ---- */}
+        <View style={styles.actions}>
+          {!offlineMode && (
+            <Pressable
+              onPress={handleToggleStar}
+              style={({ pressed }) => [
+                styles.followButton,
+                { borderColor: starred ? colors.textPrimary : colors.textSecondary },
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: starred }}
+            >
+              <Text style={[styles.followText, { color: colors.textPrimary }]}>
+                {starred ? t('artistFollowing') : t('artistFollow')}
+              </Text>
+            </Pressable>
+          )}
+          <MoreOptionsButton
+            onPress={() => moreOptionsStore.getState().show({ type: 'artist', item: artist })}
+            color={colors.textSecondary}
           />
-          <View style={styles.heroPlayButtons}>
-            {/* Top songs arrive after the base, so an unarrived list must not read as an
-                empty one — that would silently fall through to "more by artist" and play
-                the wrong thing. Only the topSongs mode depends on it; allSongs needs the
-                base alone and stays live. */}
-            <ShufflePlayButton
-              disabled={artistPlayMode === 'topSongs' && !topSongsSettled}
-              onPress={() => {
-                if (artistPlayMode === 'allSongs') {
-                  playAllByArtist(artist.id, artist.name, true);
-                } else if (topSongs.length > 1) {
-                  const shuffled = shuffleArray(topSongs);
-                  playTrack(shuffled[0], shuffled);
-                } else {
-                  playMoreByArtist(artist.id, artist.name);
-                }
-              }}
-            />
-            <PlayAllButton
-              disabled={artistPlayMode === 'topSongs' && !topSongsSettled}
-              onPress={() => {
-                if (artistPlayMode === 'allSongs') {
-                  playAllByArtist(artist.id, artist.name, false);
-                } else if (topSongs.length > 0) {
-                  playTrack(topSongs[0], topSongs);
-                } else {
-                  playMoreByArtist(artist.id, artist.name);
-                }
-              }}
-            />
-          </View>
+          <View style={styles.actionsSpacer} />
+          <Pressable
+            onPress={handleShuffle}
+            disabled={playDisabled}
+            hitSlop={8}
+            style={({ pressed }) => [styles.shuffleIcon, (pressed || playDisabled) && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={t('shufflePlay')}
+          >
+            <Ionicons name="shuffle" size={28} color={colors.textSecondary} />
+          </Pressable>
+          <PlayAllButton disabled={playDisabled} onPress={handlePlay} style={styles.playButton} />
         </View>
 
         {/* Heavy sections deferred until after the navigation animation */}
@@ -417,7 +433,7 @@ export function ArtistDetailScreen() {
                     style={({ pressed }) => [styles.seeMore, pressed && styles.pressed]}
                     hitSlop={8}
                   >
-                    <Text style={[styles.seeMoreText, { color: colors.primary }]}>
+                    <Text style={[styles.seeMoreText, { color: colors.textSecondary }]}>
                       {popularExpanded ? t('showLess') : t('artistSeeMore')}
                     </Text>
                   </Pressable>
@@ -425,86 +441,38 @@ export function ArtistDetailScreen() {
               </View>
             )}
 
-            {/* ---- Similar Artists ---- */}
-            {similarArtists.length > 0 && (
-              <View style={styles.section}>
-                <SectionTitle title={t('artistFansAlsoLike')} color={colors.label} />
-                <FlashList
-                  data={similarArtists}
-                  renderItem={similarArtistsRenderItem}
-                  keyExtractor={similarArtistsKeyExtractor}
-                  drawDistance={LIST_DRAW_DISTANCE}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.horizontalList}
-                  ItemSeparatorComponent={() => (
-                    <View style={{ width: HORIZONTAL_GAP }} />
-                  )}
-                />
-              </View>
-            )}
-
-            {/* ---- Biography ---- */}
-            {/* The bio is the slowest part — it can fall through to MusicBrainz — so show
-                the section with a spinner while it resolves rather than leaving a gap that
-                looks like the artist simply has no bio. */}
-            {bioLoading && (biography == null || biography.length === 0) && (
-              <View style={styles.section}>
-                <SectionTitle title={t('about')} color={colors.label} />
-                <View style={styles.bioLoading}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={[styles.bioLoadingText, { color: colors.textSecondary }]}>
-                    {t('loadingBiography')}
-                  </Text>
-                </View>
-              </View>
-            )}
-            {biography != null && biography.length > 0 && (
-              <View style={styles.section}>
-                <SectionTitle title={t('about')} color={colors.label} />
-                <Text
-                  style={[styles.bioText, { color: colors.textSecondary }]}
-                  numberOfLines={bioExpanded ? undefined : 4}
-                >
-                  {biography}
-                </Text>
-                <Pressable
-                  onPress={() => setBioExpanded((prev) => !prev)}
-                  style={({ pressed }) => pressed && styles.pressed}
-                >
-                  <Text style={[styles.bioToggle, { color: colors.primary }]}>
-                    {bioExpanded ? t('showLess') : t('readMore')}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-
-            {/* ---- Deezer releases missing from the library ---- */}
-            <DiscoverMoreFromArtist name={artist.name} style={styles.section} />
-
-            {/* ---- Albums section header (list items follow in FlashList) ---- */}
+            {/* ---- Discography heading + chips (rows follow in the FlashList) ---- */}
             {albums.length > 0 && (
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <SectionTitle title={t('albums')} color={colors.label} />
-                  <Pressable
-                    onPress={() => setAlbumSortDesc((prev) => !prev)}
-                    style={({ pressed }) => [
-                      styles.sortButton,
-                      pressed && styles.pressed,
-                    ]}
-                    hitSlop={8}
-                  >
-                    <Ionicons
-                      name={albumSortDesc ? 'arrow-down' : 'arrow-up'}
-                      size={14}
-                      color={colors.primary}
-                    />
-                    <Text style={[styles.sortLabel, { color: colors.textPrimary }]}>
-                      {albumSortDesc ? t('newest') : t('oldest')}
-                    </Text>
-                  </Pressable>
-                </View>
+                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
+                  {t('artistDiscography')}
+                </Text>
+                {discoChips.length > 1 && (
+                  <View style={styles.chips}>
+                    {discoChips.map((chip) => {
+                      const active = chip.key === discoFilter;
+                      return (
+                        <Pressable
+                          key={chip.key}
+                          onPress={() => {
+                            setDiscoFilter(chip.key);
+                            setDiscoExpanded(false);
+                          }}
+                          style={[
+                            styles.chip,
+                            { backgroundColor: active ? colors.primary : colors.card },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: active }}
+                        >
+                          <Text style={[styles.chipText, { color: active ? '#fff' : colors.textPrimary }]}>
+                            {t(chip.label)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             )}
           </>
@@ -517,25 +485,133 @@ export function ArtistDetailScreen() {
     bannerHeight,
     insets.top,
     listenersLine,
+    offlineMode,
+    starred,
+    handleToggleStar,
+    handlePlay,
+    handleShuffle,
+    playDisabled,
     popularSongs,
     popularExpanded,
     popularPlaysLabel,
     ready,
-    biography,
-    bioExpanded,
     topSongs,
-    similarArtists,
     albums.length,
-    albumSortDesc,
+    discoChips,
+    discoFilter,
     colors.textPrimary,
     colors.textSecondary,
-    colors.label,
     colors.primary,
+    colors.card,
+    t,
+  ]);
+
+  const listFooter = useMemo(() => {
+    if (!artist || !ready) return null;
+    return (
+      <>
+        {discoAll.length > DISCOGRAPHY_COLLAPSED && (
+          <Pressable
+            onPress={() => setDiscoExpanded((prev) => !prev)}
+            style={({ pressed }) => [
+              styles.showAllButton,
+              { borderColor: colors.textSecondary },
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.showAllText, { color: colors.textPrimary }]}>
+              {discoExpanded ? t('discographyShowLess') : t('discographyShowAll')}
+            </Text>
+          </Pressable>
+        )}
+
+        {/* ---- Fans also like ---- */}
+        {similarArtists.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
+              {t('artistFansAlsoLike')}
+            </Text>
+            <FlashList
+              data={similarArtists}
+              renderItem={similarArtistsRenderItem}
+              keyExtractor={similarArtistsKeyExtractor}
+              drawDistance={LIST_DRAW_DISTANCE}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              ItemSeparatorComponent={() => <View style={{ width: HORIZONTAL_GAP }} />}
+            />
+          </View>
+        )}
+
+        {/* ---- About: Spotify's card with the artist photo, listeners and the bio ---- */}
+        {/* The bio is the slowest part (it can fall through to MusicBrainz), so the card
+            shows a spinner while it resolves rather than a gap. */}
+        {(bioLoading || (biography != null && biography.length > 0)) && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>{t('about')}</Text>
+            <Pressable
+              onPress={() => setBioExpanded((prev) => !prev)}
+              disabled={!biography}
+              style={({ pressed }) => [
+                styles.aboutCard,
+                { backgroundColor: colors.card },
+                pressed && styles.pressed,
+              ]}
+            >
+              <CachedImage
+                coverArtId={artist.coverArt}
+                size={HERO_COVER_SIZE}
+                fallbackUri={heroFallbackUrl}
+                style={styles.aboutImage}
+                resizeMode="cover"
+              />
+              <View style={styles.aboutBody}>
+                {listenersLine && (
+                  <Text style={[styles.aboutListeners, { color: colors.textPrimary }]}>{listenersLine}</Text>
+                )}
+                {biography != null && biography.length > 0 ? (
+                  <Text
+                    style={[styles.bioText, { color: colors.textSecondary }]}
+                    numberOfLines={bioExpanded ? undefined : 3}
+                  >
+                    {biography}
+                  </Text>
+                ) : (
+                  <View style={styles.bioLoading}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={[styles.bioLoadingText, { color: colors.textSecondary }]}>
+                      {t('loadingBiography')}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+          </View>
+        )}
+
+        {/* ---- Deezer releases missing from the library ---- */}
+        <DiscoverMoreFromArtist name={artist.name} style={styles.section} />
+      </>
+    );
+  }, [
+    artist,
+    ready,
+    discoAll.length,
+    discoExpanded,
+    similarArtists,
     similarArtistsRenderItem,
     similarArtistsKeyExtractor,
-    artistPlayMode,
-    playModeOptions,
-    handlePlayModeChange,
+    bioLoading,
+    biography,
+    bioExpanded,
+    heroFallbackUrl,
+    listenersLine,
+    colors.textPrimary,
+    colors.textSecondary,
+    colors.primary,
+    colors.card,
     t,
   ]);
 
@@ -565,13 +641,6 @@ export function ArtistDetailScreen() {
     <>
       {Platform.OS === 'ios' && artist && (
         <Stack.Toolbar placement="right">
-          {!offlineMode && (
-            <Stack.Toolbar.Button
-              icon={starred ? 'heart.fill' : 'heart'}
-              onPress={handleToggleStar}
-              tintColor={starred ? colors.red : undefined}
-            />
-          )}
           <Stack.Toolbar.Button
             icon="ellipsis"
             onPress={() => moreOptionsStore.getState().show({ type: 'artist', item: artist })}
@@ -582,16 +651,15 @@ export function ArtistDetailScreen() {
         <DetailScreenBackground coverArt={artist?.coverArt} isWide={isWide} />
 
         <FlashList
-          data={sortedAlbums}
-          renderItem={renderAlbumItem}
+          data={ready ? visibleReleases : []}
+          renderItem={renderReleaseItem}
           keyExtractor={albumKeyExtractor}
           drawDistance={LIST_DRAW_DISTANCE}
           ListHeaderComponent={listHeader}
+          ListFooterComponent={listFooter}
           onScrollBeginDrag={closeOpenRow}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.content,
-          ]}
+          contentContainerStyle={styles.content}
           refreshControl={
             offlineMode ? undefined : (
               <RefreshControl
@@ -626,20 +694,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  starButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.6,
   },
 
-  /* Hero banner — runs under the transparent header, so it includes the top inset */
+  /* Hero banner: runs under the transparent header, so it includes the top inset */
   banner: {
     width: '100%',
     justifyContent: 'flex-end',
@@ -663,34 +722,51 @@ const styles = StyleSheet.create({
   meta: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 12,
   },
   metaText: {
     fontSize: 14,
     fontWeight: '500',
   },
-  heroButtons: {
+
+  /* Action row */
+  actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 16,
   },
-  heroPlayButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  followButton: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+  },
+  followText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  actionsSpacer: {
+    flex: 1,
+  },
+  shuffleIcon: {
+    padding: 2,
+  },
+  playButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
 
   /* Sections */
   section: {
     paddingHorizontal: 16,
-    marginTop: 20,
+    marginTop: 28,
   },
-
   sectionHeading: {
     fontSize: 22,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   seeMore: {
     alignSelf: 'flex-start',
@@ -702,7 +778,55 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* Biography */
+  /* Discography */
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  chip: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  releaseRowWrap: {
+    paddingHorizontal: 16,
+  },
+  showAllButton: {
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    marginTop: 16,
+  },
+  showAllText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  /* About */
+  aboutCard: {
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  aboutImage: {
+    width: '100%',
+    aspectRatio: 1.4,
+  },
+  aboutBody: {
+    padding: 16,
+    gap: 8,
+  },
+  aboutListeners: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
   bioLoading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -713,37 +837,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   bioText: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  bioToggle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 6,
+    fontSize: 15,
+    lineHeight: 21,
   },
 
-  /* Album list */
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sortButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 4,
-    marginBottom: 10,
-    gap: 4,
-  },
-  sortLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  albumRowWrap: {
-    paddingHorizontal: 16,
-  },
-
-  /* Horizontal card lists (Top Songs / Similar Artists) */
+  /* Horizontal card list (Fans also like) */
   horizontalList: {
     paddingRight: 16,
   },
