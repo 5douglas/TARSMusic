@@ -14,6 +14,9 @@ name: Android release APK
 # ANDROID_KEY_PASSWORD secrets set, the APK is signed with that keystore. Without them it
 # keeps the debug signature from the Expo prebuild template.
 #
+# Updates install through modules/expo-app-installer (PackageInstaller session), so on
+# Android 12+ the app updates itself without the install confirmation dialog.
+#
 # On a pull request that changes this file it only builds and uploads the APK as an
 # artifact, to check the build without publishing anything.
 

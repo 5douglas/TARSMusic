@@ -60,7 +60,7 @@ export function SearchScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const isFocused = useIsFocused();
-  const headerHeight = searchStore((s) => s.headerHeight);
+  const headerHeight = searchStore((s) => s.headerHeights.search ?? s.headerHeight);
   const recentSearches = recentSearchStore((s) => s.recentSearches);
 
   const query = searchStore((s) => s.query);

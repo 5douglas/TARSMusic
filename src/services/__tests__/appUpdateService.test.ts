@@ -23,6 +23,13 @@ jest.mock('expo-intent-launcher', () => ({
   startActivityAsync: (...args: unknown[]) => mockStartActivity(...args),
 }));
 
+const mockInstaller: { current: { installApk: jest.Mock } | null } = { current: null };
+jest.mock('expo-app-installer', () => ({
+  get AppInstaller() {
+    return mockInstaller.current;
+  },
+}));
+
 import { Platform } from 'react-native';
 
 import { processingOverlayStore } from '../../store/processingOverlayStore';
@@ -115,6 +122,19 @@ describe('checkForUpdate', () => {
 });
 
 describe('downloadAndInstall', () => {
+  afterEach(() => {
+    mockInstaller.current = null;
+  });
+
+  it('installs through the native session installer when the build has it', async () => {
+    const installApk = jest.fn().mockResolvedValue(true);
+    mockInstaller.current = { installApk };
+    mockDownload.mockResolvedValue({ uri: 'file:///cache/TARSMusic-8.2.0.apk', contentUri: 'content://x' });
+    await downloadAndInstall({ version: '8.2.0', notes: '', apkUrl: 'https://example.com/app.apk' });
+    expect(installApk).toHaveBeenCalledWith('file:///cache/TARSMusic-8.2.0.apk');
+    expect(mockStartActivity).not.toHaveBeenCalled();
+  });
+
   it('downloads the APK and opens the installer with read access to it', async () => {
     mockDownload.mockResolvedValue({ contentUri: 'content://app/TARSMusic-8.2.0.apk' });
     await downloadAndInstall({ version: '8.2.0', notes: '', apkUrl: 'https://example.com/app.apk' });

@@ -459,13 +459,14 @@ describe('HomeScreen — Spotify-style shortcuts and Discover rows', () => {
     mockUseDiscoverHome.mockReturnValue({ home: { sections: [] }, refresh: jest.fn() });
   });
 
-  it('shows shortcuts, mixes and releases above My listening and charts last', () => {
+  it('shows shortcuts, mixes and releases first, charts last and no My listening', () => {
     const r = render(<HomeScreen />);
     const tree = JSON.stringify(r.toJSON());
     expect(mockUseDiscoverHome).toHaveBeenLastCalledWith(true);
     expect(tree.indexOf('quick-access')).toBeLessThan(tree.indexOf('discover:mixes,releases'));
-    expect(tree.indexOf('discover:mixes,releases')).toBeLessThan(tree.indexOf('My Listening'));
-    expect(tree.indexOf('My Listening')).toBeLessThan(tree.indexOf('discover:charts'));
+    expect(tree.indexOf('discover:mixes,releases')).toBeLessThan(tree.indexOf('discover:charts'));
+    // Listening stats moved to the profile; the home screen no longer shows them.
+    expect(tree).not.toContain('My Listening');
   });
 
   it('turns Discover off offline and hides shortcuts under a filter', () => {

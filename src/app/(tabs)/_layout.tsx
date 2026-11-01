@@ -42,7 +42,7 @@ export default function TabLayout() {
         }}
         screenOptions={{
           header: (props) => (
-            <View onLayout={(e) => searchStore.getState().setHeaderHeight(e.nativeEvent.layout.height)}>
+            <View onLayout={(e) => searchStore.getState().setHeaderHeight(e.nativeEvent.layout.height, props.route.name)}>
               <SearchableHeader {...props} />
               <BannerStack />
             </View>
