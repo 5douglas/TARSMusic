@@ -1307,5 +1307,8 @@
   "albumMoreBy": "More by {{artist}}",
   "updateInstallHint": "TARSMusic installs the update and closes; open it again afterwards. The first time, Android may ask you to allow installs from TARSMusic.",
   "appUpdateInstalling": "Installing update… TARSMusic will close and update itself.",
-  "lyricsPreview": "Lyrics preview"
+  "lyricsPreview": "Lyrics preview",
+  "lyricsTranslate": "Translate",
+  "lyricsShowOriginal": "Original",
+  "lyricsTranslationUnavailable": "No translation"
 }

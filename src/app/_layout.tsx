@@ -94,6 +94,7 @@ import { initFailover } from '../services/failoverService';
 import { initScrobbleService } from '../services/scrobbleService';
 import { initSslTrustStore, syncProxyUpstreams, trustCertificateForHost } from '../services/sslTrustService';
 import { runAutoBackupIfNeeded } from '../services/backupService';
+import { syncBackupWithServer } from '../services/serverBackupService';
 import { startAutoOffline, stopAutoOffline } from '../services/autoOfflineService';
 import { excludeFromBackup } from 'expo-backup-exclusions';
 import { moveToBack } from 'expo-move-to-back';
@@ -251,7 +252,12 @@ async function runDeferredStartup(getCancelled: () => boolean): Promise<void> {
 
   // Auto-backup serializes the full scrobble history + writes files — pure,
   // interval-gated housekeeping with no first-render relevance. Defer to idle.
-  idleStage('runAutoBackupIfNeeded', () => runAutoBackupIfNeeded());
+  // The server copy first (merge it in, then refresh it), so a fresh install restores the
+  // account's history before the local daily backup runs.
+  idleStage('runAutoBackupIfNeeded', async () => {
+    await syncBackupWithServer();
+    await runAutoBackupIfNeeded();
+  });
   if (getCancelled()) return;
 
   // Resume any stalled album-detail walk from a previous session — background

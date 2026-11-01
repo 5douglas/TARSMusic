@@ -1,12 +1,13 @@
 import Ionicons from "@react-native-vector-icons/ionicons/static";
 import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { SyncedLyricsView } from './SyncedLyricsView';
 import { UnsyncedLyricsView } from './UnsyncedLyricsView';
 import { useFakeLineTimings } from '../hooks/useFakeLineTimings';
+import { useLyricsTranslation } from '../hooks/useLyricsTranslation';
 import { type LyricsData } from '../services/subsonicService';
 import { type LyricsErrorKind } from '../store/lyricsStore';
 import { hexWithAlpha } from '../utils/colors';
@@ -68,6 +69,57 @@ const LyricsModePill = memo(function LyricsModePill({
   );
 });
 
+/**
+ * Translate toggle in the lyrics' top corner: "Translate" turns on a translation under each
+ * line (into the phone's language); "Original" turns it off again.
+ */
+const TranslateButton = memo(function TranslateButton({
+  enabled,
+  loading,
+  unavailable,
+  onPress,
+  backgroundColor,
+  textColor,
+}: {
+  enabled: boolean;
+  loading: boolean;
+  unavailable: boolean;
+  onPress: () => void;
+  backgroundColor: string;
+  textColor: string;
+}) {
+  const { t } = useTranslation();
+  const label = !enabled
+    ? t('lyricsTranslate')
+    : unavailable
+      ? t('lyricsTranslationUnavailable')
+      : t('lyricsShowOriginal');
+  return (
+    <View style={styles.translateWrap} pointerEvents="box-none">
+      <Pressable
+        onPress={onPress}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ selected: enabled }}
+        testID="lyrics-translate-button"
+        style={({ pressed }) => [
+          styles.translateButton,
+          { backgroundColor },
+          pressed && styles.pressed,
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator size="small" color={textColor} style={styles.translateSpinner} />
+        ) : (
+          <Ionicons name="language" size={14} color={textColor} />
+        )}
+        <Text style={[styles.pillText, { color: textColor }]}>{label}</Text>
+      </Pressable>
+    </View>
+  );
+});
+
 export const LyricsContent = memo(function LyricsContent({
   lyricsData,
   lyricsLoading,
@@ -80,6 +132,17 @@ export const LyricsContent = memo(function LyricsContent({
   const fakeLines = useFakeLineTimings(
     lyricsData && !lyricsData.synced ? lyricsData.lines : [],
     lyricsData && !lyricsData.synced ? durationSec : null,
+  );
+  const translation = useLyricsTranslation(lyricsData?.lines);
+  const translateButton = (
+    <TranslateButton
+      enabled={translation.enabled}
+      loading={translation.loading}
+      unavailable={translation.unavailable}
+      onPress={translation.toggle}
+      backgroundColor={hexWithAlpha(colors.background, 0.55)}
+      textColor={colors.textPrimary}
+    />
   );
 
   if (lyricsError && !lyricsLoading) {
@@ -167,8 +230,10 @@ export const LyricsContent = memo(function LyricsContent({
           backgroundColor={hexWithAlpha(colors.background, 0.55)}
           textColor={colors.textPrimary}
         />
+        {translateButton}
         <SyncedLyricsView
           lines={lyricsData.lines}
+          translations={translation.translations}
           offsetMs={lyricsData.offsetMs}
           source="structured"
           textColor={colors.textPrimary}
@@ -186,8 +251,10 @@ export const LyricsContent = memo(function LyricsContent({
           backgroundColor={hexWithAlpha(colors.background, 0.55)}
           textColor={colors.textPrimary}
         />
+        {translateButton}
         <SyncedLyricsView
           lines={fakeLines}
+          translations={translation.translations}
           offsetMs={lyricsData.offsetMs}
           source="fake"
           textColor={colors.textPrimary}
@@ -198,7 +265,14 @@ export const LyricsContent = memo(function LyricsContent({
   }
 
   return (
-    <UnsyncedLyricsView lines={lyricsData.lines} textColor={colors.textPrimary} />
+    <View style={styles.fakeContainer}>
+      {translateButton}
+      <UnsyncedLyricsView
+        lines={lyricsData.lines}
+        translations={translation.translations}
+        textColor={colors.textPrimary}
+      />
+    </View>
   );
 });
 
@@ -266,5 +340,24 @@ const styles = StyleSheet.create({
   pillText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  translateWrap: {
+    position: 'absolute',
+    top: 4,
+    right: 12,
+    zIndex: 3,
+  },
+  translateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  translateSpinner: {
+    transform: [{ scale: 0.6 }],
+    width: 14,
+    height: 14,
   },
 });

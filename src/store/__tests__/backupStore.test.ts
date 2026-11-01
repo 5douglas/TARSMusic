@@ -119,6 +119,8 @@ describe('backupStore', () => {
     expect(parsed.state).toEqual({
       autoBackupEnabled: false,
       lastBackupTimes: { 'key-a': 1000 },
+      serverSyncedAt: {},
+      serverChecked: {},
     });
     // Functions should not be in persisted state
     expect(parsed.state.setAutoBackupEnabled).toBeUndefined();
