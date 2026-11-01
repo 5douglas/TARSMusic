@@ -47,6 +47,7 @@
     "double-metaphone": "^2.0.1",
     "drizzle-orm": "^0.45.2",
     "expo": "~57.0.8",
+    "expo-app-installer": "file:./modules/expo-app-installer",
     "expo-async-fs": "file:./modules/expo-async-fs",
     "expo-audio": "~57.0.5",
     "expo-backup-exclusions": "file:./modules/expo-backup-exclusions",
@@ -139,6 +140,7 @@
       "reactNativeDirectoryCheck": {
         "exclude": [
           "@op-engineering/op-sqlite",
+          "expo-app-installer",
           "expo-async-fs",
           "expo-backup-exclusions",
           "expo-gzip",

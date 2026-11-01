@@ -86,7 +86,7 @@ export function LibraryScreen() {
   const { theme, colors } = useTheme();
   const isFocused = useIsFocused();
   const { width, height: windowHeight } = useWindowDimensions();
-  const headerHeight = searchStore((s) => s.headerHeight);
+  const headerHeight = searchStore((s) => s.headerHeights.library ?? s.headerHeight);
   const offlineMode = offlineModeStore((s) => s.offlineMode);
   const [filter, setFilter] = useState<LibraryFilter | null>(null);
   const [sortSheetVisible, setSortSheetVisible] = useState(false);
@@ -238,21 +238,14 @@ export function LibraryScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>{content}</View>
-      {/* On Android the backdrop reaches up under the header too, so nothing in the list
-          shows through a banner slot between the header and the chips. */}
-      <View
-        style={[
-          styles.overlay,
-          Platform.OS === 'ios' ? { top: headerHeight } : { top: 0, paddingTop: headerHeight },
-        ]}
-      >
+      <View style={[styles.overlay, { top: headerHeight }]}>
         {Platform.OS === 'ios' ? (
           <BlurView tint={theme === 'dark' ? 'dark' : 'light'} intensity={80} style={StyleSheet.absoluteFill} />
         ) : (
           <LinearGradient
             colors={backdropColors}
             locations={GRADIENT_LOCATIONS}
-            style={[styles.backdrop, { top: 0, height: windowHeight }]}
+            style={[styles.backdrop, { top: -headerHeight, height: windowHeight }]}
             pointerEvents="none"
           />
         )}

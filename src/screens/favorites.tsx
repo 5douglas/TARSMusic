@@ -50,7 +50,7 @@ export function FavoritesScreen({ topInset }: { topInset?: number } = {}) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const isFocused = useIsFocused();
-  const tabHeaderHeight = searchStore((s) => s.headerHeight);
+  const tabHeaderHeight = searchStore((s) => s.headerHeights.library ?? s.headerHeight);
   const headerHeight = topInset ?? tabHeaderHeight;
   const [activeSegment, setActiveSegment] = useState<FavoritesSegment>('songs');
 
