@@ -12,6 +12,7 @@ import {
   makeBackupIdentityKey,
   pruneBackups,
 } from '../../services/backupService';
+import { restoreFromServerIfNewer, uploadBackupToServer } from '../../services/serverBackupService';
 import { authStore } from '../../store/authStore';
 import { backupStore } from '../../store/backupStore';
 import { RestoreBackupSheet } from './RestoreBackupSheet';
@@ -45,8 +46,11 @@ export function BackupRestoreCard() {
   const handleBackUpNow = useCallback(async () => {
     setBackingUp(true);
     try {
-      await createBackup();
+      // Merge what the server holds first, so the backup sent back to it loses nothing.
+      await restoreFromServerIfNewer().catch(() => null);
+      const stem = await createBackup();
       await pruneBackups();
+      if (stem) void uploadBackupToServer(stem).catch(() => false);
     } catch {
       alert(t('backupFailed'), t('backupFailedMessage'));
     } finally {
