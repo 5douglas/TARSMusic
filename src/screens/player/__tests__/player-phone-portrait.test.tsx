@@ -65,10 +65,12 @@ jest.mock('expo-linear-gradient', () => {
 });
 
 jest.mock('react-native-reanimated', () => {
-  const { View } = require('react-native');
+  const { View, Text } = require('react-native');
   return {
     __esModule: true,
-    default: { View },
+    default: { View, Text },
+    FadeIn: { duration: () => undefined },
+    FadeOut: { duration: () => undefined },
     useSharedValue: (init: number) => ({ value: init }),
     useAnimatedStyle: (fn: () => object) => fn(),
     withTiming: (val: number) => val,
@@ -77,7 +79,7 @@ jest.mock('react-native-reanimated', () => {
     cancelAnimation: jest.fn(),
     interpolate: (val: number, _input: number[], output: number[]) =>
       val === 0 ? output[0] : output[1],
-    Easing: { out: (e: unknown) => e, cubic: (t: number) => t, linear: (t: number) => t },
+    Easing: { out: (e: unknown) => e, cubic: (t: number) => t, quad: (t: number) => t, linear: (t: number) => t },
     runOnJS: (fn: Function) => fn,
   };
 });
@@ -436,9 +438,9 @@ describe('PlayerPhonePortrait', () => {
   it('renders transport control buttons', () => {
     const { getByText } = render(<PlayerPhonePortrait />);
 
-    expect(getByText('play-back')).toBeTruthy();
+    expect(getByText('play-skip-back')).toBeTruthy();
     expect(getByText('pause')).toBeTruthy(); // playing state shows pause
-    expect(getByText('play-forward')).toBeTruthy();
+    expect(getByText('play-skip-forward')).toBeTruthy();
   });
 
   it('renders play icon when paused', () => {
@@ -469,14 +471,14 @@ describe('PlayerPhonePortrait', () => {
 
   it('presses skip forward button', () => {
     const { getByText } = render(<PlayerPhonePortrait />);
-    fireEvent.press(getByText('play-forward'));
+    fireEvent.press(getByText('play-skip-forward'));
     const { skipToNext } = require('@/services/playerService');
     expect(skipToNext).toHaveBeenCalled();
   });
 
   it('presses skip backward button', () => {
     const { getByText } = render(<PlayerPhonePortrait />);
-    fireEvent.press(getByText('play-back'));
+    fireEvent.press(getByText('play-skip-back'));
     const { skipToPrevious } = require('@/services/playerService');
     expect(skipToPrevious).toHaveBeenCalled();
   });

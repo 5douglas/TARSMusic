@@ -1306,5 +1306,6 @@
   "albumSongsDuration_other": "{{count}} songs, {{duration}}",
   "albumMoreBy": "More by {{artist}}",
   "updateInstallHint": "TARSMusic installs the update and closes; open it again afterwards. The first time, Android may ask you to allow installs from TARSMusic.",
-  "appUpdateInstalling": "Installing update… TARSMusic will close and update itself."
+  "appUpdateInstalling": "Installing update… TARSMusic will close and update itself.",
+  "lyricsPreview": "Lyrics preview"
 }

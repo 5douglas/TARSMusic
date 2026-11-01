@@ -7,12 +7,12 @@ import { useTranslation } from 'react-i18next';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
 import { CachedImage } from '@/components/CachedImage';
+import { FavoriteButton } from '@/components/FavoriteButton';
 import { MarqueeText } from '@/components/MarqueeText';
 import WaveformLogo from '@/components/WaveformLogo';
 import { useImagePalette } from '@/hooks/useImagePalette';
 import { useTheme } from '@/hooks/useTheme';
-import { skipToNext, togglePlayPause } from '@/services/playerService';
-import { playbackSettingsStore } from '@/store/playbackSettingsStore';
+import { togglePlayPause } from '@/services/playerService';
 import { playerStore } from '@/store/playerStore';
 
 import { mixHexColors } from '@/utils/colors';
@@ -31,9 +31,6 @@ export function PlayerPhoneMini() {
   const position = playerStore((s) => s.position);
   const duration = playerStore((s) => s.duration);
   const queueLoading = playerStore((s) => s.queueLoading);
-  const currentTrackIndex = playerStore((s) => s.currentTrackIndex);
-  const queue = playerStore((s) => s.queue);
-  const repeatMode = playbackSettingsStore((s) => s.repeatMode);
 
   // Rendered synchronously from the store each re-render — same contract as
   // PlayerProgressBar so the two surfaces can never visually diverge.
@@ -42,14 +39,6 @@ export function PlayerPhoneMini() {
   const error = playerStore((s) => s.error);
   const isPlaying = playbackState === 'playing' || playbackState === 'buffering';
   const isBuffering = playbackState === 'buffering' || playbackState === 'loading';
-  const canSkipNext =
-    currentTrackIndex != null &&
-    (currentTrackIndex < queue.length - 1 || repeatMode !== 'off');
-
-  const handleSkipNext = useCallback(() => {
-    if (canSkipNext) skipToNext();
-  }, [canSkipNext]);
-
   const marqueeStyle = useMemo(
     () => [styles.title, { color: queueLoading ? colors.textSecondary : colors.textPrimary }],
     [queueLoading, colors.textSecondary, colors.textPrimary],
@@ -134,38 +123,24 @@ export function PlayerPhoneMini() {
         </View>
       </Pressable>
 
-      {/* Transport controls */}
+      {/* Spotify's mini player: save (+) and play/pause */}
       <View style={styles.controls}>
-        {/* Play / Pause / Buffering */}
+        {!queueLoading && <FavoriteButton trackId={currentTrack.id} variant="add" size={26} style={styles.addButton} />}
         <Pressable
           onPress={togglePlayPause}
           hitSlop={12}
           style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
+          accessibilityRole="button"
         >
           {(isBuffering || queueLoading) ? (
             <ActivityIndicator size="small" color={colors.textPrimary} />
           ) : (
             <Ionicons
               name={isPlaying ? 'pause' : 'play'}
-              size={28}
+              size={30}
               color={error ? colors.red : colors.textPrimary}
             />
           )}
-        </Pressable>
-
-        {/* Skip to next */}
-        <Pressable
-          onPress={handleSkipNext}
-          hitSlop={12}
-          disabled={!canSkipNext}
-          style={({ pressed }) => [styles.skipButton, pressed && canSkipNext && styles.pressed]}
-        >
-          <Ionicons
-            name="play-forward"
-            size={22}
-            color={colors.textPrimary}
-            style={!canSkipNext ? { opacity: 0.35 } : undefined}
-          />
         </Pressable>
       </View>
 
@@ -235,10 +210,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   playButton: {
-    marginLeft: 8,
+    marginLeft: 4,
     padding: 4,
   },
-  skipButton: {
+  addButton: {
     padding: 4,
   },
   pressed: {
