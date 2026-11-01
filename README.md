@@ -32,10 +32,17 @@ permitir instalações do TARSMusic.
 - Início com atalhos, mixes e lançamentos; Buscar; Sua Biblioteca com filtros, ordenação e grade.
 - Player com a linha da letra embaixo da capa, prévia da letra no tom da capa, letra em tela
   cheia sincronizada, card do álbum e próximas da fila.
+- Botão **Traduzir** na letra: a tradução (no idioma do celular) aparece embaixo de cada linha.
 - Página do artista com ouvintes, Populares (com número de plays), Discografia
   (Lançamentos populares, Álbuns, Singles e EPs, Compilações), Fãs também curtem e Sobre.
 - Página de álbum, single e EP com tipo, ano, duração e "Mais de" o artista.
 - Menu do perfil com foto e estatísticas de audição.
+
+**Seus dados no servidor**
+- Histórico de audição, estatísticas, correções de metadados, exclusões de scrobble e
+  marcadores são salvos automaticamente no Navidrome (numa playlist privada
+  *TARSMusic backup (não apagar)*) e voltam sozinhos quando você entra na conta, mesmo
+  num celular novo ou depois de reinstalar.
 
 **Descobrir música**
 - Mix diário e mixes por artista feitos a partir do que você ouve.

@@ -131,6 +131,15 @@ const AUTO_BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 const backupDir = new Directory(Paths.document, BACKUP_DIR_NAME);
 
+/** File suffixes of one backup, after its stem: the meta JSON and each gzipped dataset. */
+export const BACKUP_FILE_SUFFIXES = ['.meta.json', '.scrobbles.gz', '.mbid.gz', '.exclusions.gz', '.bookmarks.gz'] as const;
+
+/** The local backup folder (created on demand), for the server sync to read and write bundles. */
+export function getBackupDirectory(): Directory {
+  initBackupDir();
+  return backupDir;
+}
+
 function initBackupDir() {
   if (!backupDir.exists) {
     backupDir.create();
@@ -231,7 +240,8 @@ function serverUrlsMatch(a: string, b: string): boolean {
 /*  Create backup                                                      */
 /* ------------------------------------------------------------------ */
 
-export async function createBackup(): Promise<void> {
+/** Creates a local backup; resolves to its stem, or null when there was nothing to back up. */
+export async function createBackup(): Promise<string | null> {
   initBackupDir();
 
   const { serverUrl, primaryServerUrl, username } = authStore.getState();
@@ -291,7 +301,7 @@ export async function createBackup(): Promise<void> {
     bookmarksMeta = await writeBackupDataset(bookmarksFileName(stem), bookmarks, bookmarkCount);
   }
 
-  if (!scrobblesMeta && !mbidMeta && !exclusionsMeta && !bookmarksMeta) return;
+  if (!scrobblesMeta && !mbidMeta && !exclusionsMeta && !bookmarksMeta) return null;
 
   const meta: BackupMetaV6 = {
     version: 6,
@@ -312,6 +322,7 @@ export async function createBackup(): Promise<void> {
 
   const identityKey = makeBackupIdentityKey(identityUrl, username);
   backupStore.getState().setLastBackupTime(identityKey, Date.now());
+  return stem;
 }
 
 /* ------------------------------------------------------------------ */

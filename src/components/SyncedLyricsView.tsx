@@ -25,6 +25,8 @@ export { LINE_LEAD_MS, pickActiveLine };
 
 interface SyncedLyricsViewProps {
   lines: LyricsLine[];
+  /** One translation per line, shown under it; null/undefined for none. */
+  translations?: (string | null)[] | null;
   offsetMs: number;
   /** 'fake' disables tap-to-seek since timings are synthesized, not real. */
   source: 'structured' | 'fake';
@@ -68,6 +70,7 @@ const ACTIVE_LINE_VIEWPORT_RATIO = 0.35;
  */
 export const SyncedLyricsView = memo(function SyncedLyricsView({
   lines,
+  translations,
   offsetMs,
   source,
   textColor,
@@ -343,6 +346,7 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
               <LyricsLineRow
                 index={i}
                 text={line.text}
+                translation={translations?.[i]}
                 activeIndex={activeIndexSV}
                 textColor={textColor}
                 disabled={tapDisabled}
