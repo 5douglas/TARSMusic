@@ -20,8 +20,14 @@ export interface SearchState {
   error: string | null;
   /** Whether the overlay dropdown is visible */
   isOverlayVisible: boolean;
-  /** Height of the header (set by SearchableHeader via onLayout) */
+  /** Height of the most recently measured tab header (set via onLayout) */
   headerHeight: number;
+  /**
+   * Each tab's own header height. The tabs' headers differ (Search has the input, Your
+   * Library has no filter bar), so one shared value pushed one tab's content down by
+   * another tab's taller header after switching tabs.
+   */
+  headerHeights: Record<string, number>;
 
   /** Update the query text */
   setQuery: (query: string) => void;
@@ -31,8 +37,8 @@ export interface SearchState {
   showOverlay: () => void;
   /** Hide the results overlay */
   hideOverlay: () => void;
-  /** Set measured header height */
-  setHeaderHeight: (height: number) => void;
+  /** Set the measured header height of a tab */
+  setHeaderHeight: (height: number, routeName?: string) => void;
   /** Clear query, results, and hide overlay */
   clear: () => void;
 }
@@ -44,6 +50,7 @@ export const searchStore = create<SearchState>()((set, get) => ({
   error: null,
   isOverlayVisible: false,
   headerHeight: 0,
+  headerHeights: {},
 
   setQuery: (query) => {
     // Flip `loading` on as soon as the text changes so the overlay can
@@ -95,7 +102,12 @@ export const searchStore = create<SearchState>()((set, get) => ({
 
   showOverlay: () => set({ isOverlayVisible: true }),
   hideOverlay: () => set({ isOverlayVisible: false }),
-  setHeaderHeight: (headerHeight) => set({ headerHeight }),
+  setHeaderHeight: (headerHeight, routeName) =>
+    set((s) =>
+      routeName && s.headerHeights[routeName] !== headerHeight
+        ? { headerHeight, headerHeights: { ...s.headerHeights, [routeName]: headerHeight } }
+        : { headerHeight },
+    ),
 
   clear: () =>
     set({
