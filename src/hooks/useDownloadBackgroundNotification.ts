@@ -15,14 +15,19 @@ if (Platform.OS === 'android') {
   });
 }
 
+// The one app-wide handler: progress notifications stay silent while the app is open; the
+// new-music ones (newMusicAlertService) still show.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: false,
-    shouldShowBanner: false,
-    shouldShowList: false,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const show = notification.request.content.data?.kind === 'new-music';
+    return {
+      shouldShowAlert: show,
+      shouldShowBanner: show,
+      shouldShowList: show,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 export function useDownloadBackgroundNotification() {

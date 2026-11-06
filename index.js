@@ -13,5 +13,14 @@ try {
   console.error('[index] playerBootstrap failed:', e);
 }
 
+// The new-music background task must be defined before the OS can run it, which may be
+// a headless start with no UI. Guarded the same way, so a throw cannot block the app.
+try {
+  require('./src/services/newMusicBackgroundTask');
+} catch (e) {
+  // eslint-disable-next-line no-console
+  console.error('[index] newMusicBackgroundTask failed:', e);
+}
+
 // Register the expo-router root component. MUST run even if bootstrap threw.
 require('expo-router/entry');
