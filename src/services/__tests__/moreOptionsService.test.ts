@@ -378,7 +378,7 @@ describe('playMoreLikeThis', () => {
     expect(mockOverlayShow).toHaveBeenCalledWith('Loading…');
     expect(mockGetSimilarSongs).toHaveBeenCalledWith('s1', 20);
     expect(mockPlayTrack).toHaveBeenCalledWith(tracks[0], tracks);
-    expect(mockOverlayShowSuccess).toHaveBeenCalledWith('Playing similar songs');
+    expect(mockOverlayShowSuccess).toHaveBeenCalledWith('Playing radio');
     // No fallbacks needed — first call returned the full target
     expect(mockGetSimilarSongs2).not.toHaveBeenCalled();
     expect(mockGetRandomSongsFiltered).not.toHaveBeenCalled();
