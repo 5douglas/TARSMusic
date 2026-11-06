@@ -321,7 +321,7 @@ const ALL_OPTIONS = [
   'Save Top Songs Playlist',
   'Play Similar Artists',
   'Add to Playlist',
-  'Play More Like This',
+  'Start Radio',
   'Play More by This Artist',
   'Play Next',
   'Add to Queue',
@@ -389,7 +389,7 @@ describe('MoreOptionsSheet — options per entity (online, default source)', () 
       'Add to Favorites',
       'Set Rating',
       'Add to Playlist',
-      'Play More Like This',
+      'Start Radio',
       'Play More by This Artist',
       'Play Next',
       'Add to Queue',
@@ -738,9 +738,9 @@ describe('MoreOptionsSheet — playlist and queue actions', () => {
 });
 
 describe('MoreOptionsSheet — play actions', () => {
-  it('Play More Like This starts a mix from the song', () => {
+  it('Start Radio starts a radio from the song', () => {
     open(songEntity);
-    fireEvent.press(screen.getByText('Play More Like This'));
+    fireEvent.press(screen.getByText('Start Radio'));
     sheetClosed();
     expect(playMoreLikeThis).toHaveBeenCalledWith(song);
   });

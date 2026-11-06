@@ -88,17 +88,26 @@ async function topSongsFromStats(
 }
 
 /**
- * Compute stats + aggregates for the window `time >= sinceMs` (0 = all time).
+ * Compute stats + aggregates for the window `sinceMs <= time < untilMs`
+ * (`sinceMs` 0 = from the beginning, `untilMs` 0 = up to now).
  * One GROUP BY per aggregate; each result set is bounded by unique entities.
  */
-export async function computeScrobbleAnalytics(sinceMs = 0): Promise<ScrobbleAnalytics> {
+export async function computeScrobbleAnalytics(sinceMs = 0, untilMs = 0): Promise<ScrobbleAnalytics> {
   const db = getDb();
   if (db === null) return emptyResult();
 
-  const timeCond = sinceMs > 0 ? 'time >= ?' : null;
-  const p: number[] = sinceMs > 0 ? [sinceMs] : [];
+  const timeConds: string[] = [];
+  const p: number[] = [];
+  if (sinceMs > 0) {
+    timeConds.push('time >= ?');
+    p.push(sinceMs);
+  }
+  if (untilMs > 0) {
+    timeConds.push('time < ?');
+    p.push(untilMs);
+  }
   const whereOf = (extra?: string): string => {
-    const parts = [timeCond, extra].filter(Boolean) as string[];
+    const parts = [...timeConds, extra].filter(Boolean) as string[];
     return parts.length > 0 ? `WHERE ${parts.join(' AND ')}` : '';
   };
 
@@ -315,6 +324,34 @@ export async function loadScrobblesSince(sinceMs: number): Promise<CompletedScro
       [sinceMs],
     );
     return rows.filter((r) => !!r.id && r.title !== '').map((r) => rowToScrobble(r));
+  } catch {
+    return [];
+  }
+}
+
+export interface ScrobbleMonthTotal {
+  /** Local calendar month, `YYYY-MM`. */
+  month: string;
+  plays: number;
+  /** Sum of the played tracks' durations. */
+  seconds: number;
+}
+
+/**
+ * Plays and listening seconds per local calendar month, oldest first. Bounded by
+ * the number of months with history; drives the Wrapped year/month pickers and
+ * the per-month chart.
+ */
+export async function loadScrobbleMonthTotals(): Promise<ScrobbleMonthTotal[]> {
+  const db = getDb();
+  if (db === null) return [];
+  try {
+    const rows = await db.getAllAsync<{ month: string; plays: number; seconds: number }>(
+      `SELECT substr(day_key, 1, 7) AS month, COUNT(*) AS plays, COALESCE(SUM(duration), 0) AS seconds
+         FROM scrobble_events WHERE day_key IS NOT NULL
+        GROUP BY month ORDER BY month`,
+    );
+    return rows.map((r) => ({ month: r.month, plays: r.plays, seconds: r.seconds }));
   } catch {
     return [];
   }
