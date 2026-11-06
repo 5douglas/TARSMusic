@@ -86,6 +86,7 @@ import { connectivityStore } from '../store/connectivityStore';
 import { deferredMusicCacheInit, getMusicCacheStats, initMusicCache } from '../services/musicCacheService';
 import { checkStorageLimit } from '../services/storageService';
 import { initPlayer, removeNonDownloadedTracks, restorePersistedQueueAfterBoot } from '../services/playerService';
+import { initAutoplayRadio } from '../services/radioService';
 import { refreshHeadlessMediaSnapshot } from '../services/headlessMediaService';
 import { flushPersistedQueue } from '../services/queuePersistenceService';
 import { initNetInfoConfig } from '../services/netInfoConfig';
@@ -562,6 +563,7 @@ export default function RootLayout() {
       // queueRestoreStartedRef effect below); its heavy RNTP hydration freezes the
       // splash animation mid-sweep.
       initPlayer();
+      initAutoplayRadio();
 
       // Everything below talks to the server or to tables a migration may be rewriting.
       // `initPlayer` stays eager on purpose (see above); the rest waits, because
