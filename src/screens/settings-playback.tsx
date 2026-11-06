@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BottomChrome } from '../components/BottomChrome';
 import { GradientBackground } from '../components/GradientBackground';
+import { AutoplayCard } from '../components/settings/AutoplayCard';
 import { BackgroundPlaybackCard } from '../components/settings/BackgroundPlaybackCard';
 import { DownloadingCard } from '../components/settings/DownloadingCard';
 import { EqualizerCard } from '../components/settings/EqualizerCard';
@@ -110,6 +111,7 @@ export function SettingsPlaybackScreen() {
           <ReplayGainCard />
           <PlaybackModeCard />
           <LookaheadCacheCard />
+          <AutoplayCard />
           <PlayerControlsCard />
           <SkipIntervalsCard />
           <RemoteControlsCard />
