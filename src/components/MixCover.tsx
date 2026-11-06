@@ -10,23 +10,26 @@ import { mixHexColors } from '../utils/colors';
 
 /**
  * Square cover for a "Made for you" playlist, Spotify style but in the TARSMusic blue: the
- * daily recommendations get a blue gradient tile, an artist mix the artist's photo with a
- * blue band naming the mix.
+ * daily recommendations get a blue gradient tile; an artist mix or a Daily Mix shows an
+ * artist's photo with a blue band naming the mix.
  */
 export function MixCover({
   kind,
   artistId,
   artistName,
+  mixNumber,
   size,
 }: {
-  kind: 'daily' | 'artist';
+  kind: 'daily' | 'artist' | 'dailyMix';
   artistId?: string;
   artistName?: string;
+  /** For a Daily Mix: its number ("Daily Mix 2"). */
+  mixNumber?: number;
   size: number;
 }) {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const coverArt = useArtistCoverArt(kind === 'artist' ? artistId : undefined);
+  const coverArt = useArtistCoverArt(kind === 'daily' ? undefined : artistId);
   const dark = mixHexColors(colors.primary, '#000000', 0.55);
   const box = { width: size, height: size };
 
@@ -46,7 +49,9 @@ export function MixCover({
       <CachedImage coverArtId={coverArt} size={300} style={box} resizeMode="cover" />
       <View style={[styles.band, { backgroundColor: colors.primary }]}>
         <Text style={[styles.bandText, { fontSize: Math.max(11, size * 0.085) }]} numberOfLines={1}>
-          {t('artistMixTitle', { artist: artistName ?? '' })}
+          {kind === 'dailyMix'
+            ? t('dailyMixTitle', { number: mixNumber ?? 1 })
+            : t('artistMixTitle', { artist: artistName ?? '' })}
         </Text>
       </View>
     </View>
