@@ -50,6 +50,7 @@ import { scrobbleExclusionStore } from './scrobbleExclusionStore';
 import { serverInfoStore } from './serverInfoStore';
 import { shareSettingsStore } from './shareSettingsStore';
 import { sharesStore } from './sharesStore';
+import { smartDownloadStore } from './smartDownloadStore';
 import { sslCertStore } from './sslCertStore';
 import { localeStore } from './localeStore';
 import { storageLimitStore } from './storageLimitStore';
@@ -108,6 +109,7 @@ const allStores = [
   serverInfoStore,
   shareSettingsStore,
   sharesStore,
+  smartDownloadStore,
   sslCertStore,
   storageLimitStore,
   syncStatusStore,
