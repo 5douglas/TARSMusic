@@ -7,6 +7,7 @@ import { GradientBackground } from '../components/GradientBackground';
 import { DangerousActionsCard } from '../components/settings/DangerousActionsCard';
 import { DownloadedMusicCard } from '../components/settings/DownloadedMusicCard';
 import { ImageCacheCard } from '../components/settings/ImageCacheCard';
+import { SmartDownloadCard } from '../components/settings/SmartDownloadCard';
 import { StorageLimitCard } from '../components/settings/StorageLimitCard';
 import { StorageUsageCard } from '../components/settings/StorageUsageCard';
 import { settingsStyles } from '../styles/settingsStyles';
@@ -24,6 +25,7 @@ export function SettingsStorageScreen() {
         <StorageUsageCard />
         <StorageLimitCard />
         <DownloadedMusicCard />
+        <SmartDownloadCard />
         <ImageCacheCard />
         <DangerousActionsCard />
       </ScrollView>
