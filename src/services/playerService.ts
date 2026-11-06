@@ -31,6 +31,7 @@ import { addCompletedScrobble, sendNowPlaying } from './scrobbleService';
 import { registerPlayerPlayStatListener } from './playStatsService';
 import { syncProxyUpstreams } from './sslTrustService';
 import { getLocalTrackUri, waitForTrackMapsReady } from './musicCacheService';
+import { installNowPlayingSurfaces } from './nowPlayingSurfacesService';
 import {
   persistQueue,
   persistCurrentIndex,
@@ -145,6 +146,9 @@ export async function initPlayer(): Promise<void> {
   // ReplayGain loudness normalisation (off / track / album) — also not restored
   // natively across restarts, so re-apply the persisted choice.
   await applyReplayGain();
+
+  // Android home-screen widget + lock-screen lyrics (no-op elsewhere).
+  installNowPlayingSurfaces();
 
   // --- Playback state → store ---
   tp.onStateChange((state) => {

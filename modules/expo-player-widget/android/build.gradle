@@ -1,0 +1,40 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+group = 'expo.modules.playerwidget'
+version = '1.0.0'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+if (expoModulesCorePlugin.exists()) {
+  apply from: expoModulesCorePlugin
+  applyKotlinExpoModulesCorePlugin()
+}
+
+android {
+  namespace = "expo.modules.playerwidget"
+
+  compileSdk rootProject.ext.has("compileSdkVersion") ? rootProject.ext.get("compileSdkVersion") : 35
+
+  defaultConfig {
+    minSdk rootProject.ext.has("minSdkVersion") ? rootProject.ext.get("minSdkVersion") : 24
+    targetSdk rootProject.ext.has("targetSdkVersion") ? rootProject.ext.get("targetSdkVersion") : 35
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  kotlinOptions {
+    jvmTarget = JavaVersion.VERSION_17.majorVersion
+  }
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  // The widget buttons drive the player through a MediaController on the playback
+  // session, the same path the lock screen uses. Same Media3 version as
+  // react-native-queue-player so Gradle resolves one copy.
+  def media3Version = rootProject.ext.has("media3Version") ? rootProject.ext.get("media3Version") : "1.10.0"
+  implementation "androidx.media3:media3-session:${media3Version}"
+}

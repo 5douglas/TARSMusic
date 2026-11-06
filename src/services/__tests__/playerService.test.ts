@@ -8,6 +8,7 @@ jest.mock('react-native', () => ({
 }));
 
 jest.mock('../../store/persistence/kvStorage', () => require('../../store/persistence/__mocks__/kvStorage'));
+jest.mock('../nowPlayingSurfacesService', () => ({ installNowPlayingSurfaces: jest.fn() }));
 
 const mockSetCurrentTrack = jest.fn();
 const mockSetPlaybackState = jest.fn();

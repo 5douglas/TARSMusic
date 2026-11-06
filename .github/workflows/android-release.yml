@@ -17,8 +17,9 @@ name: Android release APK
 # Updates install through modules/expo-app-installer (PackageInstaller session), so on
 # Android 12+ the app updates itself without the install confirmation dialog.
 #
-# On a pull request that changes this file it only builds and uploads the APK as an
-# artifact, to check the build without publishing anything.
+# On a pull request that changes this file, the local native modules (modules/**) or the
+# config plugins it only builds and uploads the APK as an artifact, to check the build
+# without publishing anything.
 
 on:
   push:
@@ -29,7 +30,7 @@ on:
         description: 'Version to publish, e.g. 8.2.0'
         required: true
   pull_request:
-    paths: ['.github/workflows/android-release.yml']
+    paths: ['.github/workflows/android-release.yml', 'modules/**', 'plugins/**']
 
 permissions:
   contents: write
