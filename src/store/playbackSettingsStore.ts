@@ -182,6 +182,9 @@ export interface PlaybackSettingsState {
   /** ReplayGain loudness normalisation: off / track / album. */
   replayGainMode: ReplayGainModeSetting;
 
+  /** Android: the synced-lyrics line on the lock screen and in the home-screen widget. */
+  lockScreenLyrics: boolean;
+
   setMaxBitRate: (bitRate: MaxBitRate) => void;
   setStreamFormat: (format: StreamFormat) => void;
   setEstimateContentLength: (enabled: boolean) => void;
@@ -202,6 +205,7 @@ export interface PlaybackSettingsState {
   setPlaybackMode: (mode: PlaybackModeSetting) => void;
   setCrossfadeDurationMs: (ms: CrossfadeDurationMs) => void;
   setReplayGainMode: (mode: ReplayGainModeSetting) => void;
+  setLockScreenLyrics: (enabled: boolean) => void;
 }
 
 const PERSIST_KEY = 'substreamer-playback-settings';
@@ -211,17 +215,30 @@ const PERSIST_KEY = 'substreamer-playback-settings';
  * behind off-by-default toggles. Flips them on once for everyone upgrading from
  * v0; whatever the user sets afterwards persists normally and is never
  * overwritten again.
+ *
+ * v2 — one-time switch to crossfade (5 s) and track ReplayGain, which TARSMusic
+ * turns on by default (Spotify-style transitions and even loudness). Same rule:
+ * applied once on upgrade, the user's later choice is kept.
  */
 export function migratePlaybackSettings(persisted: any, version: number) {
   if (!persisted || typeof persisted !== 'object') return persisted;
+  let next = persisted;
   if (version === 0 || version === undefined) {
-    return {
-      ...persisted,
+    next = {
+      ...next,
       showSkipIntervalButtons: true,
       showSleepTimerButton: true,
     };
   }
-  return persisted;
+  if (version === 0 || version === undefined || version === 1) {
+    next = {
+      ...next,
+      playbackMode: 'crossfade',
+      crossfadeDurationMs: 5000,
+      replayGainMode: 'track',
+    };
+  }
+  return next;
 }
 
 export const playbackSettingsStore = create<PlaybackSettingsState>()(
@@ -244,9 +261,10 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       lookaheadEnabled: true,
       lookaheadCount: 3,
       scrobbleTrigger: 50,
-      playbackMode: 'gapless',
+      playbackMode: 'crossfade',
       crossfadeDurationMs: 5000,
-      replayGainMode: 'off',
+      replayGainMode: 'track',
+      lockScreenLyrics: true,
 
       setMaxBitRate: (maxBitRate) => set({ maxBitRate }),
       setStreamFormat: (streamFormat) => set({ streamFormat: normalizeFormat(streamFormat) }),
@@ -268,10 +286,11 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       setPlaybackMode: (playbackMode) => set({ playbackMode }),
       setCrossfadeDurationMs: (crossfadeDurationMs) => set({ crossfadeDurationMs }),
       setReplayGainMode: (replayGainMode) => set({ replayGainMode }),
+      setLockScreenLyrics: (lockScreenLyrics) => set({ lockScreenLyrics }),
     }),
     {
       name: PERSIST_KEY,
-      version: 1,
+      version: 2,
       migrate: migratePlaybackSettings,
       storage: createJSONStorage(() => kvStorage),
       partialize: (state) => ({
@@ -295,6 +314,7 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
         playbackMode: state.playbackMode,
         crossfadeDurationMs: state.crossfadeDurationMs,
         replayGainMode: state.replayGainMode,
+        lockScreenLyrics: state.lockScreenLyrics,
       }),
     }
   )

@@ -7,6 +7,7 @@
  * bailing when nothing is playable, and the public-API hydration guard.
  */
 
+jest.mock('../nowPlayingSurfacesService', () => ({ installNowPlayingSurfaces: jest.fn() }));
 jest.mock('react-native', () => ({
   // expo-modules-core looks optional native modules up here when expo-file-system loads.
   TurboModuleRegistry: { get: () => null },
