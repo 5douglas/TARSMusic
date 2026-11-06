@@ -461,3 +461,15 @@ export const albumIdsWithSongs = (db: InternalDb, ids: string[]): Promise<Set<st
           [JSON.stringify(ids)],
         )
         .then((rows) => new Set(rows.map((r) => r.album_id)));
+
+/** The library's most-played songs, highest play count first (last played breaks ties).
+ *  Songs never played are left out. Feeds the smart offline download. */
+export async function listMostPlayedSongs(db: InternalDb, limit: number): Promise<LibrarySong[]> {
+  const rows = await db.getAllAsync<SongListRow>(
+    `SELECT ${SONG_LIST_COLS} FROM songs WHERE play_count > 0 ` +
+      'ORDER BY play_count DESC, played DESC LIMIT ?',
+    [limit],
+  );
+  await hydrateSongRows(db, rows);
+  return rows.map(songListRowToChild);
+}
