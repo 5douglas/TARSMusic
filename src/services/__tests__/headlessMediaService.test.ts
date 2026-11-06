@@ -8,6 +8,13 @@ jest.mock('../detailFetchService', () => ({
   fetchPlaylistDetail: jest.fn(),
 }));
 
+// Mixes are built from server endpoints; the ranking stays real.
+jest.mock('../personalMixService', () => ({
+  ...jest.requireActual('../personalMixService'),
+  buildArtistMix: jest.fn(),
+  getDailyRecommendations: jest.fn(),
+}));
+
 import {
   __test,
   installHeadlessMediaService,
@@ -34,6 +41,12 @@ import { musicCacheStore } from '../../store/musicCacheStore';
 import { layoutPreferencesStore } from '../../store/layoutPreferencesStore';
 import { syncStatusStore } from '../../store/syncStatusStore';
 import { getDb } from '../../store/persistence/db';
+import { buildArtistMix, getDailyRecommendations } from '../personalMixService';
+import {
+  artistMixId,
+  dailyMixId,
+  shuffleFavoritesId,
+} from '../headlessMediaService.helpers';
 import { upsertCachedItem } from '../../store/persistence/musicCacheTables';
 import { ensureNormalizedSchema } from '../../db/createNormalizedTables';
 import { upsertAlbums } from '../../db/repository/albums';
@@ -113,8 +126,40 @@ describe('buildSnapshot', () => {
     expect(home.items.every((i) => i.hasChildren && !i.playable)).toBe(true);
 
     const favs = snap.sections.find((s) => s.id === sectionId('favorites'))!;
-    expect(favs.items.map((i) => i.id)).toEqual([favTrackId(0), favTrackId(1), favTrackId(2)]);
+    expect(favs.items.map((i) => i.id)).toEqual([
+      shuffleFavoritesId,
+      favTrackId(0),
+      favTrackId(1),
+      favTrackId(2),
+    ]);
     expect(favs.items.every((i) => i.playable && !i.hasChildren)).toBe(true);
+  });
+
+  it('Home starts with playable mixes for the top artists when online', async () => {
+    albumListsStore.setState({
+      frequentlyPlayed: [{ id: 'al-f', name: 'F', artist: 'Bowie', artistId: 'ar-b' }],
+    } as any);
+    const snap = await __test.buildSnapshot();
+    const home = snap.sections.find((s) => s.id === sectionId('home'))!;
+    expect(home.items.map((i) => i.id)).toEqual([
+      dailyMixId,
+      artistMixId('ar-b'),
+      listId('recentlyAdded'),
+      listId('frequentlyPlayed'),
+      listId('randomSelection'),
+    ]);
+    expect(home.items[1].title).toBe('Bowie Mix');
+    expect(home.items.slice(0, 2).every((i) => i.playable && !i.hasChildren)).toBe(true);
+  });
+
+  it('Home has no mixes offline (they need the server)', async () => {
+    albumListsStore.setState({
+      frequentlyPlayed: [{ id: 'al-f', name: 'F', artist: 'Bowie', artistId: 'ar-b' }],
+    } as any);
+    offlineModeStore.setState({ offlineMode: true } as any);
+    const snap = await __test.buildSnapshot();
+    const home = snap.sections.find((s) => s.id === sectionId('home'))!;
+    expect(home.items.some((i) => i.id.startsWith('mix:'))).toBe(false);
   });
 
   it('Albums section is A–Z letter buckets (not flat albums)', async () => {
@@ -142,6 +187,39 @@ const seedCachedSong = (id: string): void => {
   );
 };
 
+describe('the car mixes', () => {
+  it('shuffle row plays every favourite', async () => {
+    const r = await __test.resolvePlayback(shuffleFavoritesId);
+    expect(r.queue.map((c) => c.id).sort()).toEqual(['s1', 's2', 's3']);
+    expect(r.startIndex).toBe(0);
+  });
+
+  it('artist mix plays the mix built for that artist', async () => {
+    albumListsStore.setState({
+      frequentlyPlayed: [{ id: 'al-f', name: 'F', artist: 'Bowie', artistId: 'ar-b' }],
+    } as any);
+    (buildArtistMix as jest.Mock).mockResolvedValueOnce([song('m1'), song('m2')]);
+    const r = await __test.resolvePlayback(artistMixId('ar-b'));
+    expect(buildArtistMix).toHaveBeenCalledWith({ id: 'ar-b', name: 'Bowie', plays: 0 }, 30);
+    expect(r.queue.map((c) => c.id)).toEqual(['m1', 'm2']);
+  });
+
+  it('daily mix plays today\'s recommendations', async () => {
+    albumListsStore.setState({
+      frequentlyPlayed: [{ id: 'al-f', name: 'F', artist: 'Bowie', artistId: 'ar-b' }],
+    } as any);
+    (getDailyRecommendations as jest.Mock).mockResolvedValueOnce([song('d1')]);
+    const r = await __test.resolvePlayback(dailyMixId);
+    expect(r.queue.map((c) => c.id)).toEqual(['d1']);
+  });
+
+  it('mixes play nothing offline', async () => {
+    offlineModeStore.setState({ offlineMode: true } as any);
+    const r = await __test.resolvePlayback(dailyMixId);
+    expect(r.queue).toEqual([]);
+  });
+});
+
 describe('the car Favorites node', () => {
   it('lists newest-starred first and plays row N as queue index N', async () => {
     // `favTrackId(i)` indexes into the play queue, so the display list and the queue
@@ -155,6 +233,7 @@ describe('the car Favorites node', () => {
     const snap = await __test.buildSnapshot();
     const favs = snap.sections.find((s) => s.id === sectionId('favorites'))!;
     expect(favs.items.map((i) => i.title)).toEqual([
+      'Shuffle play',
       'Song s1',
       'Song s2',
       'Song rem1',
@@ -162,9 +241,11 @@ describe('the car Favorites node', () => {
       'Song rem2',
     ]);
 
-    for (let i = 0; i < favs.items.length; i++) {
+    const tracks = favs.items.filter((i) => i.id !== shuffleFavoritesId);
+    for (let i = 0; i < tracks.length; i++) {
+      expect(tracks[i].id).toBe(favTrackId(i));
       const r = await __test.resolvePlayback(favTrackId(i));
-      expect(r.queue[r.startIndex].title).toBe(favs.items[i].title);
+      expect(r.queue[r.startIndex].title).toBe(tracks[i].title);
     }
   });
 
@@ -180,7 +261,7 @@ describe('the car Favorites node', () => {
 
     const snap = await __test.buildSnapshot();
     const favs = snap.sections.find((s) => s.id === sectionId('favorites'))!;
-    expect(favs.items.map((i) => i.title)).toEqual(['Song s2', 'Song rem1']);
+    expect(favs.items.map((i) => i.title)).toEqual(['Shuffle play', 'Song s2', 'Song rem1']);
 
     const r = await __test.resolvePlayback(favTrackId(1));
     expect(r.queue.map((c) => c.id)).toEqual(['s2', 'rem1']);

@@ -9,6 +9,9 @@ import {
   albumTrackId,
   playlistTrackId,
   favTrackId,
+  dailyMixId,
+  shuffleFavoritesId,
+  artistMixId,
   bucketLetter,
   albumLetterRows,
   albumsForLetter,
@@ -20,6 +23,14 @@ import {
 import type { BrowseItem } from 'react-native-queue-player';
 
 describe('parseMediaId', () => {
+  it('parses the mix ids', () => {
+    expect(parseMediaId(dailyMixId)).toEqual({ kind: 'mix', mix: 'daily' });
+    expect(parseMediaId(shuffleFavoritesId)).toEqual({ kind: 'mix', mix: 'shuffleFavorites' });
+    expect(parseMediaId(artistMixId('ar:1'))).toEqual({ kind: 'mix', mix: 'artist', artistId: 'ar:1' });
+    expect(parseMediaId('mix:artist:')).toEqual({ kind: 'unknown', raw: 'mix:artist:' });
+    expect(parseMediaId('mix:other')).toEqual({ kind: 'unknown', raw: 'mix:other' });
+  });
+
   it('round-trips every id builder', () => {
     expect(parseMediaId(sectionId('albums'))).toEqual({ kind: 'section', section: 'albums' });
     expect(parseMediaId(listId('recentlyAdded'))).toEqual({ kind: 'list', list: 'recentlyAdded' });

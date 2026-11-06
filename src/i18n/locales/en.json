@@ -1310,5 +1310,8 @@
   "lyricsPreview": "Lyrics preview",
   "lyricsTranslate": "Translate",
   "lyricsShowOriginal": "Original",
-  "lyricsTranslationUnavailable": "No translation"
+  "lyricsTranslationUnavailable": "No translation",
+  "lockScreenLyrics": "Lyrics on the Lock Screen",
+  "lockScreenLyricsHint": "Shows the line being sung on the lock screen and in the TARSMusic home-screen widget while music plays. Needs synced lyrics.",
+  "lockScreenLyricsToggle": "Show lyrics"
 }

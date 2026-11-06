@@ -127,13 +127,33 @@ describe('playbackSettingsStore', () => {
       expect(result.showSleepTimerButton).toBe(true);
     });
 
-    it('leaves a v1+ blob untouched so later user changes persist', () => {
-      const blob = { showSkipIntervalButtons: false, showSleepTimerButton: false };
-      expect(migratePlaybackSettings(blob, 1)).toBe(blob);
+    it('leaves a v2+ blob untouched so later user changes persist', () => {
+      const blob = { showSkipIntervalButtons: false, showSleepTimerButton: false, playbackMode: 'gapless' };
+      expect(migratePlaybackSettings(blob, 2)).toBe(blob);
     });
 
     it('passes through a null/invalid blob unchanged', () => {
       expect(migratePlaybackSettings(null, 0)).toBeNull();
+    });
+  });
+
+  describe('migratePlaybackSettings (v1 → v2)', () => {
+    it('turns on crossfade and track ReplayGain once, keeping the button flags', () => {
+      const result = migratePlaybackSettings(
+        { showSleepTimerButton: false, playbackMode: 'gapless', replayGainMode: 'off', crossfadeDurationMs: 2000 },
+        1,
+      );
+      expect(result.playbackMode).toBe('crossfade');
+      expect(result.crossfadeDurationMs).toBe(5000);
+      expect(result.replayGainMode).toBe('track');
+      expect(result.showSleepTimerButton).toBe(false);
+    });
+
+    it('chains v0 → v2', () => {
+      const result = migratePlaybackSettings({ showSleepTimerButton: false }, 0);
+      expect(result.showSleepTimerButton).toBe(true);
+      expect(result.playbackMode).toBe('crossfade');
+      expect(result.replayGainMode).toBe('track');
     });
   });
 
