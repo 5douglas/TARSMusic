@@ -9,9 +9,9 @@
  *   installHeadlessMediaService → registerPlaybackService(() => handler) + pushSnapshot,
  *   push on onCarConnect, re-install on onServiceReady('service-reborn').
  *
- * The four sections (platform ~4-tab limit): Home (curated album lists, offline
- * recomposed via homeSectionsService), Favorites (flat songs), Albums (A–Z
- * buckets), Playlists. See src/services/headlessMediaService.helpers.ts for the
+ * The four sections (platform ~4-tab limit): Home ("made for you" mixes when online,
+ * then curated album lists, offline recomposed via homeSectionsService), Favorites
+ * (a shuffle row, then flat songs), Albums (A–Z buckets), Playlists. See src/services/headlessMediaService.helpers.ts for the
  * id scheme + A–Z bucketing.
  */
 import type {
@@ -42,6 +42,16 @@ import {
 import { logVoiceSearch } from './voiceSearchLogger';
 import { scoreCandidate, REJECT } from './searchMatch';
 import { composeHomeAlbumSections, type ComposeHomeInput } from './homeSectionsService';
+import {
+  buildArtistMix,
+  getDailyRecommendations,
+  rankTopArtists,
+  type TopArtist,
+} from './personalMixService';
+import { getArtist } from '../db/repository/artists';
+import { completedScrobbleStore } from '../store/completedScrobbleStore';
+import { personalMixStore } from '../store/personalMixStore';
+import { shuffleArray } from '../utils/arrayHelpers';
 import { getDb } from '../store/persistence/db';
 import {
   listAllAlbums,
@@ -75,6 +85,9 @@ import {
   albumTrackId,
   playlistTrackId,
   favTrackId,
+  dailyMixId,
+  shuffleFavoritesId,
+  artistMixId,
   parseMediaId,
   albumLetterRows,
   albumsForLetter,
@@ -86,6 +99,10 @@ import {
 const LOG_TAG = '[headlessMediaService]';
 const ART_SIZE = 300;
 const SEARCH_ID_PREFIX = 'search:';
+/** Artist mixes in the car's Home, same count as the phone's "Made for you" row. */
+const CAR_ARTIST_MIXES = 6;
+/** Mix length: the phone's list-length setting, at least 30 like the mix screen. */
+const MIN_MIX_SIZE = 30;
 
 /* ------------------------------------------------------------------ */
 /*  Mode-appropriate data selectors                                    */
@@ -205,6 +222,84 @@ async function homeInput(): Promise<ComposeHomeInput> {
 }
 
 /* ------------------------------------------------------------------ */
+/*  "Made for you" mixes                                               */
+/* ------------------------------------------------------------------ */
+
+/** The user's most-played artists, ranked exactly like the phone's Home row. */
+function topArtists(): TopArtist[] {
+  return rankTopArtists(
+    completedScrobbleStore.getState().aggregates.artistCounts,
+    albumListsStore.getState().frequentlyPlayed,
+    CAR_ARTIST_MIXES,
+  );
+}
+
+function mixSize(): number {
+  return Math.max(MIN_MIX_SIZE, layoutPreferencesStore.getState().listLength);
+}
+
+async function artistCoverArt(artistIdVal: string): Promise<string | undefined> {
+  const db = getDb();
+  if (!db) return undefined;
+  try {
+    const value = (await getArtist(db, artistIdVal))?.cover_art;
+    return typeof value === 'string' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Playable mix rows for the top of Home: today's recommendations and one mix per top
+ * artist. Built from the server's similar/top-songs endpoints, so online only.
+ */
+async function mixRows(): Promise<BrowseItem[]> {
+  if (isOffline()) return [];
+  const artists = topArtists();
+  if (artists.length === 0) return [];
+  const dailyCover = personalMixStore.getState().dailySongs[0]?.coverArt;
+  const daily: BrowseItem = {
+    id: dailyMixId,
+    title: i18n.t('dailyRecommendations'),
+    subtitle: i18n.t('dailyRecommendationsSubtitle'),
+    artworkUrl: await resolveRowArtwork(dailyCover ?? undefined),
+    playable: true,
+    hasChildren: false,
+  };
+  const perArtist = await Promise.all(
+    artists.map(async (a): Promise<BrowseItem> => ({
+      id: artistMixId(a.id),
+      title: i18n.t('artistMixTitle', { artist: a.name }),
+      subtitle: i18n.t('artistMixSubtitle', { artist: a.name }),
+      artworkUrl: await resolveRowArtwork(await artistCoverArt(a.id)),
+      playable: true,
+      hasChildren: false,
+    })),
+  );
+  return [daily, ...perArtist];
+}
+
+async function mixSongs(mix: 'daily' | 'shuffleFavorites' | 'artist', artistIdVal?: string): Promise<Child[]> {
+  try {
+    if (mix === 'shuffleFavorites') return shuffleArray(await favoriteSongs());
+    if (isOffline()) return [];
+    if (mix === 'daily') return await getDailyRecommendations(topArtists(), mixSize());
+    if (!artistIdVal) return [];
+    let name = topArtists().find((a) => a.id === artistIdVal)?.name;
+    if (!name) {
+      const db = getDb();
+      const row = db ? await getArtist(db, artistIdVal) : null;
+      name = typeof row?.name === 'string' ? row.name : undefined;
+    }
+    if (!name) return [];
+    return await buildArtistMix({ id: artistIdVal, name, plays: 0 }, mixSize());
+  } catch (e) {
+    console.warn(`${LOG_TAG} mix ${mix} failed:`, e);
+    return [];
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Browse-item mappers                                                */
 /* ------------------------------------------------------------------ */
 
@@ -275,20 +370,31 @@ async function trackRows(
 async function buildSnapshot(): Promise<BrowseSnapshot> {
   // Home: curated album lists (offline recomposed — drop Random, add
   // Downloaded Albums, filter to downloaded) — one drill row per non-empty list.
-  const homeItems: BrowseItem[] = composeHomeAlbumSections(await homeInput())
-    .filter((s) => s.albums.length > 0)
-    .map((s) => ({
-      id: listId(s.type),
-      title: i18n.t(s.titleKey),
-      playable: false,
-      hasChildren: true,
-    }));
+  // Online, the "made for you" mixes come first, like the phone's Home.
+  const homeItems: BrowseItem[] = [
+    ...(await mixRows()),
+    ...composeHomeAlbumSections(await homeInput())
+      .filter((s) => s.albums.length > 0)
+      .map((s) => ({
+        id: listId(s.type),
+        title: i18n.t(s.titleKey),
+        playable: false,
+        hasChildren: true,
+      })),
+  ];
 
-  // Favorites: flat playable songs (display-capped; play uses the same list).
-  const favItems = await trackRows(
-    (await favoriteSongs()).slice(0, CAR_MAX_ITEMS_PER_NODE),
-    favTrackId,
-  );
+  // Favorites: a shuffle row, then flat playable songs (display-capped; play uses
+  // the same list). The shuffle row has its own id, so the track indexes are unchanged.
+  const favorites = await favoriteSongs();
+  const favItems = await trackRows(favorites.slice(0, CAR_MAX_ITEMS_PER_NODE - 1), favTrackId);
+  if (favorites.length > 1) {
+    favItems.unshift({
+      id: shuffleFavoritesId,
+      title: i18n.t('shufflePlay'),
+      playable: true,
+      hasChildren: false,
+    });
+  }
 
   // Albums: A–Z letter buckets first (mandatory — libraries exceed the cap).
   const albumItems = albumLetterRows(await azItems());
@@ -414,6 +520,10 @@ async function resolvePlayback(mediaId: string): Promise<ResolvedPlayback> {
     return { queue: [], startIndex: 0, sourcePlaylistId: null };
   }
   const p = parseMediaId(mediaId);
+  if (p.kind === 'mix') {
+    const queue = await mixSongs(p.mix, p.mix === 'artist' ? p.artistId : undefined);
+    return { queue, startIndex: 0, sourcePlaylistId: null };
+  }
   if (p.kind === 'track') {
     if (p.ctx === 'album') {
       const queue = await albumSongs(p.ctxId);

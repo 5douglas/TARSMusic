@@ -10,6 +10,7 @@ import { AutoplayCard } from '../components/settings/AutoplayCard';
 import { BackgroundPlaybackCard } from '../components/settings/BackgroundPlaybackCard';
 import { DownloadingCard } from '../components/settings/DownloadingCard';
 import { EqualizerCard } from '../components/settings/EqualizerCard';
+import { LockScreenLyricsCard } from '../components/settings/LockScreenLyricsCard';
 import { LookaheadCacheCard } from '../components/settings/LookaheadCacheCard';
 import { PlaybackModeCard } from '../components/settings/PlaybackModeCard';
 import { PlayerControlsCard } from '../components/settings/PlayerControlsCard';
@@ -48,6 +49,7 @@ export function SettingsPlaybackScreen() {
   const playbackMode = playbackSettingsStore((s) => s.playbackMode);
   const crossfadeDurationMs = playbackSettingsStore((s) => s.crossfadeDurationMs);
   const replayGainMode = playbackSettingsStore((s) => s.replayGainMode);
+  const lockScreenLyrics = playbackSettingsStore((s) => s.lockScreenLyrics);
 
   const isDefault =
     maxBitRate === null &&
@@ -62,9 +64,10 @@ export function SettingsPlaybackScreen() {
     remoteControlMode === 'skip-track' &&
     lookaheadEnabled &&
     lookaheadCount === 3 &&
-    playbackMode === 'gapless' &&
+    playbackMode === 'crossfade' &&
     crossfadeDurationMs === 5000 &&
-    replayGainMode === 'off';
+    replayGainMode === 'track' &&
+    lockScreenLyrics;
 
   const handleResetDefaults = useCallback(() => {
     confirm({
@@ -86,9 +89,10 @@ export function SettingsPlaybackScreen() {
         s.setRemoteControlMode('skip-track');
         s.setLookaheadEnabled(true);
         s.setLookaheadCount(3);
-        s.setPlaybackMode('gapless');
+        s.setPlaybackMode('crossfade');
         s.setCrossfadeDurationMs(5000);
-        s.setReplayGainMode('off');
+        s.setReplayGainMode('track');
+        s.setLockScreenLyrics(true);
         updateRemoteCapabilities();
         void applyLookaheadCacheConfig();
         void applyPlaybackMode();
@@ -115,6 +119,7 @@ export function SettingsPlaybackScreen() {
           <PlayerControlsCard />
           <SkipIntervalsCard />
           <RemoteControlsCard />
+          <LockScreenLyricsCard />
           {/* Battery-optimization exemption — affects background playback, so it
               lives here under Sound & Playback (Android-only; renders null on iOS). */}
           <BackgroundPlaybackCard />

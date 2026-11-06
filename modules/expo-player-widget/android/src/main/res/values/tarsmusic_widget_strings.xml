@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="tarsmusic_widget_label" translatable="false">TARSMusic</string>
+  <string name="tarsmusic_widget_description">Now playing, with controls and the current lyrics line</string>
+  <string name="tarsmusic_widget_idle_title" translatable="false">TARSMusic</string>
+  <string name="tarsmusic_widget_idle_subtitle">Tap to open</string>
+  <string name="tarsmusic_widget_play">Play</string>
+  <string name="tarsmusic_widget_pause">Pause</string>
+  <string name="tarsmusic_widget_next">Next</string>
+  <string name="tarsmusic_widget_previous">Previous</string>
+  <string name="tarsmusic_lyrics_channel">Lyrics on the lock screen</string>
+  <string name="tarsmusic_lyrics_channel_description">The line being sung, shown while music plays</string>
+</resources>

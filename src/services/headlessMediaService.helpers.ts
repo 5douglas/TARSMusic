@@ -10,9 +10,11 @@
  *   az:albums:<L>[:<lo>-<hi>]                    — Albums letter buckets
  *   album:<id> / playlist:<id>                   — drill → tracks
  *   track:album:<albumId>:<i> / track:playlist:<playlistId>:<i> / track:fav:<i>
+ *   mix:daily / mix:artist:<artistId> / mix:shuffleFavorites — playable rows that
+ *                                                  start a whole generated queue
  *
  * `playable` and `hasChildren` are mutually exclusive (RNQP): list/album/
- * playlist/az rows are `hasChildren`; track rows are `playable`.
+ * playlist/az rows are `hasChildren`; track and mix rows are `playable`.
  */
 import type { BrowseItem } from 'react-native-queue-player';
 
@@ -39,6 +41,9 @@ export const albumTrackId = (albumIdVal: string, index: number): string =>
 export const playlistTrackId = (playlistIdVal: string, index: number): string =>
   `track:playlist:${playlistIdVal}:${index}`;
 export const favTrackId = (index: number): string => `track:fav:${index}`;
+export const dailyMixId = 'mix:daily';
+export const shuffleFavoritesId = 'mix:shuffleFavorites';
+export const artistMixId = (artistIdVal: string): string => `mix:artist:${artistIdVal}`;
 
 /* ------------------------------------------------------------------ */
 /*  ID parsing                                                         */
@@ -52,6 +57,8 @@ export type CarMediaId =
   | { kind: 'azLetter'; letter: string }
   | { kind: 'azBucket'; letter: string; lo: string; hi: string }
   | { kind: 'track'; ctx: 'album' | 'playlist' | 'fav'; ctxId: string; index: number }
+  | { kind: 'mix'; mix: 'daily' | 'shuffleFavorites' }
+  | { kind: 'mix'; mix: 'artist'; artistId: string }
   | { kind: 'unknown'; raw: string };
 
 /**
@@ -74,6 +81,13 @@ export function parseMediaId(id: string): CarMediaId {
       return { kind: 'album', albumId: rest };
     case 'playlist':
       return { kind: 'playlist', playlistId: rest };
+    case 'mix': {
+      if (rest === 'daily' || rest === 'shuffleFavorites') return { kind: 'mix', mix: rest };
+      if (rest.startsWith('artist:') && rest.length > 'artist:'.length) {
+        return { kind: 'mix', mix: 'artist', artistId: rest.slice('artist:'.length) };
+      }
+      return { kind: 'unknown', raw: id };
+    }
     case 'az': {
       // rest = `albums:<L>` or `albums:<L>:<lo>-<hi>`
       const parts = rest.split(':');
