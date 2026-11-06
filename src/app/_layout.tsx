@@ -96,6 +96,7 @@ import { initScrobbleService } from '../services/scrobbleService';
 import { initSslTrustStore, syncProxyUpstreams, trustCertificateForHost } from '../services/sslTrustService';
 import { runAutoBackupIfNeeded } from '../services/backupService';
 import { syncBackupWithServer } from '../services/serverBackupService';
+import { startSmartDownloads, stopSmartDownloads } from '../services/smartDownloadService';
 import { startAutoOffline, stopAutoOffline } from '../services/autoOfflineService';
 import { excludeFromBackup } from 'expo-backup-exclusions';
 import { moveToBack } from 'expo-move-to-back';
@@ -259,6 +260,11 @@ async function runDeferredStartup(getCancelled: () => boolean): Promise<void> {
     await syncBackupWithServer();
     await runAutoBackupIfNeeded();
   });
+  if (getCancelled()) return;
+
+  // Smart offline download (favourites + most played, Wi-Fi only by default). Needs the
+  // music cache maps loaded above; does nothing until the user turns it on.
+  idleStage('smartDownloads', () => { startSmartDownloads(); });
   if (getCancelled()) return;
 
   // Resume any stalled album-detail walk from a previous session — background
@@ -439,7 +445,10 @@ export default function RootLayout() {
     if (!isLoggedIn || startupBlocked) return;
     let cancelled = false;
     void runDeferredStartup(() => cancelled);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      stopSmartDownloads();
+    };
   }, [isLoggedIn, startupBlocked]);
 
   // --- Cover-art recache resumption on connectivity restoration ---
