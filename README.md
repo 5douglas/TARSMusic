@@ -44,6 +44,11 @@ permitir instalações do TARSMusic.
   *TARSMusic backup (não apagar)*) e voltam sozinhos quando você entra na conta, mesmo
   num celular novo ou depois de reinstalar.
 
+**Download inteligente**
+- Mantém no celular, sozinho, suas favoritas e as mais tocadas (25 a 500), só no Wi‑Fi
+  e dentro de um limite de espaço (1 a 50 GB). O que sai da lista é apagado de novo;
+  o que você baixou à mão nunca é mexido (Configurações › Armazenamento).
+
 **Descobrir música**
 - Mix diário e mixes por artista feitos a partir do que você ouve.
 - Integração com um servidor *Discover* próprio: novos lançamentos e paradas do Deezer,
