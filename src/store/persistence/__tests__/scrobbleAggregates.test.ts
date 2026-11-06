@@ -10,6 +10,7 @@ import { getTopDecade } from '../../../services/tunedInService';
 import {
   computeScrobbleAnalytics,
   loadRecentScrobbles,
+  loadScrobbleMonthTotals,
   loadScrobblePage,
 } from '../scrobbleAggregates';
 import { backfillScrobbleColumnsAsync } from '../scrobbleTable';
@@ -70,6 +71,27 @@ it('scopes aggregates to a period via sinceMs', async () => {
   const { stats, aggregates } = await computeScrobbleAnalytics(NOW - 7 * DAY);
   expect(stats.totalPlays).toBe(1);
   expect(Object.keys(aggregates.artistCounts)).toEqual(['B']);
+});
+
+it('bounds aggregates above via untilMs (end exclusive)', async () => {
+  insert('a', song('s1', { artist: 'A' }), NOW - 10 * DAY);
+  insert('b', song('s2', { artist: 'B' }), NOW - 5 * DAY);
+  insert('c', song('s3', { artist: 'C' }), NOW);
+  const { stats, aggregates } = await computeScrobbleAnalytics(NOW - 20 * DAY, NOW);
+  expect(stats.totalPlays).toBe(2);
+  expect(Object.keys(aggregates.artistCounts).sort()).toEqual(['A', 'B']);
+});
+
+it('totals plays and seconds per local month', async () => {
+  const jan = new Date(2026, 0, 15, 12).getTime();
+  const feb = new Date(2026, 1, 3, 12).getTime();
+  insert('j1', song('s1', { duration: 100 }), jan);
+  insert('j2', song('s2', { duration: 50 }), jan + HOUR);
+  insert('f1', song('s1', { duration: 100 }), feb);
+  expect(await loadScrobbleMonthTotals()).toEqual([
+    { month: '2026-01', plays: 2, seconds: 150 },
+    { month: '2026-02', plays: 1, seconds: 100 },
+  ]);
 });
 
 it('backfills derived columns for rows written before the columns existed', async () => {

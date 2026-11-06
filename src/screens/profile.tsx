@@ -210,6 +210,14 @@ export function ProfileScreen() {
             <Text style={[styles.link, { color: colors.primary }]}>{t('profileSeeAllStats')}</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.primary} />
           </Pressable>
+          <Pressable
+            onPress={() => router.push('/wrapped')}
+            style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.link, { color: colors.primary }]}>{t('wrappedOpen')}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+          </Pressable>
         </View>
 
         {topArtists.length > 0 && (
