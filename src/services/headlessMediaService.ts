@@ -27,6 +27,7 @@ import { getTrackPlayer, registerPlaybackService, SectionIcon } from 'react-nati
 import type { AlbumID3, Child, Playlist } from './subsonicService';
 import { buildPlayableQueue } from './playerHelpers';
 import { playTrack, initPlayer } from './playerService';
+import { initAutoplayRadio } from './radioService';
 import { initScrobbleService } from './scrobbleService';
 import { resolveDisplayImage, resolveDisplayImages } from './imageCacheService';
 import { coverArtForAlbum, coverArtForPlaylist } from '../utils/coverArtId';
@@ -752,6 +753,7 @@ function ensureHeadlessDataReady(): Promise<void> {
       // timer that drains the pending queue. Both are idempotent.
       .then(async () => {
         await initPlayer();
+        initAutoplayRadio();
         initScrobbleService();
       })
       .catch((e) => console.warn(`${LOG_TAG} ensureHeadlessDataReady failed:`, e));

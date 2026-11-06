@@ -10,21 +10,23 @@ import { PlayAllButton, ShufflePlayButton } from '../components/DetailHeroButton
 import { EmptyState } from '../components/EmptyState';
 import { GradientBackground } from '../components/GradientBackground';
 import { MixCover } from '../components/MixCover';
-import { MAX_ARTIST_MIXES } from '../components/PersonalMixesSection';
+import { dailyMixArtistLine, MAX_ARTIST_MIXES } from '../components/PersonalMixesSection';
 import { SongRow } from '../components/SongRow';
 import { useTheme } from '../hooks/useTheme';
 import { useTopArtists } from '../hooks/useTopArtists';
+import { getDailyMixes, getDailyMixSongs } from '../services/dailyMixService';
 import { buildArtistMix, getDailyRecommendations } from '../services/personalMixService';
 import { playTrack } from '../services/playerService';
 import { type Child } from '../services/subsonicService';
 import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
+import { personalMixStore } from '../store/personalMixStore';
 import { shuffleArray } from '../utils/arrayHelpers';
 
 const COVER_SIZE = 200;
 /** Songs per mix: the list-length setting, but never fewer than this. */
 const MIN_MIX_SIZE = 30;
 
-/** A "Made for you" playlist: today's recommendations or one artist's mix. */
+/** A "Made for you" playlist: a Daily Mix, today's recommendations or one artist's mix. */
 export function MixScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -32,6 +34,8 @@ export function MixScreen() {
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
   const { kind, id, name } = useLocalSearchParams<{ kind: string; id?: string; name?: string }>();
   const isDaily = kind === 'daily';
+  const isDailyMix = kind === 'dailymix';
+  const dailyMix = personalMixStore((s) => (isDailyMix ? s.dailyMixes.find((m) => m.id === id) : undefined));
   const topArtists = useTopArtists(MAX_ARTIST_MIXES);
   const listLength = layoutPreferencesStore((s) => s.listLength);
   const size = Math.max(MIN_MIX_SIZE, listLength);
@@ -42,10 +46,14 @@ export function MixScreen() {
   const load = useCallback(
     async (force: boolean) => {
       if (isDaily) return getDailyRecommendations(topArtists, size, force);
+      if (isDailyMix) {
+        const mix = (await getDailyMixes()).find((m) => m.id === id);
+        return mix ? getDailyMixSongs(mix, size, force) : [];
+      }
       if (!id || !name) return [];
       return buildArtistMix({ id, name, plays: 0 }, size);
     },
-    [isDaily, topArtists, id, name, size],
+    [isDaily, isDailyMix, topArtists, id, name, size],
   );
 
   useEffect(() => {
@@ -71,12 +79,24 @@ export function MixScreen() {
   }, [load]);
 
   const list = useMemo(() => songs ?? [], [songs]);
-  const title = isDaily ? t('dailyRecommendations') : t('artistMixTitle', { artist: name ?? '' });
-  const subtitle = isDaily
-    ? t('dailyRecommendationsDescription', {
-        artists: topArtists.slice(0, 3).map((a) => a.name).join(', '),
-      })
-    : t('artistMixDescription', { artist: name ?? '' });
+  let title: string;
+  let subtitle: string;
+  if (isDailyMix) {
+    title = t('dailyMixTitle', { number: dailyMix?.number ?? 1 });
+    subtitle = dailyMix
+      ? dailyMix.genre
+        ? t('dailyMixGenreDescription', { genre: dailyMix.genre, artists: dailyMixArtistLine(dailyMix) })
+        : t('dailyMixDescription', { artists: dailyMixArtistLine(dailyMix) })
+      : '';
+  } else if (isDaily) {
+    title = t('dailyRecommendations');
+    subtitle = t('dailyRecommendationsDescription', {
+      artists: topArtists.slice(0, 3).map((a) => a.name).join(', '),
+    });
+  } else {
+    title = t('artistMixTitle', { artist: name ?? '' });
+    subtitle = t('artistMixDescription', { artist: name ?? '' });
+  }
 
   const renderItem = useCallback(
     ({ item }: { item: Child }) => <SongRow song={item} songs={list} />,
@@ -85,7 +105,13 @@ export function MixScreen() {
 
   const header = (
     <View style={styles.header}>
-      <MixCover kind={isDaily ? 'daily' : 'artist'} artistId={id} artistName={name} size={COVER_SIZE} />
+      <MixCover
+        kind={isDailyMix ? 'dailyMix' : isDaily ? 'daily' : 'artist'}
+        artistId={isDailyMix ? dailyMix?.artists[0]?.id : id}
+        artistName={name}
+        mixNumber={dailyMix?.number}
+        size={COVER_SIZE}
+      />
       <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
         {title}
       </Text>
