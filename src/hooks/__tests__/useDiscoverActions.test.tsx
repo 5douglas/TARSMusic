@@ -14,6 +14,7 @@ jest.mock('../../services/discoverPreviewService', () => ({
 }));
 
 import { useDiscoverActions } from '../useDiscoverActions';
+import { newMusicAlertsStore } from '../../store/newMusicAlertsStore';
 import { playbackToastStore } from '../../store/playbackToastStore';
 import { themedAlertStore } from '../../store/themedAlertStore';
 
@@ -34,6 +35,7 @@ beforeEach(() => {
   mockToggle.mockReset();
   themedAlertStore.setState({ visible: false, title: '', buttons: [] });
   playbackToastStore.setState({ status: 'idle', successLabel: null });
+  newMusicAlertsStore.setState({ requests: [] });
 });
 
 describe('useDiscoverActions', () => {
@@ -51,6 +53,9 @@ describe('useDiscoverActions', () => {
     confirm();
     await waitFor(() => expect(playbackToastStore.getState().successLabel).toBe('Sent to download queue'));
     expect(mockQueueDownload).toHaveBeenCalledWith('https://www.deezer.com/track/1');
+    expect(newMusicAlertsStore.getState().requests).toEqual([
+      expect.objectContaining({ album: 'Memórias', artist: 'Jão', title: 'Aurora', wholeAlbum: false }),
+    ]);
   });
 
   it('downloads the whole album from a track, and falls back to the track without an album link', () => {
@@ -71,6 +76,7 @@ describe('useDiscoverActions', () => {
     confirm();
     await waitFor(() => expect(themedAlertStore.getState().title).toBe('Could not queue the download'));
     expect(mockQueueDownload).toHaveBeenCalledWith('https://www.deezer.com/album/9');
+    expect(newMusicAlertsStore.getState().requests).toEqual([]);
   });
 
   it('opens albums and artists by id and mixes/charts by path', () => {
