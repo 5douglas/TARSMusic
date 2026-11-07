@@ -31,6 +31,7 @@
     "local-ci": "node scripts/local-ci.js"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~57.0.7",
     "@formatjs/intl-datetimeformat": "^7.4.9",
     "@formatjs/intl-getcanonicallocales": "^3.2.10",
     "@formatjs/intl-locale": "^5.3.9",
@@ -100,6 +101,7 @@
     "react-native-safe-area-context": "^5.8.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "^15.15.5",
+    "react-native-web": "^0.21.4",
     "react-native-worklets": "0.10.2",
     "subsonic-api": "file:./modules/subsonic-api",
     "zustand": "^5.0.14"

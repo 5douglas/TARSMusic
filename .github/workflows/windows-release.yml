@@ -1,0 +1,130 @@
+name: Windows release
+
+# Builds the Windows installer (desktop/) and adds it to the GitHub release for the
+# version, next to the APK. The installed app updates itself from these releases
+# (electron-updater reads latest.yml).
+#
+#   git tag v8.4.0 && git push origin v8.4.0
+#
+# or run it by hand from the Actions tab with a version. On a pull request that
+# changes the desktop app it only builds and uploads the installer as an artifact.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish, e.g. 8.4.0'
+        required: true
+  pull_request:
+    paths:
+      - '.github/workflows/windows-release.yml'
+      - 'desktop/**'
+      - 'index.web.js'
+      - 'metro.config.js'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build installer
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION_INPUT: ${{ github.event.inputs.version }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [ -n "$VERSION_INPUT" ]; then
+            VERSION="${VERSION_INPUT#v}"
+          else
+            VERSION="$(node -p "require('./app.json').expo.version")"
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version '$VERSION' is not like 8.4.0"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp version into app.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const app = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            app.expo.version = process.env.VERSION;
+            fs.writeFileSync("app.json", JSON.stringify(app, null, 2) + "\n");
+          '
+
+      - run: npm ci
+
+      - run: npm ci
+        working-directory: desktop
+
+      - name: Build installer
+        working-directory: desktop
+        env:
+          TARS_VERSION: ${{ steps.version.outputs.version }}
+        run: npm run dist
+
+      - name: Collect files
+        id: files
+        working-directory: desktop/dist
+        run: |
+          ls -la
+          EXE="TARSMusic-Setup-${{ steps.version.outputs.version }}.exe"
+          test -f "$EXE"
+          echo "exe=$EXE" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.files.outputs.exe }}
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.blockmap
+            desktop/dist/latest.yml
+          retention-days: 14
+
+      - name: Publish to the GitHub release
+        if: github.event_name != 'pull_request'
+        working-directory: desktop/dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.version }}
+          EXE: ${{ steps.files.outputs.exe }}
+        run: |
+          FILES=("$EXE" "$EXE.blockmap" latest.yml)
+          # The Android workflow may be creating the same release right now.
+          for attempt in 1 2 3 4 5; do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release upload "$TAG" "${FILES[@]}" --clobber && exit 0
+            else
+              gh release create "$TAG" "${FILES[@]}" --title "TARSMusic ${TAG#v}" --generate-notes --target "$GITHUB_SHA" && exit 0
+            fi
+            sleep $((attempt * 20))
+          done
+          exit 1
