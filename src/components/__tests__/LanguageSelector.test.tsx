@@ -22,6 +22,7 @@ jest.mock('../../i18n', () => ({
     language: 'en',
     changeLanguage: (...args: unknown[]) => mockChangeLanguage(...args),
   },
+  getDeviceLocale: () => 'pt',
 }));
 
 let sheetOnClose: (() => void) | null = null;
@@ -107,14 +108,14 @@ describe('LanguageSelector', () => {
     expect(mockChangeLanguage).toHaveBeenCalledWith('en');
   });
 
-  it('selecting "Device default" sets locale to null and calls changeLanguage with "en"', () => {
+  it('selecting "Device default" sets locale to null and switches to the device language', () => {
     localeStore.setState({ locale: 'en' });
     const { getByText, getAllByText } = render(<LanguageSelector />);
     fireEvent.press(getByText('Language'));
     const defaults = getAllByText('Device default');
     fireEvent.press(defaults[defaults.length - 1]);
     expect(localeStore.getState().locale).toBeNull();
-    expect(mockChangeLanguage).toHaveBeenCalledWith('en');
+    expect(mockChangeLanguage).toHaveBeenCalledWith('pt');
   });
 
   it('closes sheet after selecting a language', () => {

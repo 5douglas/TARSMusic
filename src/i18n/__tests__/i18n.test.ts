@@ -7,12 +7,14 @@ jest.mock('@formatjs/intl-pluralrules/locale-data/fr.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/de.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/es.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/it.js', () => {});
+jest.mock('@formatjs/intl-pluralrules/locale-data/pt.js', () => {});
 jest.mock('@formatjs/intl-numberformat/polyfill-force.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/en.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/fr.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/de.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/es.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/it.js', () => {});
+jest.mock('@formatjs/intl-numberformat/locale-data/pt.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/polyfill-force.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/add-all-tz.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/en.js', () => {});
@@ -20,6 +22,7 @@ jest.mock('@formatjs/intl-datetimeformat/locale-data/fr.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/de.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/es.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/it.js', () => {});
+jest.mock('@formatjs/intl-datetimeformat/locale-data/pt.js', () => {});
 
 // Mock expo-localization
 jest.mock('expo-localization', () => ({

@@ -117,7 +117,7 @@ describe('OnboardingGuide', () => {
     const { toJSON } = render(<OnboardingGuide />);
     const json = JSON.stringify(toJSON());
     expect(json).toContain('Swipe left or right');
-    expect(json).toContain('Offline chip');
+    expect(json).toContain('Settings > Connectivity');
     expect(json).toContain('Head to Settings');
   });
 });

@@ -97,6 +97,7 @@ import { initScrobbleService } from '../services/scrobbleService';
 import { initSslTrustStore, syncProxyUpstreams, trustCertificateForHost } from '../services/sslTrustService';
 import { runAutoBackupIfNeeded } from '../services/backupService';
 import { syncBackupWithServer } from '../services/serverBackupService';
+import { syncProfileWithServer } from '../services/profileSyncService';
 import { startSmartDownloads, stopSmartDownloads } from '../services/smartDownloadService';
 import { startAutoOffline, stopAutoOffline } from '../services/autoOfflineService';
 import { excludeFromBackup } from 'expo-backup-exclusions';
@@ -258,6 +259,7 @@ async function runDeferredStartup(getCancelled: () => boolean): Promise<void> {
   // The server copy first (merge it in, then refresh it), so a fresh install restores the
   // account's history before the local daily backup runs.
   idleStage('runAutoBackupIfNeeded', async () => {
+    await syncProfileWithServer();
     await syncBackupWithServer();
     await runAutoBackupIfNeeded();
   });
