@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from './BottomSheet';
 import { useTheme } from '../hooks/useTheme';
-import { i18n } from '../i18n';
+import { getDeviceLocale, i18n } from '../i18n';
 import { SUPPORTED_LANGUAGES } from '../i18n/languages';
 import { localeStore } from '../store/localeStore';
 
@@ -31,7 +31,7 @@ export function LanguageSelector({ variant = 'settings' }: LanguageSelectorProps
   const handleSelect = useCallback(
     (code: string | null) => {
       setLocale(code);
-      const resolvedCode = code ?? 'en';
+      const resolvedCode = code ?? getDeviceLocale();
       i18n.changeLanguage(resolvedCode);
       setSheetVisible(false);
     },

@@ -1,27 +1,21 @@
 import { useCallback, useMemo } from 'react';
-import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { useTheme } from '../../hooks/useTheme';
-import { settingsStyles } from '../../styles/settingsStyles';
 import {
   playbackSettingsStore,
   CROSSFADE_DURATIONS_MS,
-  PLAYBACK_MODES,
   type CrossfadeDurationMs,
-  type PlaybackModeSetting,
 } from '../../store/playbackSettingsStore';
 import { applyPlaybackMode } from '../../services/playerService';
 import { DropdownRow, type DropdownOption } from './DropdownRow';
-import { SettingsSectionTitle } from './SettingsSectionTitle';
+import { SettingsToggleCard } from './SettingsToggleCard';
 
 /**
- * Track-transition mode: gapless (default) vs crossfade. Both are explicit
- * named options; the crossfade-duration selector is only shown for crossfade.
+ * Song transition: a plain on/off switch for crossfade (off = gapless), with the
+ * crossfade length shown only while it is on.
  */
 export function PlaybackModeCard() {
   const { t } = useTranslation();
-  const { colors } = useTheme();
   const mode = playbackSettingsStore((s) => s.playbackMode);
   const durationMs = playbackSettingsStore((s) => s.crossfadeDurationMs);
   const setMode = playbackSettingsStore((s) => s.setPlaybackMode);
@@ -29,23 +23,14 @@ export function PlaybackModeCard() {
 
   const isCrossfade = mode === 'crossfade';
 
-  const modeOptions: DropdownOption<PlaybackModeSetting>[] = useMemo(
-    () =>
-      PLAYBACK_MODES.map((m) => ({
-        value: m,
-        label: m === 'crossfade' ? t('playbackModeCrossfade') : t('playbackModeGapless'),
-      })),
-    [t],
-  );
-
   const durationOptions: DropdownOption<CrossfadeDurationMs>[] = useMemo(
     () => CROSSFADE_DURATIONS_MS.map((ms) => ({ value: ms, label: t('secondsValue', { count: ms / 1000 }) })),
     [t],
   );
 
-  const handleModeChange = useCallback(
-    (value: PlaybackModeSetting) => {
-      setMode(value);
+  const handleToggle = useCallback(
+    (on: boolean) => {
+      setMode(on ? 'crossfade' : 'gapless');
       void applyPlaybackMode();
     },
     [setMode],
@@ -60,17 +45,19 @@ export function PlaybackModeCard() {
   );
 
   return (
-    <View style={settingsStyles.section}>
-      <SettingsSectionTitle>{t('playbackMode')}</SettingsSectionTitle>
-      <View style={[settingsStyles.card, { backgroundColor: colors.card }]}>
-        <DropdownRow
-          label={t('playbackModeLabel')}
-          value={mode}
-          options={modeOptions}
-          onChange={handleModeChange}
-          isLast={!isCrossfade}
-        />
-        {isCrossfade && (
+    <SettingsToggleCard
+      title={t('songTransitionTitle')}
+      toggles={[
+        {
+          key: 'crossfade',
+          label: t('crossfadeToggle'),
+          hint: t('crossfadeToggleHint'),
+          value: isCrossfade,
+          onChange: handleToggle,
+        },
+      ]}
+      footer={
+        isCrossfade ? (
           <DropdownRow
             label={t('crossfadeDuration')}
             value={durationMs}
@@ -78,8 +65,8 @@ export function PlaybackModeCard() {
             onChange={handleDurationChange}
             isLast
           />
-        )}
-      </View>
-    </View>
+        ) : null
+      }
+    />
   );
 }

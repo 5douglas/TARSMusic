@@ -1,16 +1,20 @@
 /**
- * The local profile picture: picked from the photo library, cropped square, and copied into
- * the app's documents so it survives the picker's cache being cleared. It stays on this
- * device; nothing is uploaded to the server.
+ * The profile picture: picked from the photo library, cropped square, shrunk and saved in the
+ * app's documents so it survives the picker's cache being cleared, then sent to the server
+ * (`profileSyncService`) so every device signed in to the account shows it.
  */
 import { File, Paths } from 'expo-file-system';
+import { resizeImageToFileAsync } from 'expo-image-resize';
 import * as ImagePicker from 'expo-image-picker';
 
 import i18n from '../i18n/i18n';
 import { processingOverlayStore } from '../store/processingOverlayStore';
 import { profileStore } from '../store/profileStore';
+import { AVATAR_PREFIX, pushProfileToServer } from './profileSyncService';
 
-const AVATAR_PREFIX = 'profile-avatar-';
+/** Big enough for any avatar on screen, small enough to travel in a playlist comment. */
+const AVATAR_SIZE = 384;
+const AVATAR_QUALITY = 0.8;
 
 function deleteOldAvatar(): void {
   const old = profileStore.getState().avatarUri;
@@ -35,9 +39,15 @@ export async function pickProfilePicture(): Promise<boolean> {
   try {
     // A fresh name per picture, so image caches never show the previous one.
     const target = new File(Paths.document, `${AVATAR_PREFIX}${Date.now()}.jpg`);
-    new File(result.assets[0].uri).copy(target);
+    try {
+      await resizeImageToFileAsync(result.assets[0].uri, target.uri, AVATAR_SIZE, AVATAR_QUALITY);
+    } catch {
+      // Not a decodable JPEG for the resizer: keep the picker's file as it is.
+      new File(result.assets[0].uri).copy(target);
+    }
     deleteOldAvatar();
     profileStore.getState().setAvatar(target.uri);
+    void pushProfileToServer();
     return true;
   } catch {
     processingOverlayStore.getState().showError(i18n.t('profilePhotoFailed'));
@@ -48,4 +58,5 @@ export async function pickProfilePicture(): Promise<boolean> {
 export function removeProfilePicture(): void {
   deleteOldAvatar();
   profileStore.getState().setAvatar(null);
+  void pushProfileToServer();
 }
