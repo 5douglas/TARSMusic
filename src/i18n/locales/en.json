@@ -1320,9 +1320,6 @@
   "lyricsTranslate": "Translate",
   "lyricsShowOriginal": "Original",
   "lyricsTranslationUnavailable": "No translation",
-  "lockScreenLyrics": "Lyrics on the Lock Screen",
-  "lockScreenLyricsHint": "Shows the line being sung on the lock screen and in the TARSMusic home-screen widget while music plays. Needs synced lyrics.",
-  "lockScreenLyricsToggle": "Show lyrics",
   "autoplay": "Autoplay",
   "autoplaySimilar": "Keep playing similar songs",
   "autoplaySimilarHint": "When your queue is about to end, add similar songs from your library so the music never stops. Off while repeat is on or in offline mode.",
@@ -1376,5 +1373,12 @@
   "wrappedPeakHour": "You listen the most around {{hour}}",
   "wrappedBusiestDay_one": "Busiest day: {{day}} ({{formatted}} play)",
   "wrappedBusiestDay_other": "Busiest day: {{day}} ({{formatted}} plays)",
-  "wrappedFootnote": "Based on the plays recorded by TARSMusic (kept in the server backup)."
+  "wrappedFootnote": "Based on the plays recorded by TARSMusic (kept in the server backup).",
+  "tarsmusicFeatures": "TARSMusic features",
+  "tarsmusicFeaturesSubtitle": "Player lyrics, transitions, normalization, autoplay, notifications",
+  "tarsmusicPlayerSection": "Player",
+  "coverLyricLineToggle": "Lyrics line under the cover",
+  "coverLyricLineHint": "Shows the line being sung between the cover and the controls. The space stays reserved, so the buttons never move.",
+  "widgetLyricsToggle": "Lyrics in the widget",
+  "widgetLyricsHint": "Shows the line being sung in the TARSMusic home-screen widget. Needs synced lyrics."
 }

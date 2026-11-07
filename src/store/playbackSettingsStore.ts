@@ -182,8 +182,10 @@ export interface PlaybackSettingsState {
   /** ReplayGain loudness normalisation: off / track / album. */
   replayGainMode: ReplayGainModeSetting;
 
-  /** Android: the synced-lyrics line on the lock screen and in the home-screen widget. */
-  lockScreenLyrics: boolean;
+  /** Android: the synced-lyrics line in the home-screen widget. */
+  widgetLyrics: boolean;
+  /** The synced-lyrics line between the cover and the title in the player. */
+  coverLyricLine: boolean;
 
   setMaxBitRate: (bitRate: MaxBitRate) => void;
   setStreamFormat: (format: StreamFormat) => void;
@@ -205,7 +207,8 @@ export interface PlaybackSettingsState {
   setPlaybackMode: (mode: PlaybackModeSetting) => void;
   setCrossfadeDurationMs: (ms: CrossfadeDurationMs) => void;
   setReplayGainMode: (mode: ReplayGainModeSetting) => void;
-  setLockScreenLyrics: (enabled: boolean) => void;
+  setWidgetLyrics: (enabled: boolean) => void;
+  setCoverLyricLine: (enabled: boolean) => void;
 }
 
 const PERSIST_KEY = 'substreamer-playback-settings';
@@ -264,7 +267,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       playbackMode: 'crossfade',
       crossfadeDurationMs: 5000,
       replayGainMode: 'track',
-      lockScreenLyrics: true,
+      widgetLyrics: true,
+      coverLyricLine: true,
 
       setMaxBitRate: (maxBitRate) => set({ maxBitRate }),
       setStreamFormat: (streamFormat) => set({ streamFormat: normalizeFormat(streamFormat) }),
@@ -286,7 +290,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       setPlaybackMode: (playbackMode) => set({ playbackMode }),
       setCrossfadeDurationMs: (crossfadeDurationMs) => set({ crossfadeDurationMs }),
       setReplayGainMode: (replayGainMode) => set({ replayGainMode }),
-      setLockScreenLyrics: (lockScreenLyrics) => set({ lockScreenLyrics }),
+      setWidgetLyrics: (widgetLyrics) => set({ widgetLyrics }),
+      setCoverLyricLine: (coverLyricLine) => set({ coverLyricLine }),
     }),
     {
       name: PERSIST_KEY,
@@ -314,7 +319,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
         playbackMode: state.playbackMode,
         crossfadeDurationMs: state.crossfadeDurationMs,
         replayGainMode: state.replayGainMode,
-        lockScreenLyrics: state.lockScreenLyrics,
+        widgetLyrics: state.widgetLyrics,
+        coverLyricLine: state.coverLyricLine,
       }),
     }
   )
