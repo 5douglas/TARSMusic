@@ -1,0 +1,65 @@
+{
+  "name": "tarsmusic-desktop",
+  "productName": "TARSMusic",
+  "version": "0.0.0",
+  "description": "TARSMusic para Windows",
+  "author": "douglas",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "build:web": "node scripts/build-web.js",
+    "start": "electron .",
+    "dist": "node scripts/build-web.js && electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.douglas.tarsmusic",
+    "productName": "TARSMusic",
+    "artifactName": "TARSMusic-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "web/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TARSMusic",
+      "runAfterFinish": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "5douglas",
+        "repo": "TARSMusic",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
