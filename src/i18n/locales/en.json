@@ -1380,5 +1380,21 @@
   "coverLyricLineToggle": "Lyrics line under the cover",
   "coverLyricLineHint": "Shows the line being sung between the cover and the controls. The space stays reserved, so the buttons never move.",
   "widgetLyricsToggle": "Lyrics in the widget",
-  "widgetLyricsHint": "Shows the line being sung in the TARSMusic home-screen widget. Needs synced lyrics."
+  "widgetLyricsHint": "Shows the line being sung in the TARSMusic home-screen widget. Needs synced lyrics.",
+  "serverBackupTitle": "Backup on your server",
+  "serverAutoBackup": "Back up automatically",
+  "serverLastBackup": "Last backup on the server",
+  "serverBackupWhere": "Saved on",
+  "serverBackUpNow": "Back Up Now",
+  "serverRestore": "Restore",
+  "localBackupsLink": "Local copies on this phone",
+  "serverBackupDescription": "Your listening history and stats, bookmarks, MBID corrections and scrobble exclusions are saved on your music server, in the private playlist \"{{playlist}}\". It is updated every 6 hours and when you tap Back Up Now, and merged back automatically when you sign in on a new phone. Do not delete that playlist.",
+  "serverBackupDone": "Backed up",
+  "serverBackupDoneMessage": "Your data is saved on the server.",
+  "serverBackupFailedMessage": "Could not reach the server. Check the connection and try again.",
+  "serverRestoreDone": "Restored",
+  "serverRestoreDoneMessage": "Merged from the server: {{plays}} plays and {{bookmarks}} bookmarks were new on this phone.",
+  "serverRestoreNothing": "Nothing to restore",
+  "serverRestoreNothingMessage": "There is no backup on the server yet.",
+  "serverRestoreFailed": "Restore Failed"
 }
