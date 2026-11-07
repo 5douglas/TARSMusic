@@ -181,6 +181,31 @@ export function resetMidSessionAcceptanceForTests(): void {
   userAcceptedThisSession = false;
 }
 
+/**
+ * A first login on a server that already uses the new ids has nothing to re-key: no
+ * downloads, no listening history, no completed sync. Everything it will ever hold comes
+ * from this server, so the pass is settled as complete instead of offered. Without this
+ * a fresh install refused its first sync until the app was restarted (the splash then ran
+ * the pass on the empty library).
+ *
+ * Only for a server that answered and needs the pass: on an unconfirmed or pre-0.64
+ * server the marker must stay open so a later upgrade still re-keys.
+ */
+export async function settleReidIfFreshInstall(): Promise<boolean> {
+  if (!hasServerAnswered() || reidVerdict() === 'skip') return false;
+  if (syncStatusStore.getState().librarySyncComplete) return false;
+  const db = getDb();
+  if (!db) return false;
+  for (const table of ['cached_items', 'download_queue', 'scrobble_events', 'pending_scrobble_events', 'songs']) {
+    const row = await db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table};`);
+    if ((row?.n ?? 0) > 0) return false;
+  }
+  setReidState('complete');
+  logLibrarySync('[reid] fresh install on a re-keyed server — nothing to re-key, marked complete');
+  appendReidLog('complete', ['fresh install: no downloads, history or synced library to re-key']);
+  return true;
+}
+
 /** The user said yes to the mid-session offer. */
 export function acceptMidSessionReid(): Promise<void> {
   userAcceptedThisSession = true;

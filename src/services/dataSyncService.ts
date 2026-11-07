@@ -24,7 +24,7 @@ import { downloadedMetadataRefreshStore } from '../store/downloadedMetadataRefre
 import { refreshDownloadedMetadata } from './downloadedMetadataService';
 import { logLibrarySync } from './librarySyncLogger';
 import { probeServerVersion } from './navidromeReid/reidProbe';
-import { runNavidromeReidIfNeeded } from './navidromeReid/runNavidromeReid';
+import { runNavidromeReidIfNeeded, settleReidIfFreshInstall } from './navidromeReid/runNavidromeReid';
 import { shouldBlockLibraryWrites } from './navidromeReid/reidMarker';
 import { serverInfoStore } from '../store/serverInfoStore';
 import { syncStatusStore, type SyncScope } from '../store/syncStatusStore';
@@ -265,8 +265,17 @@ async function resumeFlowBody(): Promise<void> {
   // path that can discover an upgraded server mid-session. Awaiting rather than
   // early-returning on a blocked verdict matters: nothing re-triggers this flow, so a
   // bare `return` while the answer was still pending would cost the session its sync.
+  // On a first login the server's type is not known yet (the login screen does not wait
+  // for it), and the probe skips any server it cannot tell is Navidrome. It then settled
+  // without asking, the sync below was refused once the type arrived, and the library
+  // stayed empty until the next launch. Learn the type first.
+  const serverInfoFetched = !serverInfoStore.getState().serverType;
+  if (serverInfoFetched) {
+    const info = await fetchServerInfo();
+    if (info) serverInfoStore.getState().setServerInfo(info);
+  }
   await (probeServerVersion() ?? Promise.resolve());
-  if (shouldBlockLibraryWrites()) {
+  if (shouldBlockLibraryWrites() && !(await settleReidIfFreshInstall())) {
     // The ids this fan-out would write do not match the ones the rest of the install
     // holds. Writing both is what doubles the library.
     //
@@ -280,9 +289,11 @@ async function resumeFlowBody(): Promise<void> {
     return;
   }
 
-  fetchServerInfo().then((info) => {
-    if (info) serverInfoStore.getState().setServerInfo(info);
-  });
+  if (!serverInfoFetched) {
+    fetchServerInfo().then((info) => {
+      if (info) serverInfoStore.getState().setServerInfo(info);
+    });
+  }
   fetchScanStatus();
   // Eager home-list refresh, gated on offline/reachability via refreshAllIfDue(0)
   // so a doomed fetch never fires against an unreachable server. This is the only

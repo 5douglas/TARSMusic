@@ -116,20 +116,49 @@ function createWindow() {
   }
 }
 
-function startAutoUpdate() {
-  if (!app.isPackaged) return;
-  try {
-    const { autoUpdater } = require('electron-updater');
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.on('error', (err) => console.warn('[update]', err?.message ?? err));
-    autoUpdater.checkForUpdatesAndNotify().catch(() => {});
-    // Check again every 6 hours while the app stays open.
-    setInterval(() => autoUpdater.checkForUpdatesAndNotify().catch(() => {}), 6 * 60 * 60 * 1000);
-  } catch (err) {
-    console.warn('[update] unavailable', err?.message ?? err);
+let autoUpdater = null;
+function updater() {
+  if (!app.isPackaged) return null;
+  if (!autoUpdater) {
+    try {
+      ({ autoUpdater } = require('electron-updater'));
+      // Downloads in the background as soon as an update is found and installs it
+      // when the app closes; "Check for updates" in the app can install it now.
+      autoUpdater.autoDownload = true;
+      autoUpdater.autoInstallOnAppQuit = true;
+      autoUpdater.on('error', (err) => console.warn('[update]', err?.message ?? err));
+    } catch (err) {
+      console.warn('[update] unavailable', err?.message ?? err);
+      return null;
+    }
   }
+  return autoUpdater;
 }
+
+function startAutoUpdate() {
+  const u = updater();
+  if (!u) return;
+  const check = () => u.checkForUpdates().catch(() => {});
+  check();
+  // Check again every 6 hours while the app stays open.
+  setInterval(check, 6 * 60 * 60 * 1000);
+}
+
+ipcMain.handle('tars:update-check', async () => {
+  const u = updater();
+  if (!u) return null;
+  const result = await u.checkForUpdates();
+  if (!result || !result.isUpdateAvailable) return null;
+  return { version: result.updateInfo.version };
+});
+
+ipcMain.handle('tars:update-install', async () => {
+  const u = updater();
+  if (!u) throw new Error('Updates are only available in the installed app');
+  await u.downloadUpdate();
+  // Silent install, then start the app again.
+  setImmediate(() => u.quitAndInstall(true, true));
+});
 
 app.on('second-instance', () => {
   if (!mainWindow) return;

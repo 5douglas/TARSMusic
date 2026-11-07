@@ -64,7 +64,7 @@ export function ProfileMenu() {
     { key: 'wrapped', labelKey: 'wrapped', icon: 'sparkles-outline', action: () => go('/wrapped') },
     { key: 'recents', labelKey: 'profileRecents', icon: 'time-outline', action: () => go('/scrobble-browser') },
     { key: 'downloads', labelKey: 'deemixDownloads', icon: 'cloud-download-outline', action: () => go('/discover-downloads') },
-    ...(Platform.OS === 'android'
+    ...((Platform.OS === 'android' || Platform.OS === 'web')
       ? [{
           key: 'updates',
           labelKey: 'appUpdateCheck',
