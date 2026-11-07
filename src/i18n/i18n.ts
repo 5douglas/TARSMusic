@@ -18,29 +18,26 @@ import '@formatjs/intl-locale/polyfill-force.js';
 import '@formatjs/intl-pluralrules/polyfill-force.js';
 import '@formatjs/intl-pluralrules/locale-data/en.js';
 import '@formatjs/intl-pluralrules/locale-data/fr.js';
-import '@formatjs/intl-pluralrules/locale-data/de.js';
 import '@formatjs/intl-pluralrules/locale-data/es.js';
 import '@formatjs/intl-pluralrules/locale-data/it.js';
-import '@formatjs/intl-pluralrules/locale-data/ru.js';
+import '@formatjs/intl-pluralrules/locale-data/pt.js';
 import '@formatjs/intl-pluralrules/locale-data/zh.js';
 
 import '@formatjs/intl-numberformat/polyfill-force.js';
 import '@formatjs/intl-numberformat/locale-data/en.js';
 import '@formatjs/intl-numberformat/locale-data/fr.js';
-import '@formatjs/intl-numberformat/locale-data/de.js';
 import '@formatjs/intl-numberformat/locale-data/es.js';
 import '@formatjs/intl-numberformat/locale-data/it.js';
-import '@formatjs/intl-numberformat/locale-data/ru.js';
+import '@formatjs/intl-numberformat/locale-data/pt.js';
 import '@formatjs/intl-numberformat/locale-data/zh.js';
 
 import '@formatjs/intl-datetimeformat/polyfill-force.js';
 import '@formatjs/intl-datetimeformat/add-all-tz.js';
 import '@formatjs/intl-datetimeformat/locale-data/en.js';
 import '@formatjs/intl-datetimeformat/locale-data/fr.js';
-import '@formatjs/intl-datetimeformat/locale-data/de.js';
 import '@formatjs/intl-datetimeformat/locale-data/es.js';
 import '@formatjs/intl-datetimeformat/locale-data/it.js';
-import '@formatjs/intl-datetimeformat/locale-data/ru.js';
+import '@formatjs/intl-datetimeformat/locale-data/pt.js';
 import '@formatjs/intl-datetimeformat/locale-data/zh.js';
 
 import i18next from 'i18next';
@@ -68,13 +65,10 @@ try {
 // Locale JSON imports — add new imports here when enabling a language
 import en from './locales/en.json';
 import fr from './locales/fr.json';
-import de from './locales/de.json';
 import es from './locales/es.json';
 import it from './locales/it.json';
-import ru from './locales/ru.json';
+import pt from './locales/pt.json';
 import zhHans from './locales/zh-Hans.json';
-import zhHant from './locales/zh-Hant.json';
-import ja from './locales/ja.json';
 
 import { SUPPORTED_LOCALE_CODES } from './languages';
 import { localeStore } from '../store/localeStore';
@@ -83,55 +77,38 @@ import { localeStore } from '../store/localeStore';
 const localeResources: Record<string, { translation: Record<string, string> }> = {
   en: { translation: en },
   fr: { translation: fr },
-  de: { translation: de },
   es: { translation: es },
   it: { translation: it },
-  ru: { translation: ru },
+  pt: { translation: pt },
   'zh-Hans': { translation: zhHans },
-  'zh-Hant': { translation: zhHant },
-  ja: { translation: ja },
   // Add new entries here when enabling a language
 };
 
-/** Regions that use Traditional Chinese by convention. */
-const ZH_HANT_REGIONS = new Set(['TW', 'HK', 'MO']);
-
 /**
- * Resolve a BCP-47 language tag (e.g. "zh-Hans-CN", "ru-RU", "en-US") to the
- * supported app locale code. Handles the Simplified vs Traditional Chinese
- * split explicitly; other languages fall through to their 2-letter code.
+ * Resolve a BCP-47 language tag (e.g. "pt-BR", "zh-Hant-TW", "en-US") to the
+ * app locale code. Every Chinese variant maps to zh-Hans (Mandarin, Simplified
+ * script), the only Chinese translation shipped; other languages fall through
+ * to their 2-letter code.
  */
 export function resolveAppLocale(tag: string | undefined | null): string | null {
   if (!tag) return null;
-  const parts = tag.split('-');
-  const language = parts[0]?.toLowerCase();
+  const language = tag.split(/[-_]/)[0]?.toLowerCase();
   if (!language) return null;
-
-  if (language === 'zh') {
-    // Inspect subtags after the language code for script / region hints.
-    const subtags = parts.slice(1);
-    const script = subtags.find((p) => p.length === 4);
-    const region = subtags.find((p) => p.length === 2)?.toUpperCase();
-    if (script) {
-      if (script === 'Hant') return 'zh-Hant';
-      if (script === 'Hans') return 'zh-Hans';
-    }
-    if (region && ZH_HANT_REGIONS.has(region)) return 'zh-Hant';
-    return 'zh-Hans';
-  }
-
+  if (language === 'zh') return 'zh-Hans';
   return language;
 }
 
-function getDeviceLocale(): string {
+/** The supported app locale for the device language, or "en" when unsupported. */
+export function getDeviceLocale(): string {
   try {
     const locales = getLocales();
     const first = locales[0];
     if (!first) return 'en';
-    // Prefer the full BCP-47 tag so we can distinguish zh-Hans vs zh-Hant.
-    // Fall back to languageCode for older expo-localization runtimes.
+    // Prefer the full BCP-47 tag; fall back to languageCode for older
+    // expo-localization runtimes.
     const tag = first.languageTag ?? first.languageCode ?? null;
-    return resolveAppLocale(tag) ?? 'en';
+    const resolved = resolveAppLocale(tag);
+    return resolved && SUPPORTED_LOCALE_CODES.includes(resolved) ? resolved : 'en';
   } catch {
     return 'en';
   }
@@ -140,9 +117,7 @@ function getDeviceLocale(): string {
 function getInitialLocale(): string {
   const stored = localeStore.getState().locale;
   if (stored && SUPPORTED_LOCALE_CODES.includes(stored)) return stored;
-  const device = getDeviceLocale();
-  if (SUPPORTED_LOCALE_CODES.includes(device)) return device;
-  return 'en';
+  return getDeviceLocale();
 }
 
 i18next

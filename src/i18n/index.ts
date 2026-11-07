@@ -1,1 +1,1 @@
-export { default as i18n } from './i18n';
+export { default as i18n, getDeviceLocale } from './i18n';

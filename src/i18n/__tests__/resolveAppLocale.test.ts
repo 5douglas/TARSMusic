@@ -7,6 +7,7 @@ jest.mock('@formatjs/intl-pluralrules/locale-data/fr.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/de.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/es.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/it.js', () => {});
+jest.mock('@formatjs/intl-pluralrules/locale-data/pt.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/ru.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/zh.js', () => {});
 jest.mock('@formatjs/intl-numberformat/polyfill-force.js', () => {});
@@ -15,6 +16,7 @@ jest.mock('@formatjs/intl-numberformat/locale-data/fr.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/de.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/es.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/it.js', () => {});
+jest.mock('@formatjs/intl-numberformat/locale-data/pt.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/ru.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/zh.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/polyfill-force.js', () => {});
@@ -24,6 +26,7 @@ jest.mock('@formatjs/intl-datetimeformat/locale-data/fr.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/de.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/es.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/it.js', () => {});
+jest.mock('@formatjs/intl-datetimeformat/locale-data/pt.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/ru.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/zh.js', () => {});
 jest.mock('../../store/persistence/kvStorage', () => require('../../store/persistence/__mocks__/kvStorage'));
@@ -46,6 +49,8 @@ describe('resolveAppLocale', () => {
     expect(resolveAppLocale('de-AT')).toBe('de');
     expect(resolveAppLocale('ru-RU')).toBe('ru');
     expect(resolveAppLocale('ja-JP')).toBe('ja');
+    expect(resolveAppLocale('pt-BR')).toBe('pt');
+    expect(resolveAppLocale('pt_PT')).toBe('pt');
   });
 
   it('returns the 2-letter code for bare language tags', () => {
@@ -65,16 +70,11 @@ describe('resolveAppLocale', () => {
       expect(resolveAppLocale('zh-Hans-SG')).toBe('zh-Hans');
     });
 
-    it('routes Hant script to zh-Hant', () => {
-      expect(resolveAppLocale('zh-Hant')).toBe('zh-Hant');
-      expect(resolveAppLocale('zh-Hant-TW')).toBe('zh-Hant');
-      expect(resolveAppLocale('zh-Hant-HK')).toBe('zh-Hant');
-    });
-
-    it('routes TW/HK/MO regions to zh-Hant when no script is present', () => {
-      expect(resolveAppLocale('zh-TW')).toBe('zh-Hant');
-      expect(resolveAppLocale('zh-HK')).toBe('zh-Hant');
-      expect(resolveAppLocale('zh-MO')).toBe('zh-Hant');
+    it('routes Hant script and TW/HK/MO regions to zh-Hans (only Mandarin bundle)', () => {
+      expect(resolveAppLocale('zh-Hant')).toBe('zh-Hans');
+      expect(resolveAppLocale('zh-Hant-TW')).toBe('zh-Hans');
+      expect(resolveAppLocale('zh-TW')).toBe('zh-Hans');
+      expect(resolveAppLocale('zh-HK')).toBe('zh-Hans');
     });
 
     it('defaults bare zh to zh-Hans', () => {
