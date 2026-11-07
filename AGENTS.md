@@ -4,9 +4,9 @@ Drop-in operating instructions for coding agents. Read this file before every ta
 
 **Working code only. Finish the job. Plausibility is not correctness.**
 
-This file follows the [AGENTS.md](https://agents.md) open standard (Linux Foundation / Agentic AI Foundation). Claude Code, Codex, Cursor, Windsurf, Copilot, Aider, Devin and Amp read it natively.
+This file follows the [AGENTS.md](https://agents.md) open standard (Linux Foundation / Agentic AI Foundation). The common AI coding tools read it natively.
 
-**This is the only rules file.** `CLAUDE.md`, `.cursor/rules/`, `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md` were all retired on 2026-08-06 — every tool reads AGENTS.md now. Do not reintroduce a per-tool copy: two rules files drift, and the stale one is always the one that gets read. (The retired Copilot files had gone stale exactly that way — none of them knew the data model existed.)
+**This is the only rules file.** `.cursor/rules/`, `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md` were all retired on 2026-08-06 — every tool reads AGENTS.md now. Do not reintroduce a per-tool copy: two rules files drift, and the stale one is always the one that gets read. (The retired Copilot files had gone stale exactly that way — none of them knew the data model existed.)
 
 ---
 
@@ -29,7 +29,7 @@ These rules override everything else in this file when in conflict:
 **Goal: understand the problem and the codebase before producing a diff.**
 
 - State your plan in one or two sentences before editing. For anything non-trivial, produce a numbered list of steps with a verification check for each.
-- Read the files you will touch. Read the files that call the files you will touch. Claude Code: use subagents for exploration so the main context stays clean.
+- Read the files you will touch. Read the files that call the files you will touch.
 - Match existing patterns in the codebase. If the project uses pattern X, use pattern X, even if you'd do it differently in a greenfield repo.
 - Surface assumptions out loud: "I'm assuming you want X, Y, Z. If that's wrong, say so." Do not bury assumptions inside the implementation.
 - If two approaches exist, present both with tradeoffs. Do not pick one silently. Exception: trivial tasks (typo, rename, log line) where the diff fits in one sentence.
@@ -137,8 +137,8 @@ For every task:
 
 - Context is the constraint. Long sessions with accumulated failed attempts perform worse than fresh sessions with a better prompt.
 - After two failed corrections on the same issue, stop. Summarize what you learned and ask the user to reset the session with a sharper prompt.
-- Use subagents (Claude Code: "use subagents to investigate X") for exploration tasks that would otherwise pollute the main context with dozens of file reads.
-- When committing, write descriptive commit messages (subject under 72 chars, body explains the why). No "update file" or "fix bug" commits. No "Co-Authored-By: Claude" attribution unless the project explicitly wants it.
+- Use subagents for exploration tasks that would otherwise pollute the main context with dozens of file reads.
+- When committing, write descriptive commit messages (subject under 72 chars, body explains the why). No "update file" or "fix bug" commits. No AI co-author or "Generated with" attribution lines.
 
 ---
 
