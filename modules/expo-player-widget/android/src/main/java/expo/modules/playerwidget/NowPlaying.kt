@@ -16,8 +16,7 @@ import java.net.URL
 import java.util.concurrent.Executors
 
 /**
- * Process-wide now-playing state that feeds the home-screen widget and the lock-screen
- * lyrics notification. JS pushes the track, the synced lyrics and position anchors; the
+ * Process-wide now-playing state that feeds the home-screen widget. JS pushes the track, the synced lyrics and position anchors; the
  * line being sung is tracked here on the main looper, because JS timers stop while the
  * app is in the background and the player only reports its position every 10 s there.
  *
@@ -69,11 +68,11 @@ internal object NowPlaying {
   val currentLine: String?
     get() = lines.getOrNull(activeLine)?.takeIf { it.isNotBlank() }
 
-  val nextLine: String?
-    get() = lines.drop(activeLine + 1).firstOrNull { it.isNotBlank() }
-
   fun init(context: Context) {
-    if (appContext == null) appContext = context.applicationContext
+    if (appContext == null) {
+      appContext = context.applicationContext
+      LyricsNotifier.removeLegacyChannel(context.applicationContext)
+    }
   }
 
   /** Last track from disk, for a widget drawn by a fresh process before JS has pushed anything. */
@@ -203,14 +202,12 @@ internal object NowPlaying {
   private fun refreshLyricSurfaces() {
     val context = appContext ?: return
     PlayerWidgetProvider.refreshLyric(context)
-    LyricsNotifier.update(context)
   }
 
   private fun refreshAll() {
     val context = appContext ?: return
     PlayerWidgetProvider.refreshAll(context)
     tick()
-    LyricsNotifier.update(context)
   }
 
   /* ---------------------------------------------------------------- */

@@ -912,6 +912,10 @@ export default function RootLayout() {
           options={{ ...blurHeaderOptions, title: i18n.t('tunedIn'), headerBackTitle: i18n.t('back') }}
         />
         <Stack.Screen
+          name="settings-tarsmusic"
+          options={{ ...blurHeaderOptions, title: i18n.t('tarsmusicFeatures'), headerBackTitle: i18n.t('settings') }}
+        />
+        <Stack.Screen
           name="settings-playback"
           options={{ ...blurHeaderOptions, title: i18n.t('soundPlayback'), headerBackTitle: i18n.t('settings') }}
         />

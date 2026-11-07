@@ -6,6 +6,4 @@
   <string name="tarsmusic_widget_pause">Pausar</string>
   <string name="tarsmusic_widget_next">Próxima</string>
   <string name="tarsmusic_widget_previous">Anterior</string>
-  <string name="tarsmusic_lyrics_channel">Letras na tela de bloqueio</string>
-  <string name="tarsmusic_lyrics_channel_description">A linha que está sendo cantada, enquanto a música toca</string>
 </resources>

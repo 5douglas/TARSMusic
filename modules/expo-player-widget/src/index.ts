@@ -11,12 +11,12 @@ export interface ExpoPlayerWidgetModule {
   setLyrics(startsMs: number[], lines: string[]): void;
   /** A position report. `advancing`: the clock runs (playing). `playing`: the button shows pause. */
   syncPosition(positionMs: number, advancing: boolean, playing: boolean): void;
-  /** Lyrics on the lock screen and in the widget. */
+  /** The lyrics line in the widget. */
   setLyricsEnabled(enabled: boolean): void;
 }
 
 /**
- * The home-screen widget + lock-screen lyrics bridge, or null in a build that predates it
+ * The home-screen widget bridge, or null in a build that predates it
  * (an older APK running a newer bundle) and on iOS.
  */
 export const PlayerWidget = requireOptionalNativeModule<ExpoPlayerWidgetModule>('ExpoPlayerWidget');

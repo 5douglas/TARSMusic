@@ -87,16 +87,16 @@ export async function fetchServerBackup(): Promise<ServerBackupBundle | null> {
 
 /**
  * Merges the server backup into this phone when it is one this phone has not merged or
- * written yet. Marks the server as checked either way (even when it holds nothing), which
+ * written yet (`force`: merge it even then, for the user's own "restore from server"). Marks the server as checked either way (even when it holds nothing), which
  * is what allows `uploadBackupToServer` to overwrite it. Throws on network errors, leaving
  * the server unchecked so nothing is overwritten.
  */
-export async function restoreFromServerIfNewer(): Promise<RestoreCounts | null> {
+export async function restoreFromServerIfNewer(force = false): Promise<RestoreCounts | null> {
   const identity = currentIdentityKey();
   if (!identity || !getApi()) return null;
   const bundle = await fetchServerBackup();
   const store = backupStore.getState();
-  if (!bundle || store.serverSyncedAt[identity] === bundle.createdAt) {
+  if (!bundle || (!force && store.serverSyncedAt[identity] === bundle.createdAt)) {
     store.setServerChecked(identity, true);
     return null;
   }
