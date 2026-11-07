@@ -6,22 +6,18 @@ import { useTranslation } from 'react-i18next';
 
 import { BottomChrome } from '../components/BottomChrome';
 import { GradientBackground } from '../components/GradientBackground';
-import { AutoplayCard } from '../components/settings/AutoplayCard';
 import { BackgroundPlaybackCard } from '../components/settings/BackgroundPlaybackCard';
 import { DownloadingCard } from '../components/settings/DownloadingCard';
 import { EqualizerCard } from '../components/settings/EqualizerCard';
-import { LockScreenLyricsCard } from '../components/settings/LockScreenLyricsCard';
 import { LookaheadCacheCard } from '../components/settings/LookaheadCacheCard';
-import { PlaybackModeCard } from '../components/settings/PlaybackModeCard';
 import { PlayerControlsCard } from '../components/settings/PlayerControlsCard';
 import { RemoteControlsCard } from '../components/settings/RemoteControlsCard';
-import { ReplayGainCard } from '../components/settings/ReplayGainCard';
 import { SkipIntervalsCard } from '../components/settings/SkipIntervalsCard';
 import { StreamingCard } from '../components/settings/StreamingCard';
 import { StreamFormatSheet } from '../components/StreamFormatSheet';
 import { useTheme } from '../hooks/useTheme';
 import { useThemedAlert } from '../hooks/useThemedAlert';
-import { applyLookaheadCacheConfig, applyPlaybackMode, applyReplayGain, updateRemoteCapabilities } from '../services/playerService';
+import { applyLookaheadCacheConfig, updateRemoteCapabilities } from '../services/playerService';
 import { playbackSettingsStore } from '../store/playbackSettingsStore';
 import { settingsStyles } from '../styles/settingsStyles';
 
@@ -46,10 +42,6 @@ export function SettingsPlaybackScreen() {
   const remoteControlMode = playbackSettingsStore((s) => s.remoteControlMode);
   const lookaheadEnabled = playbackSettingsStore((s) => s.lookaheadEnabled);
   const lookaheadCount = playbackSettingsStore((s) => s.lookaheadCount);
-  const playbackMode = playbackSettingsStore((s) => s.playbackMode);
-  const crossfadeDurationMs = playbackSettingsStore((s) => s.crossfadeDurationMs);
-  const replayGainMode = playbackSettingsStore((s) => s.replayGainMode);
-  const lockScreenLyrics = playbackSettingsStore((s) => s.lockScreenLyrics);
 
   const isDefault =
     maxBitRate === null &&
@@ -63,11 +55,7 @@ export function SettingsPlaybackScreen() {
     skipForwardInterval === 30 &&
     remoteControlMode === 'skip-track' &&
     lookaheadEnabled &&
-    lookaheadCount === 3 &&
-    playbackMode === 'crossfade' &&
-    crossfadeDurationMs === 5000 &&
-    replayGainMode === 'track' &&
-    lockScreenLyrics;
+    lookaheadCount === 3;
 
   const handleResetDefaults = useCallback(() => {
     confirm({
@@ -89,14 +77,8 @@ export function SettingsPlaybackScreen() {
         s.setRemoteControlMode('skip-track');
         s.setLookaheadEnabled(true);
         s.setLookaheadCount(3);
-        s.setPlaybackMode('crossfade');
-        s.setCrossfadeDurationMs(5000);
-        s.setReplayGainMode('track');
-        s.setLockScreenLyrics(true);
         updateRemoteCapabilities();
         void applyLookaheadCacheConfig();
-        void applyPlaybackMode();
-        void applyReplayGain();
       },
     });
   }, [confirm, t]);
@@ -112,14 +94,10 @@ export function SettingsPlaybackScreen() {
           <StreamingCard />
           <DownloadingCard />
           <EqualizerCard />
-          <ReplayGainCard />
-          <PlaybackModeCard />
           <LookaheadCacheCard />
-          <AutoplayCard />
           <PlayerControlsCard />
           <SkipIntervalsCard />
           <RemoteControlsCard />
-          <LockScreenLyricsCard />
           {/* Battery-optimization exemption — affects background playback, so it
               lives here under Sound & Playback (Android-only; renders null on iOS). */}
           <BackgroundPlaybackCard />

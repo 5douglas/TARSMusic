@@ -1,13 +1,13 @@
 /**
- * Feeds the Android home-screen widget and the lock-screen lyrics notification
- * (modules/expo-player-widget) from the player and lyrics stores.
+ * Feeds the Android home-screen widget (modules/expo-player-widget) from the player
+ * and lyrics stores.
  *
  * JS only sends facts: the track, its synced lyrics, and position reports. The native
  * side keeps the clock and picks the line being sung, because JS timers stop while the
  * app is in the background and the player reports its position only every 10 s there.
  *
  * Installed from `initPlayer()`, so it runs on the UI boot and on a headless
- * (Android Auto / lock-screen) start alike. No-op on iOS and on an APK without the module.
+ * (Android Auto / media-button) start alike. No-op on iOS and on an APK without the module.
  */
 import { Platform } from 'react-native';
 import { PlayerWidget, type ExpoPlayerWidgetModule } from 'expo-player-widget';
@@ -58,7 +58,7 @@ async function pushArtwork(native: ExpoPlayerWidgetModule, track: Child): Promis
 }
 
 async function pushLyrics(native: ExpoPlayerWidgetModule, track: Child): Promise<void> {
-  if (!playbackSettingsStore.getState().lockScreenLyrics) return;
+  if (!playbackSettingsStore.getState().widgetLyrics) return;
   const lyrics = await lyricsStore
     .getState()
     .fetchLyrics(track.id, track.artist ?? undefined, track.title ?? undefined)
@@ -85,7 +85,7 @@ export function installNowPlayingSurfaces(): void {
   installed = true;
   const native = PlayerWidget;
 
-  native.setLyricsEnabled(playbackSettingsStore.getState().lockScreenLyrics);
+  native.setLyricsEnabled(playbackSettingsStore.getState().widgetLyrics);
   const current = playerStore.getState().currentTrack;
   if (current) pushTrack(native, current);
 
@@ -98,10 +98,10 @@ export function installNowPlayingSurfaces(): void {
       }
     }),
     playbackSettingsStore.subscribe((s, prev) => {
-      if (s.lockScreenLyrics === prev.lockScreenLyrics) return;
-      native.setLyricsEnabled(s.lockScreenLyrics);
+      if (s.widgetLyrics === prev.widgetLyrics) return;
+      native.setLyricsEnabled(s.widgetLyrics);
       const track = playerStore.getState().currentTrack;
-      if (s.lockScreenLyrics && track) {
+      if (s.widgetLyrics && track) {
         void pushLyrics(native, track).then(() => pushPosition(native));
       }
     }),
