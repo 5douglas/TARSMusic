@@ -128,6 +128,26 @@ describe('DiscoverBrowseScreen', () => {
     });
   });
 
+  it('narrows the discography by release kind and downloads the missing ones', async () => {
+    mockParams = { kind: 'artist', id: '5' };
+    const single: DiscoverAlbum = { ...album, id: 10, title: 'Idiota', record_type: 'single', in_library: false, link: 'https://www.deezer.com/album/10' };
+    const ep: DiscoverAlbum = { ...album, id: 11, title: 'Lobos EP', record_type: 'ep', in_library: false, link: 'https://www.deezer.com/album/11' };
+    mockBrowse.mockResolvedValue({ ...artistPage, albums: [album, single, ep] });
+    mockQueueDownload.mockResolvedValue(true);
+    render(<DiscoverBrowseScreen />);
+    await waitFor(() => expect(screen.getByText('Discography')).toBeTruthy());
+    expect(screen.getByText('Download discography (2 releases)')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('Singles'));
+    expect(screen.queryByText('Lobos EP')).toBeNull();
+    expect(screen.getByText('Idiota')).toBeTruthy();
+    fireEvent.press(screen.getByText('Download 1 single'));
+    const confirm = themedAlertStore.getState().buttons.find((b) => b.text === 'Download');
+    await act(async () => confirm?.onPress?.());
+    expect(mockQueueDownload).toHaveBeenCalledTimes(1);
+    expect(mockQueueDownload).toHaveBeenCalledWith('https://www.deezer.com/album/10');
+  });
+
   it('shows an album with a whole-album download button', async () => {
     mockParams = { kind: 'album', id: '9' };
     mockBrowse.mockResolvedValue(albumPage);

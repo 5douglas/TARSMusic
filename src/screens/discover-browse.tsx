@@ -16,29 +16,81 @@ import { stopDiscoverPreview } from '../services/discoverPreviewService';
 import {
   fetchDiscoverBrowse,
   fetchDiscoverPlaylist,
+  queueDiscoverDownload,
   type DiscoverAlbum,
   type DiscoverBrowse,
   type DiscoverItem,
 } from '../services/discoverService';
 import { discoverPreviewStore } from '../store/discoverPreviewStore';
+import { newMusicAlertsStore } from '../store/newMusicAlertsStore';
+import { playbackToastStore } from '../store/playbackToastStore';
+import { themedAlertStore } from '../store/themedAlertStore';
+
+/**
+ * Queues every release one after another (deemix takes one link per call) and says how
+ * many made it. Each queued release is remembered so the app can announce its arrival.
+ */
+export async function downloadReleases(releases: DiscoverAlbum[]): Promise<{ queued: number; failed: number }> {
+  let queued = 0;
+  let failed = 0;
+  for (const album of releases) {
+    // Sequential on purpose: a burst of parallel requests would hammer deemix.
+    // eslint-disable-next-line no-await-in-loop
+    const ok = await queueDiscoverDownload(album.link);
+    if (ok) {
+      queued += 1;
+      newMusicAlertsStore.getState().addRequest({ album: album.title, artist: album.artist, title: album.title, wholeAlbum: true });
+    } else failed += 1;
+  }
+  return { queued, failed };
+}
 
 type Row =
   | { kind: 'section'; key: string; label: string }
+  | { kind: 'releaseChips'; key: string }
   | { kind: 'track'; key: string; item: DiscoverItem }
   | { kind: 'album'; key: string; item: DiscoverAlbum };
 
-function buildRows(data: DiscoverBrowse, t: (key: string) => string): Row[] {
+/** Release kinds an artist's discography can be narrowed to (Deezer's `record_type`). */
+export type ReleaseFilter = 'all' | 'album' | 'ep' | 'single';
+const RELEASE_FILTERS: Array<{ key: ReleaseFilter; labelKey: string }> = [
+  { key: 'all', labelKey: 'discoverFilterAll' },
+  { key: 'album', labelKey: 'discoverReleaseAlbums' },
+  { key: 'ep', labelKey: 'discoverReleaseEps' },
+  { key: 'single', labelKey: 'discoverReleaseSingles' },
+];
+
+/** Releases of the given kind; Deezer's compilations count as albums. */
+export function filterReleases(albums: DiscoverAlbum[], filter: ReleaseFilter): DiscoverAlbum[] {
+  if (filter === 'all') return albums;
+  return albums.filter((a) => {
+    const kind = a.record_type === 'compile' ? 'album' : a.record_type ?? 'album';
+    return kind === filter;
+  });
+}
+
+function buildRows(data: DiscoverBrowse, t: (key: string) => string, releaseFilter: ReleaseFilter): Row[] {
   const rows: Row[] = [];
   if (data.type === 'artist' && data.items.length > 0) {
     rows.push({ kind: 'section', key: 'top', label: t('discoverTopTracks') });
   }
   for (const item of data.items) rows.push({ kind: 'track', key: `t-${item.id}`, item });
   if (data.albums && data.albums.length > 0) {
-    rows.push({ kind: 'section', key: 'albums', label: t('albums') });
-    for (const item of data.albums) rows.push({ kind: 'album', key: `a-${item.id}`, item });
+    rows.push({ kind: 'section', key: 'albums', label: t('discoverDiscography') });
+    if (data.type === 'artist') rows.push({ kind: 'releaseChips', key: 'chips' });
+    for (const item of filterReleases(data.albums, releaseFilter)) {
+      rows.push({ kind: 'album', key: `a-${item.id}`, item });
+    }
   }
   return rows;
 }
+
+const DISCOGRAPHY_LABEL: Record<ReleaseFilter, string> = {
+  all: 'discoverDownloadDiscography',
+  album: 'discoverDownloadAllAlbums',
+  ep: 'discoverDownloadAllEps',
+  single: 'discoverDownloadAllSingles',
+};
 
 /** A Deezer album, artist (top tracks + discography), mix or chart playlist opened from Discover. */
 export function DiscoverBrowseScreen() {
@@ -53,6 +105,8 @@ export function DiscoverBrowseScreen() {
   const [data, setData] = useState<DiscoverBrowse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [releaseFilter, setReleaseFilter] = useState<ReleaseFilter>('all');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(
     async (refresh: boolean) => {
@@ -89,12 +143,64 @@ export function DiscoverBrowseScreen() {
     }
   }, [load]);
 
-  const rows = useMemo(() => (data ? buildRows(data, t) : []), [data, t]);
+  const rows = useMemo(() => (data ? buildRows(data, t, releaseFilter) : []), [data, t, releaseFilter]);
+
+  // The releases the discography button would fetch: the chosen kind, minus what the
+  // library already has.
+  const missingReleases = useMemo(
+    () => (data?.albums ? filterReleases(data.albums, releaseFilter).filter((a) => !a.in_library) : []),
+    [data, releaseFilter],
+  );
+
+  const handleDiscographyDownload = useCallback(() => {
+    if (missingReleases.length === 0 || bulkBusy) return;
+    themedAlertStore.getState().show(
+      t('discoverDownloadDiscographyTitle'),
+      t('discoverDownloadDiscographyBody', { count: missingReleases.length, artist: data?.title ?? '' }),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('discoverDownload'),
+          onPress: () => {
+            setBulkBusy(true);
+            void downloadReleases(missingReleases).then(({ queued, failed }) => {
+              setBulkBusy(false);
+              if (failed === 0) playbackToastStore.getState().flashSuccess(t('discoverReleasesQueued', { count: queued }));
+              else
+                themedAlertStore
+                  .getState()
+                  .show(t('discoverDownloadFailed'), t('discoverReleasesPartial', { queued, failed }), [{ text: t('ok') }]);
+            });
+          },
+        },
+      ],
+    );
+  }, [missingReleases, bulkBusy, data, t]);
 
   const renderItem = useCallback(
     ({ item }: { item: Row }) => {
       if (item.kind === 'section') {
         return <Text style={[styles.section, { color: colors.textPrimary }]}>{item.label}</Text>;
+      }
+      if (item.kind === 'releaseChips') {
+        return (
+          <View style={styles.chips}>
+            {RELEASE_FILTERS.map((f) => {
+              const selected = releaseFilter === f.key;
+              return (
+                <Pressable
+                  key={f.key}
+                  onPress={() => setReleaseFilter(f.key)}
+                  style={[styles.chip, { backgroundColor: selected ? colors.primary : colors.inputBg }]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={[styles.chipLabel, { color: selected ? '#fff' : colors.textPrimary }]}>{t(f.labelKey)}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        );
       }
       if (item.kind === 'track') {
         return (
@@ -108,7 +214,7 @@ export function DiscoverBrowseScreen() {
       }
       return <DiscoverEntityRow item={item.item} onOpen={handleOpen} onDownload={handleAlbumDownload} />;
     },
-    [colors, playingId, handlePreview, handleTrackDownload, handleAlbumDownload, handleOpen],
+    [colors, playingId, handlePreview, handleTrackDownload, handleAlbumDownload, handleOpen, releaseFilter, t],
   );
 
   const header = data ? (
@@ -137,6 +243,29 @@ export function DiscoverBrowseScreen() {
           <Text style={styles.albumButtonLabel}>{t('discoverDownloadAlbum')}</Text>
         </Pressable>
       )}
+      {data.type === 'artist' && (data.albums?.length ?? 0) > 0 && (
+        <Pressable
+          onPress={handleDiscographyDownload}
+          disabled={missingReleases.length === 0 || bulkBusy}
+          style={({ pressed }) => [
+            styles.albumButton,
+            { backgroundColor: colors.primary },
+            (missingReleases.length === 0 || bulkBusy) && styles.disabled,
+            pressed && styles.pressed,
+          ]}
+          accessibilityRole="button"
+        >
+          {bulkBusy ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.albumButtonLabel}>
+              {missingReleases.length === 0
+                ? t('discoverAllInLibrary')
+                : t(DISCOGRAPHY_LABEL[releaseFilter], { count: missingReleases.length })}
+            </Text>
+          )}
+        </Pressable>
+      )}
     </View>
   ) : null;
 
@@ -152,7 +281,7 @@ export function DiscoverBrowseScreen() {
         keyExtractor={(row) => row.key}
         getItemType={(row) => row.kind}
         renderItem={renderItem}
-        extraData={playingId}
+        extraData={`${playingId}:${releaseFilter}`}
         drawDistance={400}
         maintainVisibleContentPosition={{ disabled: true }}
         contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: insets.bottom + 32 }}
@@ -219,6 +348,25 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.6,
+  },
+  disabled: {
+    opacity: 0.5,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  chip: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  chipLabel: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   section: {
     fontSize: 18,
