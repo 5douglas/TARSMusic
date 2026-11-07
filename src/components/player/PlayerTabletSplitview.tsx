@@ -4,6 +4,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -41,6 +42,8 @@ import { type Child } from '@/services/subsonicService';
 import { moreOptionsStore } from '@/store/moreOptionsStore';
 import { playerStore } from '@/store/playerStore';
 import { tabletLayoutStore } from '@/store/tabletLayoutStore';
+
+import { VolumeControl } from './VolumeControl';
 
 const COVER_SIZE = 300;
 const PADDING = 16;
@@ -355,6 +358,12 @@ const PanelHeader = memo(function PanelHeader({
             </View>
           </View>
 
+          {Platform.OS === 'web' && (
+            <View style={styles.volumeRow}>
+              <VolumeControl colors={colors} />
+            </View>
+          )}
+
     </View>
   );
 });
@@ -375,6 +384,10 @@ const styles = StyleSheet.create({
   },
   queueList: {
     flex: 1,
+  },
+  volumeRow: {
+    paddingHorizontal: PADDING,
+    paddingBottom: 8,
   },
   panelToolbar: {
     flexDirection: 'row',
