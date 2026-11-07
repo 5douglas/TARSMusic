@@ -110,7 +110,14 @@ export function SearchableHeader({ route }: BottomTabHeaderProps) {
 
   // Spotify-style top row: the profile picture (opens the profile menu), the tab's title,
   // and on Your Library the search and "+" (new playlist) actions.
-  const titleKey = route.name === 'library' ? 'yourLibrary' : route.name === 'search' ? 'search' : null;
+  const titleKey =
+    route.name === 'library'
+      ? 'yourLibrary'
+      : route.name === 'search'
+        ? 'search'
+        : route.name === 'discover'
+          ? 'discover'
+          : null;
   const isLibrary = route.name === 'library';
   const [createVisible, setCreateVisible] = useState(false);
   const closeCreate = useCallback(() => setCreateVisible(false), []);

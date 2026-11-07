@@ -84,6 +84,15 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="discover"
+          options={{
+            title: t('discover'),
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="compass" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="library"
           options={{
             title: t('yourLibrary'),
