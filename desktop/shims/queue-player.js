@@ -11,6 +11,16 @@ const PROGRESS_MS = 500;
 const RESTART_THRESHOLD_S = 3;
 const MILESTONES = [25, 50, 75, 90];
 const SLEEP_FADE_S = 10;
+const VOLUME_KEY = 'tars.volume';
+
+function savedVolume() {
+  try {
+    const v = Number(window.localStorage.getItem(VOLUME_KEY));
+    return Number.isFinite(v) && window.localStorage.getItem(VOLUME_KEY) != null ? Math.max(0, Math.min(1, v)) : 1;
+  } catch {
+    return 1;
+  }
+}
 
 function emitter() {
   const subs = new Set();
@@ -51,6 +61,7 @@ function getGraph() {
   });
   for (let i = 0; i < filters.length - 1; i++) filters[i].connect(filters[i + 1]);
   const master = ctx.createGain();
+  master.gain.value = savedVolume();
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 2048;
   filters[filters.length - 1].connect(master);
@@ -74,7 +85,9 @@ function createDeck() {
   const gain = g.ctx.createGain();
   source.connect(gain);
   gain.connect(g.input);
-  return { el, gain, track: null, key: null, rg: 1 };
+  // offset: seconds into the track where the element's stream starts, when the
+  // server was asked to start a transcoded stream part-way (timeOffset).
+  return { el, gain, track: null, key: null, rg: 1, offset: 0 };
 }
 
 // ------------------------------------------------------------------ equalizer
@@ -284,7 +297,7 @@ function createTrackPlayer() {
   let repeat = 'off';
   let mode = { kind: 'gapless' };
   let speed = 1;
-  let volume = 1;
+  let volume = savedVolume();
   let rgMode = 'off';
   let remote = { skipMode: 'track', forwardJumpInterval: 15, backwardJumpInterval: 15 };
   let revision = 0;
@@ -361,17 +374,21 @@ function createTrackPlayer() {
   const position = () => {
     const el = decks?.cur.el;
     if (!el || !decks.cur.track) return 0;
-    return pendingSeek ?? el.currentTime ?? 0;
+    return pendingSeek ?? decks.cur.offset + (el.currentTime ?? 0);
   };
   const duration = () => {
-    const el = decks?.cur.el;
+    const deck = decks?.cur;
+    const el = deck?.el;
+    const meta = current()?.duration || 0;
+    // A stream started part-way only knows its own remaining length.
+    if (deck?.offset && meta) return meta;
     const d = el && Number.isFinite(el.duration) ? el.duration : 0;
-    return d || current()?.duration || 0;
+    return d || meta;
   };
   const buffered = () => {
     const el = decks?.cur.el;
     if (!el || !el.buffered || el.buffered.length === 0) return 0;
-    return el.buffered.end(el.buffered.length - 1);
+    return decks.cur.offset + el.buffered.end(el.buffered.length - 1);
   };
   const emitProgress = () => {
     ev.progress.emit({ position: position(), duration: duration(), buffered: buffered() });
@@ -445,7 +462,7 @@ function createTrackPlayer() {
       if (!isCur()) return;
       if (pendingSeek != null) {
         try {
-          el.currentTime = pendingSeek;
+          el.currentTime = Math.max(0, pendingSeek - deck.offset);
         } catch {
           /* ignore */
         }
@@ -457,7 +474,7 @@ function createTrackPlayer() {
     el.addEventListener('progress', () => {
       if (!isCur()) return;
       const d = el.duration;
-      const full = Number.isFinite(d) && d > 0 && buffered() >= d - 0.5;
+      const full = !deck.offset && Number.isFinite(d) && d > 0 && buffered() >= d - 0.5;
       ev.fullyBuffered.emit(full);
     });
     el.addEventListener('ended', () => {
@@ -488,6 +505,7 @@ function createTrackPlayer() {
     deck.rg = replayGainFactor(track);
     deck.el.playbackRate = speed;
     deck.el.defaultPlaybackRate = speed;
+    deck.offset = 0;
     if (deck.blobUrl) {
       URL.revokeObjectURL(deck.blobUrl);
       deck.blobUrl = null;
@@ -509,9 +527,30 @@ function createTrackPlayer() {
     return false;
   };
 
+  // A Subsonic stream URL with timeOffset set, so the server starts the
+  // (transcoded) stream at that second. Null if the URL isn't a Subsonic stream.
+  const offsetUrl = (url, seconds) => {
+    try {
+      const u = new URL(url);
+      if (!/\/rest\/stream(\.view)?$/.test(u.pathname)) return null;
+      u.searchParams.set('timeOffset', String(seconds));
+      return u.toString();
+    } catch {
+      return null;
+    }
+  };
+
+  const loadAtOffset = (deck, url, seconds) => {
+    deck.offset = seconds;
+    pendingSeek = null;
+    deck.el.src = url;
+    deck.el.load();
+    emitProgress();
+    if (wantPlay) void playCurrentDeck();
+  };
+
   const loadWhole = async (deck, target) => {
     const key = deck.key;
-    const wasPlaying = wantPlay;
     try {
       const res = await fetch(deck.track.url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -520,10 +559,12 @@ function createTrackPlayer() {
       const url = URL.createObjectURL(blob);
       if (deck.blobUrl) URL.revokeObjectURL(deck.blobUrl);
       deck.blobUrl = url;
+      deck.offset = 0;
       pendingSeek = target;
       deck.el.src = url;
       deck.el.load();
-      if (wasPlaying) await playCurrentDeck();
+      // Follow the play/pause state as it is now, not as it was when the load began.
+      if (wantPlay) await playCurrentDeck();
     } catch (e) {
       console.warn('[player] seek fallback failed', e);
       pendingSeek = null;
@@ -614,6 +655,12 @@ function createTrackPlayer() {
     }
     if (repeat === 'track') {
       firedMilestones = new Set();
+      if (decks.cur.offset) {
+        // Started part-way: fetch the track from the top again.
+        loadInto(decks.cur, decks.cur.track);
+        void playCurrentDeck();
+        return;
+      }
       const el = decks.cur.el;
       el.currentTime = 0;
       void el.play();
@@ -887,6 +934,7 @@ function createTrackPlayer() {
       cancelFade();
       if (decks) {
         decks.cur.el.pause();
+        if (decks.cur.offset) loadInto(decks.cur, decks.cur.track);
         try {
           decks.cur.el.currentTime = 0;
         } catch {
@@ -915,17 +963,25 @@ function createTrackPlayer() {
         const pct = (target / d) * 100;
         for (const m of MILESTONES) if (m <= pct) firedMilestones.add(m);
       }
-      if (cur.el.readyState >= 1 && !isSeekable(cur.el, target) && /^https?:/i.test(cur.track?.url || '')) {
+      const local = target - cur.offset;
+      if (cur.el.readyState >= 1 && !(local >= 0 && isSeekable(cur.el, local)) && /^https?:/i.test(cur.track?.url || '')) {
         // A stream the server can't serve from the middle (no byte ranges, e.g. a
-        // transcoded one): the browser would jump back to 0. Load the whole track
-        // into memory once and seek in that.
+        // transcoded one): the browser would jump back to 0. Ask the server to
+        // start the stream at that second (Navidrome's timeOffset); otherwise load
+        // the whole track into memory once and seek in that.
+        const whole = Math.floor(target);
+        const url = offsetUrl(cur.track.url, whole);
+        if (url) {
+          loadAtOffset(cur, url, whole);
+          return;
+        }
         pendingSeek = target;
         emitProgress();
         await loadWhole(cur, target);
         return;
       }
       if (cur.el.readyState >= 1) {
-        cur.el.currentTime = target;
+        cur.el.currentTime = local;
         pendingSeek = null;
       } else {
         pendingSeek = target;
@@ -981,6 +1037,11 @@ function createTrackPlayer() {
     getPitchCorrectionMode: () => 'auto',
     setVolume: async (v) => {
       volume = Math.max(0, Math.min(1, v));
+      try {
+        window.localStorage.setItem(VOLUME_KEY, String(volume));
+      } catch {
+        /* not persisted */
+      }
       const g = getGraph();
       g.master.gain.setTargetAtTime(volume, g.ctx.currentTime, 0.02);
     },

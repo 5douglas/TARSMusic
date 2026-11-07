@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -55,6 +56,8 @@ import { type Child } from '@/services/subsonicService';
 import { usePlayerAlbumInfo } from '@/hooks/usePlayerAlbumInfo';
 import { usePlayerLyrics } from '@/hooks/usePlayerLyrics';
 import { playbackSettingsStore } from '@/store/playbackSettingsStore';
+
+import { VolumeControl } from './VolumeControl';
 import { moreOptionsStore } from '@/store/moreOptionsStore';
 import { offlineModeStore } from '@/store/offlineModeStore';
 import { playerStore } from '@/store/playerStore';
@@ -445,6 +448,12 @@ export function PlayerTabletLandscape({
                 </View>
               </View>
 
+              {Platform.OS === 'web' && (
+                <View style={styles.volumeRow}>
+                  <VolumeControl colors={colors} />
+                </View>
+              )}
+
               {/* Quality badge */}
               {qualityLabel && (
                 <Text style={[styles.qualityBadge, { color: colors.textSecondary }]}>
@@ -715,6 +724,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
+  },
+  volumeRow: {
+    marginTop: 4,
+    marginBottom: 4,
   },
   secondaryControls: {
     flexDirection: 'row',

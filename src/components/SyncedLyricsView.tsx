@@ -69,6 +69,40 @@ const ACTIVE_LINE_VIEWPORT_RATIO = 0.35;
  * `useAnimatedRef` on `Animated.ScrollView` keeps `.current` null, making
  * its `scrollTo` a silent no-op (software-mansion/react-native-reanimated#8240).
  */
+/** Duration of the web auto-scroll to the next line. */
+const GLIDE_MS = 700;
+function webScrollNode(scroll: ScrollView | null): HTMLElement | null {
+  if (Platform.OS !== 'web' || !scroll) return null;
+  return (scroll.getScrollableNode?.() as unknown as HTMLElement | null) ?? null;
+}
+
+const glideFrames = new WeakMap<HTMLElement, number>();
+
+function stopGlide(node: HTMLElement | null | undefined) {
+  if (!node) return;
+  const f = glideFrames.get(node);
+  if (f != null) cancelAnimationFrame(f);
+  glideFrames.delete(node);
+}
+
+/** Ease the element's scrollTop to `to` (web only). */
+function glideScroll(node: HTMLElement, to: number) {
+  stopGlide(node);
+  const from = node.scrollTop;
+  const delta = to - from;
+  if (Math.abs(delta) < 1) return;
+  const start = performance.now();
+  const step = (now: number) => {
+    const t = Math.min(1, (now - start) / GLIDE_MS);
+    // easeInOutCubic
+    const k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    node.scrollTop = from + delta * k;
+    if (t < 1) glideFrames.set(node, requestAnimationFrame(step));
+    else glideFrames.delete(node);
+  };
+  glideFrames.set(node, requestAnimationFrame(step));
+}
+
 export const SyncedLyricsView = memo(function SyncedLyricsView({
   lines,
   translations,
@@ -154,13 +188,17 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
         // On Windows (react-native-web) measureLayout returns the line's position
         // in the visible viewport, not in the scrolled content, so add the
         // current scroll offset to get the content position.
-        const scrolled =
-          Platform.OS === 'web'
-            ? ((scroll.getScrollableNode?.() as unknown as HTMLElement | null)?.scrollTop ?? 0)
-            : 0;
+        const node = webScrollNode(scroll);
+        const scrolled = node?.scrollTop ?? 0;
         const lineCentre = scrolled + y + h / 2;
         const targetY = Math.max(0, lineCentre - vh * ACTIVE_LINE_VIEWPORT_RATIO);
-        scroll.scrollTo({ x: 0, y: targetY, animated: true });
+        if (node) {
+          // The browser's own smooth scroll is short and abrupt; glide like the
+          // phone does instead.
+          glideScroll(node, targetY);
+        } else {
+          scroll.scrollTo({ x: 0, y: targetY, animated: true });
+        }
       },
       () => {
         // measureLayout can fail if the view isn't mounted yet; silent.
@@ -214,6 +252,7 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
   // ends shortly after the last tick, so auto-scroll waits like it does on touch.
   const wheelEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleWheel = useCallback(() => {
+    stopGlide(webScrollNode(scrollRef.current));
     if (!userScrollingRef.current) handleScrollBeginDrag();
     if (wheelEndTimerRef.current) clearTimeout(wheelEndTimerRef.current);
     wheelEndTimerRef.current = setTimeout(() => {
@@ -246,6 +285,7 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
     return () => {
       if (lockoutTimerRef.current) clearTimeout(lockoutTimerRef.current);
       if (wheelEndTimerRef.current) clearTimeout(wheelEndTimerRef.current);
+      stopGlide(webScrollNode(scrollRef.current));
     };
   }, []);
 
