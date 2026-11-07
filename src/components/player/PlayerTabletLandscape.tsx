@@ -2,7 +2,7 @@ import Ionicons from "@react-native-vector-icons/ionicons/static";
 import MaterialCommunityIcons from "@react-native-vector-icons/material-design-icons/static";
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -97,6 +97,21 @@ export function PlayerTabletLandscape({
   // while collapsed, so "the player is open" is the expanded flag, not the mount.
   const playerExpanded = tabletLayoutStore((s) => s.playerExpanded);
   const { canSkipNext, canSkipPrevious } = useCanSkip();
+
+  // On Windows (react-native-web) pointerEvents: 'none' on this overlay does not
+  // stop its list rows and buttons from taking clicks, so the invisible queue sat
+  // on top of the side-panel player and a click on its buttons played a random
+  // queue entry. Hide the collapsed overlay outright once the collapse animation ends.
+  const [webHidden, setWebHidden] = useState(Platform.OS === 'web' && !playerExpanded);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (playerExpanded) {
+      setWebHidden(false);
+      return;
+    }
+    const t = setTimeout(() => setWebHidden(true), 350);
+    return () => clearTimeout(t);
+  }, [playerExpanded]);
 
   // Own palette extraction for gradient background. Primary is already
   // lightness-clamped for the active theme so the previous manual
@@ -256,7 +271,7 @@ export function PlayerTabletLandscape({
   const albumLine = albumParts.join(' \u00b7 ') || null;
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
+    <Animated.View style={[StyleSheet.absoluteFill, overlayStyle, webHidden && styles.webHidden]}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Gradient background — emanates from the left (art side) */}
         <Animated.View
@@ -725,6 +740,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
   },
+  webHidden: {
+    // react-native-web passes this through to CSS; hidden elements take no clicks.
+    visibility: 'hidden',
+  } as object,
   volumeRow: {
     marginTop: 4,
     marginBottom: 4,
