@@ -213,6 +213,14 @@ export function buildPostApi(): SubsonicAPI | null {
 /** Name of the private playlist whose comment holds the app's server backup. */
 export const SERVER_BACKUP_PLAYLIST_NAME = 'TARSMusic backup (não apagar)';
 
+/** Name of the private playlist whose comment holds the profile picture, so it follows the account. */
+export const SERVER_PROFILE_PLAYLIST_NAME = 'TARSMusic perfil (não apagar)';
+
+/** The app's own data playlists: not music, so they never show in the library. */
+export function isAppDataPlaylist(name: string | null | undefined): boolean {
+  return name === SERVER_BACKUP_PLAYLIST_NAME || name === SERVER_PROFILE_PLAYLIST_NAME;
+}
+
 export type { AlbumID3, AlbumInfo, AlbumWithSongsID3, ArtistID3, ArtistInfo2, ArtistWithAlbumsID3, Child, Genre, Playlist, PlaylistWithSongs, ScanStatus, Share };
 
 // ------------------------------------------------------------------ //
@@ -826,8 +834,9 @@ export async function getAllPlaylists(): Promise<Playlist[]> {
   if (!api) return [];
   const response = await api.getPlaylists();
   throwIfSubsonicFailure(response, 'getPlaylists');
-  // The server backup lives in a playlist of its own; it is not music, so keep it out of the library.
-  return (response.playlists?.playlist ?? []).filter((p) => p.name !== SERVER_BACKUP_PLAYLIST_NAME);
+  // The server backup and profile live in playlists of their own; they are not music, so keep
+  // them out of the library.
+  return (response.playlists?.playlist ?? []).filter((p) => !isAppDataPlaylist(p.name));
 }
 
 /**
