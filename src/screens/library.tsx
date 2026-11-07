@@ -79,7 +79,8 @@ type Row = { kind: 'liked' } | LibraryItem;
 /**
  * Your Library, Spotify style: filter chips (Playlists, Artists, Albums, Songs, Downloaded)
  * over a mixed list that opens with the pinned Liked Songs, sortable and switchable
- * between list and grid. A chip for one kind shows that kind's full library list.
+ * between list and grid. A chip for one kind shows only that kind's favourites (starred
+ * on the server), like Spotify's Your Library; the full catalogue stays in Search/Browse.
  */
 export function LibraryScreen() {
   const { t } = useTranslation();
@@ -211,14 +212,14 @@ export function LibraryScreen() {
   } else if (effectiveFilter === 'playlists') {
     content = <PlaylistListScreen layout={playlistLayout} downloadedOnly={false} contentInsetTop={contentInsetTop} />;
   } else if (effectiveFilter === 'artists') {
-    content = <ArtistListScreen layout={artistLayout} favoritesOnly={false} contentInsetTop={contentInsetTop} />;
+    content = <ArtistListScreen layout={artistLayout} favoritesOnly contentInsetTop={contentInsetTop} />;
   } else if (effectiveFilter === 'albums') {
     content = (
-      <AlbumLibraryListScreen layout={albumLayout} downloadedOnly={false} favoritesOnly={false} contentInsetTop={contentInsetTop} />
+      <AlbumLibraryListScreen layout={albumLayout} downloadedOnly={false} favoritesOnly contentInsetTop={contentInsetTop} />
     );
   } else {
     content = (
-      <SongLibraryListScreen layout={songLayout} downloadedOnly={false} favoritesOnly={false} contentInsetTop={contentInsetTop} />
+      <SongLibraryListScreen layout={songLayout} downloadedOnly={false} favoritesOnly contentInsetTop={contentInsetTop} />
     );
   }
 

@@ -31,7 +31,11 @@ jest.mock('@shopify/flash-list', () => {
 // The kind screens have their own suites; here they only need to be told apart.
 jest.mock('../album-library-list', () => {
   const { Text } = require('react-native');
-  return { AlbumLibraryListScreen: () => <Text>album list</Text> };
+  return {
+    AlbumLibraryListScreen: ({ favoritesOnly }: { favoritesOnly: boolean }) => (
+      <Text>{`album list${favoritesOnly ? ' favourites' : ''}`}</Text>
+    ),
+  };
 });
 jest.mock('../playlist-list', () => {
   const { Text } = require('react-native');
@@ -39,11 +43,19 @@ jest.mock('../playlist-list', () => {
 });
 jest.mock('../song-library-list', () => {
   const { Text } = require('react-native');
-  return { SongLibraryListScreen: () => <Text>song list</Text> };
+  return {
+    SongLibraryListScreen: ({ favoritesOnly }: { favoritesOnly: boolean }) => (
+      <Text>{`song list${favoritesOnly ? ' favourites' : ''}`}</Text>
+    ),
+  };
 });
 jest.mock('../artist-list', () => {
   const { Text } = require('react-native');
-  return { ArtistListScreen: ({ contentInsetTop }: { contentInsetTop: number }) => <Text>{`artist list ${contentInsetTop}`}</Text> };
+  return {
+    ArtistListScreen: ({ contentInsetTop, favoritesOnly }: { contentInsetTop: number; favoritesOnly?: boolean }) => (
+      <Text>{`artist list ${contentInsetTop}${favoritesOnly ? ' favourites' : ''}`}</Text>
+    ),
+  };
 });
 
 import React from 'react';
@@ -75,14 +87,23 @@ describe('LibraryScreen, Spotify style', () => {
     expect(filterBarStore.getState()).toMatchObject({ layoutToggle: null, hideDownloaded: true, hideFavorites: true });
   });
 
-  it('opens the full list for a chip below the chips, and clears back to the mix', async () => {
+  it('opens the favourites list for a chip below the chips, and clears back to the mix', async () => {
     render(<LibraryScreen />);
     fireEvent.press(screen.getByText('Artists'));
     // Header 100 + chip row 48, no sort row on the kind lists.
-    await waitFor(() => expect(screen.getByText('artist list 148')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('artist list 148 favourites')).toBeTruthy());
     expect(screen.queryByText('Playlists')).toBeNull();
     fireEvent.press(screen.getByLabelText('Clear filter'));
     await waitFor(() => expect(screen.getByText('Liked Songs')).toBeTruthy());
+  });
+
+  it('shows only starred albums and songs on their chips', async () => {
+    render(<LibraryScreen />);
+    fireEvent.press(screen.getByText('Albums'));
+    await waitFor(() => expect(screen.getByText('album list favourites')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Clear filter'));
+    fireEvent.press(await screen.findByText('Songs'));
+    await waitFor(() => expect(screen.getByText('song list favourites')).toBeTruthy());
   });
 
   it('shows only downloaded music when offline', async () => {
