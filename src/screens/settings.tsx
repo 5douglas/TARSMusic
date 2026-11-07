@@ -20,6 +20,7 @@ const SETTINGS_LINKS: {
   subtitleKey: string;
   icon: IoniconsName;
 }[] = [
+  { route: '/settings-tarsmusic', labelKey: 'tarsmusicFeatures', subtitleKey: 'tarsmusicFeaturesSubtitle', icon: 'sparkles-outline' },
   { route: '/settings-server', labelKey: 'serverAccount', subtitleKey: 'serverAccountSubtitle', icon: 'server-outline' },
   { route: '/settings-appearance', labelKey: 'appearanceLayout', subtitleKey: 'appearanceLayoutSubtitle', icon: 'color-palette-outline' },
   { route: '/settings-playback', labelKey: 'soundPlayback', subtitleKey: 'soundPlaybackSubtitle', icon: 'musical-notes-outline' },

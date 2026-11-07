@@ -46,7 +46,7 @@ beforeEach(() => {
   __test.reset();
   Object.values(mockNative).forEach((f) => f.mockClear());
   playerStore.setState({ currentTrack: null, position: 0, playbackState: 'idle' } as any);
-  playbackSettingsStore.setState({ lockScreenLyrics: true } as any);
+  playbackSettingsStore.setState({ widgetLyrics: true } as any);
   jest.spyOn(lyricsStore.getState(), 'fetchLyrics').mockResolvedValue(synced);
 });
 
@@ -85,14 +85,14 @@ describe('installNowPlayingSurfaces', () => {
   });
 
   it('skips lyrics when turned off, and sends them when turned back on', async () => {
-    playbackSettingsStore.setState({ lockScreenLyrics: false } as any);
+    playbackSettingsStore.setState({ widgetLyrics: false } as any);
     installNowPlayingSurfaces();
     expect(mockNative.setLyricsEnabled).toHaveBeenCalledWith(false);
     playerStore.setState({ currentTrack: track('s1') } as any);
     await flush();
     expect(mockNative.setLyrics).not.toHaveBeenCalled();
 
-    playbackSettingsStore.setState({ lockScreenLyrics: true } as any);
+    playbackSettingsStore.setState({ widgetLyrics: true } as any);
     await flush();
     expect(mockNative.setLyricsEnabled).toHaveBeenLastCalledWith(true);
     expect(mockNative.setLyrics).toHaveBeenCalledWith([1100, 2100], ['one', 'two']);

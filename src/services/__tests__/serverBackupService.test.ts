@@ -118,6 +118,19 @@ describe('restoreFromServerIfNewer', () => {
     expect(mockRestoreBackup).not.toHaveBeenCalled();
   });
 
+  it('merges an already-merged backup again when forced', async () => {
+    backupStore.getState().setServerSynced(IDENTITY, '2026-11-01T00:00:00.000Z');
+    mockApi.getPlaylists.mockResolvedValue({ playlists: { playlist: [{ id: 'p1', name: NAME, owner: 'dino' }] } });
+    mockApi.getPlaylist.mockResolvedValue({ playlist: { comment: comment(bundle()) } });
+    mockListBackups.mockImplementation(async () => {
+      const stem = [...mockFiles.keys()][0].replace('.meta.json', '');
+      return { current: [{ stem }], other: [] };
+    });
+    mockRestoreBackup.mockResolvedValue({ scrobbleCount: 0 });
+    await restoreFromServerIfNewer(true);
+    expect(mockRestoreBackup).toHaveBeenCalledWith(expect.anything(), 'merge');
+  });
+
   it('ignores another user’s playlist with the same name', async () => {
     mockApi.getPlaylists.mockResolvedValue({ playlists: { playlist: [{ id: 'p9', name: NAME, owner: 'someone' }] } });
     await restoreFromServerIfNewer();

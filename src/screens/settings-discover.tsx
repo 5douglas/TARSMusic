@@ -1,13 +1,12 @@
 import { HeaderHeightContext } from 'expo-router/react-navigation';
 import { useContext, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BottomChrome } from '../components/BottomChrome';
 import { GradientBackground } from '../components/GradientBackground';
 import { useTheme } from '../hooks/useTheme';
 import { discoverSettingsStore } from '../store/discoverSettingsStore';
-import { newMusicAlertsStore } from '../store/newMusicAlertsStore';
 import { themedAlertStore } from '../store/themedAlertStore';
 
 /** Address and token of the navidrome-discover backend that feeds Discover content and downloads. */
@@ -21,8 +20,6 @@ export function SettingsDiscoverScreen() {
   const [newToken, setNewToken] = useState('');
   const lastfmApiKey = discoverSettingsStore((s) => s.lastfmApiKey);
   const [newLastfmKey, setNewLastfmKey] = useState(lastfmApiKey ?? '');
-  const releasesEnabled = newMusicAlertsStore((s) => s.releasesEnabled);
-  const requestsEnabled = newMusicAlertsStore((s) => s.requestsEnabled);
   const connected = !!baseUrl && !!token;
   const canSave = !!url.trim() && !!newToken.trim();
 
@@ -115,31 +112,6 @@ export function SettingsDiscoverScreen() {
             <Text style={[styles.buttonLabel, { color: '#fff' }]}>{t('save')}</Text>
           </Pressable>
         </View>
-        <View style={[styles.gap, styles.section]}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{t('newMusicAlertsTitle')}</Text>
-          <View style={styles.switchRow}>
-            <View style={styles.switchText}>
-              <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>{t('newMusicReleasesToggle')}</Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('newMusicReleasesToggleHint')}</Text>
-            </View>
-            <Switch
-              value={releasesEnabled}
-              onValueChange={(v) => newMusicAlertsStore.getState().setReleasesEnabled(v)}
-              trackColor={{ false: colors.border, true: colors.primary }}
-            />
-          </View>
-          <View style={styles.switchRow}>
-            <View style={styles.switchText}>
-              <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>{t('newMusicRequestsToggle')}</Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('newMusicRequestsToggleHint')}</Text>
-            </View>
-            <Switch
-              value={requestsEnabled}
-              onValueChange={(v) => newMusicAlertsStore.getState().setRequestsEnabled(v)}
-              trackColor={{ false: colors.border, true: colors.primary }}
-            />
-          </View>
-        </View>
       </ScrollView>
       <BottomChrome withSafeAreaPadding />
     </GradientBackground>
@@ -181,18 +153,5 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.5,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  switchText: {
-    flex: 1,
-    gap: 2,
-  },
-  switchLabel: {
-    fontSize: 16,
-    fontWeight: '500',
   },
 });

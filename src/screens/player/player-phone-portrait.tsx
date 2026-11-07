@@ -580,7 +580,9 @@ const PlayerContent = memo(function PlayerContent({
 
   const showSkipInterval = playbackSettingsStore((s) => s.showSkipIntervalButtons);
   const offlineMode = offlineModeStore((s) => s.offlineMode);
-  const showCoverLyric = !!lyrics?.synced && lyrics.lines.length > 0;
+  // The slot for the sung line is reserved whenever the setting is on, lyrics or not, so
+  // the cover and the controls keep their place while lyrics load or are missing.
+  const showCoverLyric = playbackSettingsStore((s) => s.coverLyricLine);
   const handleShare = useCallback(async () => {
     const coverArtId = await resolveCoverArtId({ coverArt: currentTrack.coverArt, albumId: currentTrack.albumId });
     createShareStore.getState().showSong(currentTrack.id, currentTrack.title, currentTrack.artist ?? undefined, coverArtId);
@@ -666,7 +668,7 @@ const PlayerContent = memo(function PlayerContent({
       </View>
 
       {/* The line being sung, between the cover and the title, as in Spotify */}
-      {showCoverLyric && <CoverLyricLine lyrics={lyrics} color={colors.textPrimary} />}
+      {showCoverLyric && <CoverLyricLine lyrics={lyrics?.synced ? lyrics : null} color={colors.textPrimary} />}
 
       {/* Track info */}
       <View style={[styles.trackInfo, { marginBottom: m.infoMarginBottom }]}>
