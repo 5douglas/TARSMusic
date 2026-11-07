@@ -37,3 +37,14 @@ if (typeof document !== 'undefined') {
 // are enabled; without it a tab switch shows the previous tab under the new one
 // (the app's tab scenes are transparent).
 require('react-native-screens').enableScreens(true);
+
+// "Check for updates" in the app: electron-updater runs in the main process.
+try {
+  const { ipcRenderer } = window.require('electron');
+  globalThis.tarsDesktopUpdater = {
+    check: () => ipcRenderer.invoke('tars:update-check'),
+    install: () => ipcRenderer.invoke('tars:update-install'),
+  };
+} catch {
+  /* not in the desktop app */
+}

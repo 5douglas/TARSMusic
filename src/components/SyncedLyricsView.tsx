@@ -2,6 +2,7 @@ import Ionicons from "@react-native-vector-icons/ionicons/static";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -150,7 +151,14 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
       (_x, y, _w, h) => {
         const vh = viewportHRef.current;
         if (vh <= 0) return;
-        const lineCentre = y + h / 2;
+        // On Windows (react-native-web) measureLayout returns the line's position
+        // in the visible viewport, not in the scrolled content, so add the
+        // current scroll offset to get the content position.
+        const scrolled =
+          Platform.OS === 'web'
+            ? ((scroll.getScrollableNode?.() as unknown as HTMLElement | null)?.scrollTop ?? 0)
+            : 0;
+        const lineCentre = scrolled + y + h / 2;
         const targetY = Math.max(0, lineCentre - vh * ACTIVE_LINE_VIEWPORT_RATIO);
         scroll.scrollTo({ x: 0, y: targetY, animated: true });
       },
@@ -202,6 +210,18 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
     [scrollToActiveLine],
   );
 
+  // The mouse wheel has no drag events: treat each wheel burst as a drag that
+  // ends shortly after the last tick, so auto-scroll waits like it does on touch.
+  const wheelEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleWheel = useCallback(() => {
+    if (!userScrollingRef.current) handleScrollBeginDrag();
+    if (wheelEndTimerRef.current) clearTimeout(wheelEndTimerRef.current);
+    wheelEndTimerRef.current = setTimeout(() => {
+      wheelEndTimerRef.current = null;
+      handleScrollEndDrag(undefined as unknown as NativeSyntheticEvent<NativeScrollEvent>);
+    }, 250);
+  }, [handleScrollBeginDrag, handleScrollEndDrag]);
+
   const handleMomentumScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       handleScrollEndDrag(e);
@@ -225,6 +245,7 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
   useEffect(() => {
     return () => {
       if (lockoutTimerRef.current) clearTimeout(lockoutTimerRef.current);
+      if (wheelEndTimerRef.current) clearTimeout(wheelEndTimerRef.current);
     };
   }, []);
 
@@ -329,6 +350,7 @@ export const SyncedLyricsView = memo(function SyncedLyricsView({
         onScrollBeginDrag={handleScrollBeginDrag}
         onScrollEndDrag={handleScrollEndDrag}
         onMomentumScrollEnd={handleMomentumScrollEnd}
+        {...(Platform.OS === 'web' ? { onWheel: handleWheel } : null)}
         scrollEventThrottle={16}
       >
         <View style={styles.spacer} />

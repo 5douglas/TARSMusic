@@ -488,12 +488,45 @@ function createTrackPlayer() {
     deck.rg = replayGainFactor(track);
     deck.el.playbackRate = speed;
     deck.el.defaultPlaybackRate = speed;
+    if (deck.blobUrl) {
+      URL.revokeObjectURL(deck.blobUrl);
+      deck.blobUrl = null;
+    }
     if (track) {
       deck.el.src = track.url;
       deck.el.load();
     } else {
       deck.el.removeAttribute('src');
       deck.el.load();
+    }
+  };
+
+  const isSeekable = (el, t) => {
+    const r = el.seekable;
+    for (let i = 0; r && i < r.length; i++) {
+      if (t >= r.start(i) && t <= r.end(i)) return true;
+    }
+    return false;
+  };
+
+  const loadWhole = async (deck, target) => {
+    const key = deck.key;
+    const wasPlaying = wantPlay;
+    try {
+      const res = await fetch(deck.track.url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      if (deck.key !== key || decks.cur !== deck) return;
+      const url = URL.createObjectURL(blob);
+      if (deck.blobUrl) URL.revokeObjectURL(deck.blobUrl);
+      deck.blobUrl = url;
+      pendingSeek = target;
+      deck.el.src = url;
+      deck.el.load();
+      if (wasPlaying) await playCurrentDeck();
+    } catch (e) {
+      console.warn('[player] seek fallback failed', e);
+      pendingSeek = null;
     }
   };
 
@@ -881,6 +914,15 @@ function createTrackPlayer() {
       if (d) {
         const pct = (target / d) * 100;
         for (const m of MILESTONES) if (m <= pct) firedMilestones.add(m);
+      }
+      if (cur.el.readyState >= 1 && !isSeekable(cur.el, target) && /^https?:/i.test(cur.track?.url || '')) {
+        // A stream the server can't serve from the middle (no byte ranges, e.g. a
+        // transcoded one): the browser would jump back to 0. Load the whole track
+        // into memory once and seek in that.
+        pendingSeek = target;
+        emitProgress();
+        await loadWhole(cur, target);
+        return;
       }
       if (cur.el.readyState >= 1) {
         cur.el.currentTime = target;

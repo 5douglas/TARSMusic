@@ -66,7 +66,6 @@ export function PlayerProgressBar({
 }: PlayerProgressBarProps) {
   const { t } = useTranslation();
   const trackWidth = useRef(0);
-  const trackPageX = useRef(0);
   const trackRef = useRef<View>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragFraction, setDragFraction] = useState(0);
@@ -86,25 +85,26 @@ export function PlayerProgressBar({
   const onSeekRef = useRef(onSeek);
   onSeekRef.current = onSeek;
 
-  /** Convert an absolute screen pageX to a 0–1 fraction across the track. */
-  const fractionFromPageX = (pageX: number) =>
-    clamp((pageX - trackPageX.current) / (trackWidth.current || 1), 0, 1);
+  /** Convert a gesture's x (relative to the track view) to a 0–1 fraction across the
+   *  track. Relative x stays right when the bar moves without resizing (a window
+   *  resize on Windows, the side panel), where a cached page offset goes stale. */
+  const fractionFromX = (x: number) => clamp(x / (trackWidth.current || 1), 0, 1);
 
-  const handleTapSeek = useCallback((absoluteX: number) => {
-    const frac = fractionFromPageX(absoluteX);
+  const handleTapSeek = useCallback((x: number) => {
+    const frac = fractionFromX(x);
     setPendingSeekFraction(frac);
     onSeekRef.current(frac * durationRef.current);
   }, []);
 
-  const handlePanStart = useCallback((absoluteX: number) => {
-    const frac = fractionFromPageX(absoluteX);
+  const handlePanStart = useCallback((x: number) => {
+    const frac = fractionFromX(x);
     setDragFraction(frac);
     setIsDragging(true);
     setPendingSeekFraction(null);
   }, []);
 
-  const handlePanUpdate = useCallback((absoluteX: number) => {
-    setDragFraction(fractionFromPageX(absoluteX));
+  const handlePanUpdate = useCallback((x: number) => {
+    setDragFraction(fractionFromX(x));
   }, []);
 
   const handlePanEnd = useCallback(() => {
@@ -121,7 +121,7 @@ export function PlayerProgressBar({
   const tapGesture = Gesture.Tap()
     .onEnd((e) => {
       'worklet';
-      runOnJS(handleTapSeek)(e.absoluteX);
+      runOnJS(handleTapSeek)(e.x);
     });
 
   const panGesture = Gesture.Pan()
@@ -130,11 +130,11 @@ export function PlayerProgressBar({
     .onStart((e) => {
       'worklet';
       thumbScale.value = withSpring(ACTIVE_THUMB_SIZE / THUMB_SIZE);
-      runOnJS(handlePanStart)(e.absoluteX);
+      runOnJS(handlePanStart)(e.x);
     })
     .onUpdate((e) => {
       'worklet';
-      runOnJS(handlePanUpdate)(e.absoluteX);
+      runOnJS(handlePanUpdate)(e.x);
     })
     .onEnd(() => {
       'worklet';
@@ -154,9 +154,6 @@ export function PlayerProgressBar({
   const handleLayout = useCallback(
     (e: { nativeEvent: { layout: { width: number } } }) => {
       trackWidth.current = e.nativeEvent.layout.width;
-      trackRef.current?.measureInWindow((x) => {
-        if (x != null) trackPageX.current = x;
-      });
     },
     [],
   );

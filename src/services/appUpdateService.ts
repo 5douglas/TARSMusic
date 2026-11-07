@@ -5,6 +5,9 @@
  * update without a confirmation dialog; older builds and Android versions get the system
  * "Install?" prompt. The first time, Android still asks to allow installs from this app, and
  * the update only installs over the current app when the APK is signed with the same key.
+ *
+ * The Windows app (the web build inside Electron, see desktop/) updates through
+ * electron-updater in the Electron main process, reached through `tarsDesktopUpdater`.
  */
 import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
@@ -37,6 +40,14 @@ interface GithubRelease {
   assets?: Array<{ name?: string; browser_download_url?: string }>;
 }
 
+/** Set by desktop/bootstrap.js in the Windows app. */
+interface DesktopUpdater {
+  check(): Promise<{ version: string } | null>;
+  install(): Promise<void>;
+}
+const desktopUpdater = (): DesktopUpdater | undefined =>
+  (globalThis as { tarsDesktopUpdater?: DesktopUpdater }).tarsDesktopUpdater;
+
 export function currentAppVersion(): string {
   return Constants.expoConfig?.version ?? '0.0.0';
 }
@@ -60,6 +71,14 @@ export function isNewerVersion(remote: string, current: string): boolean {
 
 /** The latest release when it is newer than this build and carries an APK; null otherwise. */
 export async function checkForUpdate(): Promise<AppUpdate | null> {
+  if (Platform.OS === 'web') {
+    try {
+      const found = await desktopUpdater()?.check();
+      return found ? { version: found.version, notes: '', apkUrl: '' } : null;
+    } catch {
+      return null;
+    }
+  }
   if (Platform.OS !== 'android') return null;
   try {
     const res = await fetch(LATEST_RELEASE_URL, { headers: { Accept: 'application/vnd.github+json' } });
@@ -85,6 +104,17 @@ export async function checkForUpdate(): Promise<AppUpdate | null> {
 export async function downloadAndInstall(update: AppUpdate): Promise<void> {
   const overlay = processingOverlayStore.getState();
   overlay.show(i18n.t('appUpdateDownloading'));
+  const desktop = Platform.OS === 'web' ? desktopUpdater() : undefined;
+  if (desktop) {
+    try {
+      // Downloads the installer if it is not already, then closes the app, installs
+      // and opens it again.
+      await desktop.install();
+    } catch {
+      overlay.showError(i18n.t('appUpdateFailed'));
+    }
+    return;
+  }
   try {
     const target = new File(Paths.cache, `TARSMusic-${update.version}.apk`);
     const apk = await File.downloadFileAsync(update.apkUrl, target, { idempotent: true });
@@ -112,7 +142,7 @@ export function promptUpdate(update: AppUpdate): void {
   const message = [
     i18n.t('appUpdateAvailableBody', { version: update.version }),
     update.notes,
-    i18n.t('updateInstallHint'),
+    Platform.OS === 'android' ? i18n.t('updateInstallHint') : '',
   ]
     .filter(Boolean)
     .join('\n\n');

@@ -74,7 +74,7 @@ export function SettingsScreen() {
         icon="help-circle-outline"
         onPress={handleShowOnboarding}
       />
-      {Platform.OS === 'android' && (
+      {(Platform.OS === 'android' || Platform.OS === 'web') && (
         <SettingsLinkRow
           label={t('appUpdateCheck')}
           subtitle={t('appUpdateCheckSubtitle')}
