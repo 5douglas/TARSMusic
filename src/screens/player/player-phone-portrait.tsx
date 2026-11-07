@@ -703,11 +703,10 @@ const PlayerContent = memo(function PlayerContent({
         />
       </View>
 
-      {/* Three equal flex spacers (above the primary row, between the rows,
-          and below the secondary row) evenly distribute the controls in the
-          space under the progress bar — this centers the primary row between
-          the progress bar and the secondary row. */}
-      <View style={styles.playerSpacer} />
+      {/* Flex spacers above the primary row, between the rows and below the
+          secondary row share the space under the progress bar. The top one is
+          smaller so the buttons sit closer to the song times. */}
+      <View style={styles.playerSpacerTop} />
 
       {/* Playback controls */}
       <View style={[styles.controls, { paddingVertical: m.controlsPadV }]}>
@@ -1183,6 +1182,9 @@ const styles = StyleSheet.create({
   },
   playerSpacer: {
     flex: 1,
+  },
+  playerSpacerTop: {
+    flex: 0.35,
   },
   hero: {
     width: '100%',

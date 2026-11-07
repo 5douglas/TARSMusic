@@ -47,19 +47,21 @@ const SEGMENT_KEYS = [
 
 /**
  * `topInset` overrides the tab-header height when embedded below other chrome (Library's pills).
- * `inlineSegments` lays the Songs/Albums/Artists pills out above the list instead of floating
- * them over it, for a parent that already pads below its header (the Liked Songs screen).
+ * `songsOnly` drops the Songs/Albums/Artists pills and shows just the starred songs, for a
+ * parent that already pads below its header (the Liked Songs screen, where Your Library's own
+ * chips cover albums and artists).
  */
 export function FavoritesScreen({
   topInset,
-  inlineSegments = false,
-}: { topInset?: number; inlineSegments?: boolean } = {}) {
+  songsOnly = false,
+}: { topInset?: number; songsOnly?: boolean } = {}) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const isFocused = useIsFocused();
   const tabHeaderHeight = searchStore((s) => s.headerHeights.library ?? s.headerHeight);
   const headerHeight = topInset ?? tabHeaderHeight;
-  const [activeSegment, setActiveSegment] = useState<FavoritesSegment>('songs');
+  const [selectedSegment, setActiveSegment] = useState<FavoritesSegment>('songs');
+  const activeSegment: FavoritesSegment = songsOnly ? 'songs' : selectedSegment;
 
   const segments = useMemo(
     () => SEGMENT_KEYS.map((s) => ({ key: s.key, label: t(s.labelKey) })),
@@ -215,7 +217,7 @@ export function FavoritesScreen({
   }, []);
 
   const segmentHeight = 52;
-  const contentInsetTop = inlineSegments ? 0 : headerHeight + segmentHeight;
+  const contentInsetTop = songsOnly ? 0 : headerHeight + segmentHeight;
 
   // Count + duration as two SQL aggregates over the favourites set — never a whole-set
   // read. Both halves store `duration` as a column, so this stays an aggregate.
@@ -324,7 +326,6 @@ export function FavoritesScreen({
 
   return (
     <View style={styles.container}>
-      {inlineSegments && segmentControl}
       <View style={styles.content}>
         {activeSegment === 'songs' && (
           songsSuppressed ? (
@@ -402,7 +403,7 @@ export function FavoritesScreen({
           )
         )}
       </View>
-      {!inlineSegments && (
+      {!songsOnly && (
         <View style={[styles.segmentOverlay, { top: headerHeight }]}>{segmentControl}</View>
       )}
     </View>

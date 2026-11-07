@@ -1396,5 +1396,8 @@
   "serverRestoreDoneMessage": "Merged from the server: {{plays}} plays and {{bookmarks}} bookmarks were new on this phone.",
   "serverRestoreNothing": "Nothing to restore",
   "serverRestoreNothingMessage": "There is no backup on the server yet.",
-  "serverRestoreFailed": "Restore Failed"
+  "serverRestoreFailed": "Restore Failed",
+  "songTransitionTitle": "Song transition",
+  "crossfadeToggle": "Crossfade between songs",
+  "crossfadeToggleHint": "Fades the end of one song into the next. Off plays songs back to back with no gap."
 }

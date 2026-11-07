@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 
 import { useTheme } from '../../hooks/useTheme';
@@ -12,8 +13,16 @@ export interface SettingsToggle {
   onChange: (value: boolean) => void;
 }
 
-/** A titled settings card made of switch rows. */
-export function SettingsToggleCard({ title, toggles }: { title: string; toggles: SettingsToggle[] }) {
+/** A titled settings card made of switch rows, with optional extra rows below them. */
+export function SettingsToggleCard({
+  title,
+  toggles,
+  footer,
+}: {
+  title: string;
+  toggles: SettingsToggle[];
+  footer?: ReactNode;
+}) {
   const { colors } = useTheme();
   return (
     <View style={settingsStyles.section}>
@@ -24,7 +33,7 @@ export function SettingsToggleCard({ title, toggles }: { title: string; toggles:
             key={toggle.key}
             style={[
               styles.row,
-              index < toggles.length - 1 && {
+              (index < toggles.length - 1 || !!footer) && {
                 borderBottomWidth: StyleSheet.hairlineWidth,
                 borderBottomColor: colors.border,
               },
@@ -44,6 +53,7 @@ export function SettingsToggleCard({ title, toggles }: { title: string; toggles:
             />
           </View>
         ))}
+        {footer}
       </View>
     </View>
   );
