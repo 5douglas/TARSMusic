@@ -6,13 +6,9 @@ Thank you for your interest in contributing to TARSMusic (a fork of [Substreamer
 
 This project's conventions, architecture and coding standards live in a single file: **[`AGENTS.md`](./AGENTS.md)**.
 
-It follows the [AGENTS.md](https://agents.md) open standard, which Claude Code, Cursor, Copilot, Codex, Windsurf, Aider, Devin and Amp all read natively — so the rules are picked up automatically, with no configuration.
+It follows the [AGENTS.md](https://agents.md) open standard, which the common AI coding tools read natively — so the rules are picked up automatically, with no configuration.
 
-**Please don't add a per-tool copy** (`CLAUDE.md`, `.cursor/rules/`, `.github/copilot-instructions.md`). We kept those as pointer stubs and retired them in August 2026: two rules files drift, and the stale one is always the one that gets read.
-
-### Terminal Observation
-
-When working with Claude Code, you can share your terminal output so the AI can see your command results. Run `npm run terminal-log` in any terminal you want observed — this starts a `script` session that logs everything to `/tmp/claude-terminal.txt`. Then ask Claude Code to "check my terminal" to have it read the output. Type `exit` to stop recording.
+**Please don't add a per-tool copy** (`.cursor/rules/`, `.github/copilot-instructions.md` or similar). We kept those as pointer stubs and retired them in August 2026: two rules files drift, and the stale one is always the one that gets read.
 
 ---
 

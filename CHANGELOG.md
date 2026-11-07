@@ -800,7 +800,6 @@
 ## [8.0.55] - 2026-04-22
 
 - ci: update coverage badge [skip ci]
-- chore: gitignore .claude/scheduled_tasks.lock runtime lockfile
 - ci: update coverage badge [skip ci]
 - fix(expanded-player): reorder right-panel toggles to queue/info/lyrics to match PlayerTabBar
 - fix(album-info): theme-aware skeleton fill so bars are visible in light mode
@@ -1238,7 +1237,6 @@
 - ci: update coverage badge [skip ci]
 - fix: auto-offline home WiFi SSID detection broken after permission grant
 - ui fixes: android vs ios quirks for various spacing, ensure lists are populated if empty on start, ensure playlist list is fresh before trying to add to a playlist
-- build: simple terminal monitoring for claude code
 ## [8.0.25] - 2026-03-13
 
 - build: update to address deprecation warning
@@ -1338,7 +1336,7 @@
 - RNTP: Review all comments in Android code base, address where needed, clean up and update comments for accuracy.
 - android: fix link in media notifcation, should just return to app, no need to deeplink for this
 - RNTP: KotlinAudio was inlined in the 5.0.0alpha version we are based on.  No need to retain a seperate copy.
-- ai: add project rules for claude code and github copilot
+- ai: add project rules for AI coding tools
 - android: fix download concurrency (was stuck at 1)
 - react-native: interaction manager now marked as deprecated after RN 0.83 update
 - android: set minsdk sensibly to SDK29/Android 10

@@ -1737,8 +1737,8 @@ const MIGRATION_TASKS: MigrationTask[] = [
       // Recovery for songs whose full Subsonic `Child` envelope was
       // silently dropped by Migration 14 (v1 tracks had only 7 fields) and
       // by the pre-v8.0.56 runtime writes in `downloadSong`. Every
-      // cached_songs row should ultimately carry the full envelope — see
-      // CLAUDE.md / memory "Preserve full API envelope in row caches".
+      // cached_songs row should ultimately carry the full envelope (rule:
+      // "Preserve full API envelope in row caches").
       //
       // Priority order per song:
       //   1. album_details table (full AlbumWithSongsID3 JSON)
