@@ -7,6 +7,7 @@ jest.mock('@formatjs/intl-pluralrules/locale-data/fr.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/de.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/es.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/it.js', () => {});
+jest.mock('@formatjs/intl-pluralrules/locale-data/pt.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/ru.js', () => {});
 jest.mock('@formatjs/intl-pluralrules/locale-data/zh.js', () => {});
 jest.mock('@formatjs/intl-numberformat/polyfill-force.js', () => {});
@@ -15,6 +16,7 @@ jest.mock('@formatjs/intl-numberformat/locale-data/fr.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/de.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/es.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/it.js', () => {});
+jest.mock('@formatjs/intl-numberformat/locale-data/pt.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/ru.js', () => {});
 jest.mock('@formatjs/intl-numberformat/locale-data/zh.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/polyfill-force.js', () => {});
@@ -24,6 +26,7 @@ jest.mock('@formatjs/intl-datetimeformat/locale-data/fr.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/de.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/es.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/it.js', () => {});
+jest.mock('@formatjs/intl-datetimeformat/locale-data/pt.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/ru.js', () => {});
 jest.mock('@formatjs/intl-datetimeformat/locale-data/zh.js', () => {});
 jest.mock('../../store/persistence/kvStorage', () => require('../../store/persistence/__mocks__/kvStorage'));
@@ -70,28 +73,44 @@ describe('getDeviceLocale fallback', () => {
     expect(i18n.language).toBe('zh-Hans');
   });
 
-  it('resolves Traditional Chinese (zh-Hant-TW) to zh-Hant', () => {
+  it('resolves Traditional Chinese (zh-Hant-TW) to zh-Hans', () => {
     jest.doMock('expo-localization', () => ({
       getLocales: () => [{ languageCode: 'zh', languageTag: 'zh-Hant-TW' }],
     }));
     const i18n = require('../i18n').default;
-    expect(i18n.language).toBe('zh-Hant');
+    expect(i18n.language).toBe('zh-Hans');
   });
 
-  it('resolves Hong Kong Chinese (zh-HK) to zh-Hant', () => {
+  it('resolves Hong Kong Chinese (zh-HK) to zh-Hans', () => {
     jest.doMock('expo-localization', () => ({
       getLocales: () => [{ languageCode: 'zh', languageTag: 'zh-HK' }],
     }));
     const i18n = require('../i18n').default;
-    expect(i18n.language).toBe('zh-Hant');
+    expect(i18n.language).toBe('zh-Hans');
   });
 
-  it('resolves Macau Chinese (zh-MO) to zh-Hant', () => {
+  it('resolves Macau Chinese (zh-MO) to zh-Hans', () => {
     jest.doMock('expo-localization', () => ({
       getLocales: () => [{ languageCode: 'zh', languageTag: 'zh-MO' }],
     }));
     const i18n = require('../i18n').default;
-    expect(i18n.language).toBe('zh-Hant');
+    expect(i18n.language).toBe('zh-Hans');
+  });
+
+  it('resolves Brazilian Portuguese (pt-BR) to pt', () => {
+    jest.doMock('expo-localization', () => ({
+      getLocales: () => [{ languageCode: 'pt', languageTag: 'pt-BR' }],
+    }));
+    const i18n = require('../i18n').default;
+    expect(i18n.language).toBe('pt');
+  });
+
+  it('falls back to "en" for a dropped language such as German', () => {
+    jest.doMock('expo-localization', () => ({
+      getLocales: () => [{ languageCode: 'de', languageTag: 'de-DE' }],
+    }));
+    const i18n = require('../i18n').default;
+    expect(i18n.language).toBe('en');
   });
 
   it('defaults bare "zh" to zh-Hans', () => {
@@ -154,12 +173,10 @@ describe('eager-loaded locale resources', () => {
     const i18n = require('../i18n').default;
     expect(i18n.hasResourceBundle('en', 'translation')).toBe(true);
     expect(i18n.hasResourceBundle('fr', 'translation')).toBe(true);
-    expect(i18n.hasResourceBundle('de', 'translation')).toBe(true);
     expect(i18n.hasResourceBundle('es', 'translation')).toBe(true);
     expect(i18n.hasResourceBundle('it', 'translation')).toBe(true);
-    expect(i18n.hasResourceBundle('ru', 'translation')).toBe(true);
     expect(i18n.hasResourceBundle('zh-Hans', 'translation')).toBe(true);
-    expect(i18n.hasResourceBundle('zh-Hant', 'translation')).toBe(true);
+    expect(i18n.hasResourceBundle('pt', 'translation')).toBe(true);
   });
 
   it('translates keys in non-English locale', () => {

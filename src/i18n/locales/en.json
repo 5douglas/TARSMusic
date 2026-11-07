@@ -68,7 +68,7 @@
   "onboardingSwipeHeadline": "Swipe & Long Press",
   "onboardingSwipeBody": "Swipe left or right on any song, album, or artist to access quick actions like adding to playlists, downloading, or deleting. Long press for more options.",
   "onboardingOfflineHeadline": "Offline Mode",
-  "onboardingOfflineBody": "Tap the Offline chip in the filter bar to switch to offline mode. Only your downloaded music will be shown — perfect for when you’re on the go without a connection.",
+  "onboardingOfflineBody": "Turn on Offline Mode in Settings > Connectivity. Only your downloaded music will be shown, perfect for when you’re on the go without a connection.",
   "onboardingCustomiseHeadline": "Customise Your Experience",
   "onboardingCustomiseBody": "Head to Settings to choose your streaming and download quality, set storage limits, and pick your preferred theme and accent colour.",
   "onboardingBackgroundHeadline": "Background Playback",
