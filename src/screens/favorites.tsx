@@ -45,8 +45,15 @@ const SEGMENT_KEYS = [
 /*  FavoritesScreen                                                   */
 /* ------------------------------------------------------------------ */
 
-/** `topInset` overrides the tab-header height when embedded below other chrome (Library's pills). */
-export function FavoritesScreen({ topInset }: { topInset?: number } = {}) {
+/**
+ * `topInset` overrides the tab-header height when embedded below other chrome (Library's pills).
+ * `inlineSegments` lays the Songs/Albums/Artists pills out above the list instead of floating
+ * them over it, for a parent that already pads below its header (the Liked Songs screen).
+ */
+export function FavoritesScreen({
+  topInset,
+  inlineSegments = false,
+}: { topInset?: number; inlineSegments?: boolean } = {}) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const isFocused = useIsFocused();
@@ -208,7 +215,7 @@ export function FavoritesScreen({ topInset }: { topInset?: number } = {}) {
   }, []);
 
   const segmentHeight = 52;
-  const contentInsetTop = headerHeight + segmentHeight;
+  const contentInsetTop = inlineSegments ? 0 : headerHeight + segmentHeight;
 
   // Count + duration as two SQL aggregates over the favourites set — never a whole-set
   // read. Both halves store `duration` as a column, so this stays an aggregate.
@@ -311,8 +318,13 @@ export function FavoritesScreen({ topInset }: { topInset?: number } = {}) {
     );
   }, [totals, playAll, colors, t, offlineMode, starredSongsDownloaded, handleDownloadStarred, handleDeleteStarred]);
 
+  const segmentControl = (
+    <SegmentControl segments={segments} selected={activeSegment} onSelect={setActiveSegment} />
+  );
+
   return (
     <View style={styles.container}>
+      {inlineSegments && segmentControl}
       <View style={styles.content}>
         {activeSegment === 'songs' && (
           songsSuppressed ? (
@@ -390,9 +402,9 @@ export function FavoritesScreen({ topInset }: { topInset?: number } = {}) {
           )
         )}
       </View>
-      <View style={[styles.segmentOverlay, { top: headerHeight }]}>
-        <SegmentControl segments={segments} selected={activeSegment} onSelect={setActiveSegment} />
-      </View>
+      {!inlineSegments && (
+        <View style={[styles.segmentOverlay, { top: headerHeight }]}>{segmentControl}</View>
+      )}
     </View>
   );
 }
