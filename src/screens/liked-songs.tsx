@@ -6,13 +6,13 @@ import { FavoritesScreen } from './favorites';
 
 /**
  * "Liked Songs", opened from the pinned row at the top of Your Library.
- * GradientBackground already pads below the header, so the pills sit in the layout
- * right under it and the list scrolls beneath them, never under or behind them.
+ * Songs only, like Spotify's Liked Songs: albums and artists have their own chips in
+ * Your Library. GradientBackground already pads below the header.
  */
 export function LikedSongsScreen() {
   return (
     <GradientBackground style={styles.container}>
-      <FavoritesScreen topInset={0} inlineSegments />
+      <FavoritesScreen topInset={0} songsOnly />
       <BottomChrome withSafeAreaPadding />
     </GradientBackground>
   );

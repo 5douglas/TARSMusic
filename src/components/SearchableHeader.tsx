@@ -21,7 +21,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CreatePlaylistSheet } from './CreatePlaylistSheet';
-import { FilterBar } from './FilterBar';
 import { DARK_MIX, GRADIENT_LOCATIONS, GRADIENT_MIX_CURVE, LIGHT_MIX } from './GradientBackground';
 import { ProfileAvatar } from './ProfileAvatar';
 import { useTheme } from '../hooks/useTheme';
@@ -191,8 +190,6 @@ export function SearchableHeader({ route }: BottomTabHeaderProps) {
         </View>
       </View>
       )}
-      {/* Your Library has its own Spotify chips under the header, so no filter bar there. */}
-      {!isLibrary && <FilterBar routeName={route.name} />}
     </>
   );
 
