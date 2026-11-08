@@ -1,17 +1,18 @@
 import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams } from 'expo-router';
 import { HeaderHeightContext } from 'expo-router/react-navigation';
+import Ionicons from '@react-native-vector-icons/ionicons/static';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
+import { BottomChrome } from '../components/BottomChrome';
 import { PlayAllButton, ShufflePlayButton } from '../components/DetailHeroButtons';
 import { EmptyState } from '../components/EmptyState';
 import { GradientBackground } from '../components/GradientBackground';
 import { MixCover } from '../components/MixCover';
 import { dailyMixArtistLine, MAX_ARTIST_MIXES } from '../components/PersonalMixesSection';
-import { SongRow } from '../components/SongRow';
+import { TrackRow } from '../components/TrackRow';
 import { useTheme } from '../hooks/useTheme';
 import { useTopArtists } from '../hooks/useTopArtists';
 import { getDailyMixes, getDailyMixSongs } from '../services/dailyMixService';
@@ -21,8 +22,11 @@ import { type Child } from '../services/subsonicService';
 import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { personalMixStore } from '../store/personalMixStore';
 import { shuffleArray } from '../utils/arrayHelpers';
+import { formatCompactDuration } from '../utils/formatters';
 
-const COVER_SIZE = 200;
+/** Same hero as a playlist: a square cover filling the width, up to this size. */
+const HERO_PADDING = 24;
+const MAX_COVER_SIZE = 400;
 /** Songs per mix: the list-length setting, but never fewer than this. */
 const MIN_MIX_SIZE = 30;
 
@@ -30,7 +34,8 @@ const MIN_MIX_SIZE = 30;
 export function MixScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const coverSize = Math.min(MAX_COVER_SIZE, width - HERO_PADDING * 2);
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
   const { kind, id, name } = useLocalSearchParams<{ kind: string; id?: string; name?: string }>();
   const isDaily = kind === 'daily';
@@ -99,39 +104,63 @@ export function MixScreen() {
   }
 
   const renderItem = useCallback(
-    ({ item }: { item: Child }) => <SongRow song={item} songs={list} />,
-    [list],
+    ({ item }: { item: Child }) => (
+      <TrackRow track={item} colors={colors} songs={list} showCoverArt optionsSource="playlist-detail" />
+    ),
+    [list, colors],
   );
+  const duration = useMemo(() => list.reduce((sum, song) => sum + (song.duration ?? 0), 0), [list]);
 
+  // Laid out like a playlist: big cover, then name, description, size and the play buttons.
   const header = (
-    <View style={styles.header}>
-      <MixCover
-        kind={isDailyMix ? 'dailyMix' : isDaily ? 'daily' : 'artist'}
-        artistId={isDailyMix ? dailyMix?.artists[0]?.id : id}
-        artistName={name}
-        mixNumber={dailyMix?.number}
-        size={COVER_SIZE}
-      />
-      <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
-        {title}
-      </Text>
-      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
-      {list.length > 0 && (
-        <View style={styles.buttons}>
-          <Text style={[styles.count, { color: colors.textSecondary }]}>
-            {t('songCount', { count: list.length })}
-          </Text>
-          <View style={styles.playButtons}>
+    <View>
+      <View style={styles.hero}>
+        <MixCover
+          kind={isDailyMix ? 'dailyMix' : isDaily ? 'daily' : 'artist'}
+          artistId={isDailyMix ? dailyMix?.artists[0]?.id : id}
+          artistName={name}
+          mixNumber={dailyMix?.number}
+          size={coverSize}
+        />
+      </View>
+      <View style={styles.info}>
+        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
+          {title}
+        </Text>
+        <View style={styles.subtitleRow}>
+          <View style={styles.subtitleText}>
+            {subtitle ? (
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
+            ) : null}
+            {list.length > 0 && (
+              <View style={styles.meta}>
+                <Ionicons name="musical-notes-outline" size={14} color={colors.primary} />
+                <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                  {t('songCount', { count: list.length })}
+                </Text>
+                <View style={styles.metaSpacer} />
+                <Ionicons name="time-outline" size={14} color={colors.primary} />
+                <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                  {formatCompactDuration(duration)}
+                </Text>
+              </View>
+            )}
+          </View>
+          {list.length > 1 && (
             <ShufflePlayButton
+              style={styles.heroButtonSpacing}
               onPress={() => {
                 const shuffled = shuffleArray(list);
                 playTrack(shuffled[0], shuffled);
               }}
             />
-            <PlayAllButton onPress={() => playTrack(list[0], list)} />
-          </View>
+          )}
+          {list.length > 0 && (
+            <PlayAllButton style={styles.heroButtonSpacing} onPress={() => playTrack(list[0], list)} />
+          )}
         </View>
-      )}
+      </View>
+      <View style={styles.trackListSpacer} />
     </View>
   );
 
@@ -141,13 +170,15 @@ export function MixScreen() {
 
   return (
     <GradientBackground style={styles.container} scrollable>
+      <View style={styles.container}>
       <FlashList
         data={loading ? [] : list}
         keyExtractor={(song, index) => `${song.id}-${index}`}
         renderItem={renderItem}
         drawDistance={400}
         maintainVisibleContentPosition={{ disabled: true }}
-        contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: insets.bottom + 32 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: 24 }}
         ListHeaderComponent={header}
         ListEmptyComponent={empty}
         refreshControl={
@@ -159,6 +190,8 @@ export function MixScreen() {
           />
         }
       />
+      <BottomChrome withSafeAreaPadding withTabBar />
+      </View>
     </GradientBackground>
   );
 }
@@ -167,36 +200,48 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  hero: {
     alignItems: 'center',
+    paddingTop: HERO_PADDING / 2,
+    paddingHorizontal: HERO_PADDING,
+  },
+  info: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 6,
+    paddingTop: 20,
+    paddingBottom: 8,
   },
   title: {
     fontSize: 24,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginTop: 12,
+    fontWeight: '700',
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  subtitleText: {
+    flex: 1,
   },
   subtitle: {
     fontSize: 14,
-    textAlign: 'center',
   },
-  buttons: {
-    alignSelf: 'stretch',
+  meta: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: 10,
   },
-  count: {
-    fontSize: 13,
+  metaText: {
+    fontSize: 14,
+    marginLeft: 4,
   },
-  playButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  metaSpacer: {
+    width: 14,
+  },
+  heroButtonSpacing: {
+    marginLeft: 10,
+  },
+  trackListSpacer: {
+    height: 8,
   },
   spinner: {
     marginTop: 32,

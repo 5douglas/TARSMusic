@@ -71,7 +71,7 @@ export function ChatSendScreen() {
             style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             accessibilityRole="button"
           >
-            <ChatAvatar name={item.name} size={44} />
+            <ChatAvatar name={item.name} username={item.username} size={44} />
             <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
               {item.name}
             </Text>

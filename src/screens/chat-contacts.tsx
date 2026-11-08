@@ -90,7 +90,7 @@ export function ChatContactsScreen() {
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
       accessibilityRole="button"
     >
-      <ChatAvatar name={user.name} size={44} />
+      <ChatAvatar name={user.name} username={user.username} size={44} />
       <View style={styles.rowText}>
         <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
           {user.name}

@@ -516,7 +516,7 @@ export function AlbumDetailScreen() {
             )
           }
         />
-        <BottomChrome withSafeAreaPadding />
+        <BottomChrome withSafeAreaPadding withTabBar />
       </View>
     </>
   );

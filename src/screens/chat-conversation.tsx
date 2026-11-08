@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChatShareCard } from '../components/ChatShareCard';
 import { GradientBackground } from '../components/GradientBackground';
+import { ChatAvatar } from '../components/ChatAvatar';
 import { useTheme } from '../hooks/useTheme';
 import {
   deleteChatMessage,
@@ -60,8 +61,19 @@ export function ChatConversationScreen() {
   const newest = useRef(0);
 
   useLayoutEffect(() => {
-    navigation.setOptions({ title: params.name || peer });
-  }, [navigation, params.name, peer]);
+    const title = params.name || peer;
+    navigation.setOptions({
+      title,
+      headerTitle: () => (
+        <View style={styles.headerTitle}>
+          <ChatAvatar name={title} username={peer} size={32} />
+          <Text style={[styles.headerName, { color: colors.textPrimary }]} numberOfLines={1}>
+            {title}
+          </Text>
+        </View>
+      ),
+    });
+  }, [navigation, params.name, peer, colors.textPrimary]);
 
   // While this conversation is on screen its new messages don't pop the chat banner.
   useEffect(() => {
@@ -267,6 +279,17 @@ export function ChatConversationScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    maxWidth: 260,
+  },
+  headerName: {
+    fontSize: 17,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
   container: {
     flex: 1,
   },

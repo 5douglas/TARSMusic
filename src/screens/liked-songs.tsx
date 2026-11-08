@@ -13,7 +13,7 @@ export function LikedSongsScreen() {
   return (
     <GradientBackground style={styles.container}>
       <FavoritesScreen topInset={0} songsOnly />
-      <BottomChrome withSafeAreaPadding />
+      <BottomChrome withSafeAreaPadding withTabBar />
     </GradientBackground>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { ensureDiscoverSession } from '../services/discoverAuthService';
+import { shareAvatarWithChat } from '../services/profileSyncService';
 import { authStore } from '../store/authStore';
 
 /**
@@ -15,7 +16,10 @@ export function useDiscoverAutoConnect(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
-    void ensureDiscoverSession();
+    // Once connected, the chat (same address) can show this user's picture to others.
+    void ensureDiscoverSession().then((ok) => {
+      if (ok) void shareAvatarWithChat();
+    });
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') void ensureDiscoverSession();
     });

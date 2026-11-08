@@ -38,6 +38,9 @@ if (typeof document !== 'undefined') {
 // (the app's tab scenes are transparent).
 require('react-native-screens').enableScreens(true);
 
+// Carousels: drag and ‹ › buttons with the mouse; thin dark scrollbars.
+require('./horizontal-scroll');
+
 // "Check for updates" in the app: electron-updater runs in the main process.
 try {
   const { ipcRenderer } = window.require('electron');

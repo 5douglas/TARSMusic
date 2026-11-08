@@ -13,7 +13,6 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { AlbumCard } from '../components/AlbumCard';
-import { DiscoverHomeSections } from '../components/DiscoverHomeSections';
 import { DownloadedIcon } from '../components/DownloadedIcon';
 import { EmptyState } from '../components/EmptyState';
 import { GenreChipSection } from '../components/GenreChipSection';
@@ -22,7 +21,6 @@ import { PlaylistCard } from '../components/PlaylistCard';
 import { QuickAccessGrid } from '../components/QuickAccessGrid';
 import { ResumeBookmarksSection } from '../components/ResumeBookmarksSection';
 import WaveformLogo from '../components/WaveformLogo';
-import { useDiscoverHome } from '../hooks/useDiscoverHome';
 import { useTheme } from '../hooks/useTheme';
 import type { AlbumID3, Playlist } from '../services/subsonicService';
 import { composeHomeAlbumSections } from '../services/homeSectionsService';
@@ -445,8 +443,6 @@ export function HomeScreen() {
   );
 
   const hasAnyFilters = downloadedOnly || favoritesOnly;
-  // Discover rows are remote Deezer content: shown only online and with no library filter on.
-  const { home: discoverHome } = useDiscoverHome(!offlineMode && !hasAnyFilters);
 
   // Playlists download atomically (no partial state), so the read carries no gate; it
   // comes back A-Z on the stored `sort_title`. Never-reaped source, independent of the
@@ -539,7 +535,6 @@ export function HomeScreen() {
               />
             );
           })}
-          {discoverHome && <DiscoverHomeSections home={discoverHome} ids={['charts']} />}
         </ScrollView>
       )}
     </View>

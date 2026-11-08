@@ -87,7 +87,7 @@ export function ChatListScreen() {
         style={({ pressed }) => [styles.row, pressed && styles.pressed]}
         accessibilityRole="button"
       >
-        <ChatAvatar name={item.name} size={52} />
+        <ChatAvatar name={item.name} username={item.username} size={52} />
         <View style={styles.rowText}>
           <View style={styles.rowTop}>
             <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>

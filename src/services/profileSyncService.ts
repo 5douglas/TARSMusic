@@ -12,6 +12,7 @@ import { File, Paths } from 'expo-file-system';
 
 import { authStore } from '../store/authStore';
 import { profileStore } from '../store/profileStore';
+import { isChatConfigured, setChatAvatar } from './chatService';
 import { SERVER_PROFILE_PLAYLIST_NAME, getApi } from './subsonicService';
 
 export const SERVER_PROFILE_MARKER = 'TARSMUSIC-PROFILE-1:';
@@ -83,6 +84,7 @@ export async function pushProfileToServer(): Promise<boolean> {
       public: false,
     });
     profileStore.getState().markAvatarSynced(avatarUpdatedAt);
+    void shareAvatarWithChat();
     return true;
   } catch {
     // Offline or refused: `avatarDirty` stays set, so the next sync sends it.
@@ -141,4 +143,37 @@ export async function syncProfileWithServer(): Promise<void> {
   } catch {
     /* offline or the server refused: the next startup retries */
   }
+  void shareAvatarWithChat();
+}
+
+/** `avatarUpdatedAt` of the picture the chat last accepted in this app session. */
+let chatAvatarSent: string | null = null;
+
+/**
+ * Publishes the profile picture to the chat service, where the people this user talks to
+ * can see it (the playlist copy is private). Once per picture per app session.
+ */
+export async function shareAvatarWithChat(): Promise<boolean> {
+  const { avatarUri, avatarUpdatedAt } = profileStore.getState();
+  if (!isChatConfigured() || (!avatarUri && !avatarUpdatedAt)) return false;
+  const version = `${avatarUpdatedAt ?? ''}|${avatarUri ?? ''}`;
+  if (chatAvatarSent === version) return true;
+  try {
+    let data: string | null = null;
+    if (avatarUri) {
+      const file = new File(avatarUri);
+      if (!file.exists) return false;
+      data = await file.base64();
+    }
+    const ok = await setChatAvatar(data);
+    if (ok) chatAvatarSent = version;
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Test hook. */
+export function resetChatAvatarShareForTests(): void {
+  chatAvatarSent = null;
 }

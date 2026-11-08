@@ -106,6 +106,20 @@ class ChatServerTest(unittest.TestCase):
         with urllib.request.urlopen(req) as res:
             self.assertEqual(json.loads(res.read())["username"], "ana")
 
+    def test_avatars(self):
+        import base64
+        jpeg = base64.b64encode(b"\xff\xd8\xff\xe0" + b"x" * 100).decode()
+        self.assertEqual(self.call("ana", "GET", "/avatar/douglas")[0], 404)
+        self.assertEqual(self.call("douglas", "POST", "/avatar", {"data": "bm90IGFuIGltYWdl"})[0], 400)
+        self.assertEqual(self.call("douglas", "POST", "/avatar", {"data": "%%%"})[0], 400)
+        self.assertEqual(self.call("douglas", "POST", "/avatar", {"data": jpeg})[0], 200)
+        status, got = self.call("ana", "GET", "/avatar/Douglas")
+        self.assertEqual((status, got["data"]), (200, jpeg))
+        big = base64.b64encode(b"\xff\xd8\xff" + b"x" * (300 * 1024)).decode()
+        self.assertEqual(self.call("douglas", "POST", "/avatar", {"data": big})[0], 400)
+        self.assertEqual(self.call("douglas", "POST", "/avatar", {"data": None})[0], 200)
+        self.assertEqual(self.call("ana", "GET", "/avatar/douglas")[0], 404)
+
     def test_users_contacts_and_messages(self):
         # The account list is never exposed: /users only holds the caller's contacts.
         status, users = self.call("Douglas", "GET", "/users")

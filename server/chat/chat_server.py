@@ -8,6 +8,8 @@ user can only read and send as themselves.
 Data lives in one SQLite file (DB_PATH). Usernames are stored lowercase.
 """
 
+import base64
+import binascii
 import json
 import os
 import re
@@ -72,6 +74,11 @@ def init_db():
             created_at REAL NOT NULL,
             read_at REAL
         );
+        CREATE TABLE IF NOT EXISTS avatars (
+            username TEXT PRIMARY KEY,
+            data TEXT NOT NULL,
+            updated_at REAL NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS messages_pair ON messages (sender, recipient, id);
         CREATE INDEX IF NOT EXISTS messages_inbox ON messages (recipient, read_at);
         """
@@ -114,6 +121,23 @@ def verify_subsonic(user, token, salt, password):
                 _auth_cache.clear()
             _auth_cache[key] = now + AUTH_TTL
     return ok
+
+
+AVATAR_BODY_LIMIT = 400 * 1024
+AVATAR_MAX_BYTES = 256 * 1024
+
+
+def valid_avatar(data):
+    """A base64 JPEG, PNG or WebP of at most AVATAR_MAX_BYTES."""
+    if not isinstance(data, str) or len(data) > AVATAR_BODY_LIMIT:
+        return False
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except (binascii.Error, ValueError):
+        return False
+    if not raw or len(raw) > AVATAR_MAX_BYTES:
+        return False
+    return raw[:3] == b"\xff\xd8\xff" or raw[:8] == b"\x89PNG\r\n\x1a\n" or (raw[:4] == b"RIFF" and raw[8:12] == b"WEBP")
 
 
 def navidrome_users():
@@ -214,9 +238,9 @@ class Handler(BaseHTTPRequestHandler):
             "Content-Type, X-Subsonic-User, X-Subsonic-Token, X-Subsonic-Salt, X-Subsonic-Password",
         )
 
-    def _body(self):
+    def _body(self, limit=64 * 1024):
         length = int(self.headers.get("Content-Length") or 0)
-        if length <= 0 or length > 64 * 1024:
+        if length <= 0 or length > limit:
             return {}
         try:
             data = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -266,7 +290,9 @@ class Handler(BaseHTTPRequestHandler):
         if not display:
             return self._send(401, {"error": "unauthorized"})
         me = display.lower()
-        body = self._body() if method == "POST" else {}
+        # A profile picture (base64 JPEG/PNG) is the only large body.
+        limit = AVATAR_BODY_LIMIT if path == "/avatar" else 64 * 1024
+        body = self._body(limit) if method == "POST" else {}
         conn = db()
         try:
             conn.execute(
@@ -307,6 +333,35 @@ class Handler(BaseHTTPRequestHandler):
                 "SELECT 1 FROM contacts WHERE owner = ? AND contact = ?", (me, target)
             ).fetchone()
             return 200, {"user": {"username": target, "name": users[target], "contact": row is not None}}
+
+        if method == "POST" and path == "/avatar":
+            # The caller's own profile picture, or null to remove it.
+            if "data" not in body:
+                # Missing, unreadable or over the size limit.
+                return 400, {"error": "invalid image"}
+            data = body.get("data")
+            if data is None:
+                conn.execute("DELETE FROM avatars WHERE username = ?", (me,))
+                conn.commit()
+                return 200, {"ok": True}
+            if not valid_avatar(data):
+                return 400, {"error": "invalid image"}
+            conn.execute(
+                "INSERT INTO avatars (username, data, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(username) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
+                (me, data, time.time()),
+            )
+            conn.commit()
+            return 200, {"ok": True}
+
+        if method == "GET" and path.startswith("/avatar/"):
+            target = urllib.parse.unquote(path[len("/avatar/"):]).lower()
+            row = conn.execute(
+                "SELECT data, updated_at FROM avatars WHERE username = ?", (target,)
+            ).fetchone()
+            if not row:
+                return 404, {"error": "no avatar"}
+            return 200, {"username": target, "data": row["data"], "updatedAt": row["updated_at"]}
 
         if method == "GET" and path == "/contacts":
             users = all_users(conn)

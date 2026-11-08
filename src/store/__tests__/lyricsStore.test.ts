@@ -294,3 +294,33 @@ describe('lyricsStore.clearLyrics', () => {
     expect(mockClearAll).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('setLyrics / adjustOffset', () => {
+  beforeEach(() => {
+    lyricsStore.setState({ entries: {}, loading: {}, errors: {}, revision: 0 });
+    mockSave.mockReset();
+  });
+
+  it('stores lyrics from elsewhere in memory and on disk', async () => {
+    await lyricsStore.getState().setLyrics('t1', sample);
+    expect(lyricsStore.getState().entries.t1).toEqual(sample);
+    expect(mockSave).toHaveBeenCalledWith('t1', sample);
+  });
+
+  it('moves synced lyrics and keeps the running total', () => {
+    lyricsStore.setState({ entries: { t1: sample } });
+    expect(lyricsStore.getState().adjustOffset('t1', 500)).toBe(500);
+    expect(lyricsStore.getState().adjustOffset('t1', 500)).toBe(1000);
+    expect(lyricsStore.getState().adjustOffset('t1', -1500)).toBe(-500);
+    expect(lyricsStore.getState().entries.t1.offsetMs).toBe(-500);
+    expect(mockSave).toHaveBeenLastCalledWith('t1', expect.objectContaining({ offsetMs: -500 }));
+  });
+
+  it('does nothing for missing or unsynced lyrics', () => {
+    lyricsStore.setState({ entries: { t2: { ...sample, synced: false } } });
+    expect(lyricsStore.getState().adjustOffset('t1', 500)).toBeNull();
+    expect(lyricsStore.getState().adjustOffset('t2', 500)).toBeNull();
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+});
+

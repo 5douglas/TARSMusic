@@ -95,3 +95,33 @@ it('does nothing without a Discover address', async () => {
   await expect(fetchConversations()).resolves.toBeNull();
   expect(mockFetch).not.toHaveBeenCalled();
 });
+
+describe('profile pictures', () => {
+  const { clearChatAvatarCache, fetchChatAvatar, setChatAvatar, cachedChatAvatar } = require('../chatService');
+
+  beforeEach(() => clearChatAvatarCache());
+
+  it('fetches once, caches the data URI and shares one request', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: 'QUJD' }) });
+    const [a, b] = await Promise.all([fetchChatAvatar('Ana'), fetchChatAvatar('ana')]);
+    expect(a).toBe('data:image/jpeg;base64,QUJD');
+    expect(b).toBe(a);
+    await fetchChatAvatar('ana');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toBe(`${BASE}/chat/avatar/ana`);
+    expect(cachedChatAvatar('ANA')).toBe(a);
+  });
+
+  it('remembers that a user has no picture', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
+    await expect(fetchChatAvatar('bob')).resolves.toBeNull();
+    expect(cachedChatAvatar('bob')).toBeNull();
+  });
+
+  it('publishes the own picture', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    await expect(setChatAvatar('QUJD')).resolves.toBe(true);
+    expect(mockFetch.mock.calls[0][0]).toBe(`${BASE}/chat/avatar`);
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({ data: 'QUJD' });
+  });
+});

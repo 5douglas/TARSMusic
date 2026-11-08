@@ -672,7 +672,7 @@ export function ArtistDetailScreen() {
             )
           }
         />
-        <BottomChrome withSafeAreaPadding />
+        <BottomChrome withSafeAreaPadding withTabBar />
       </View>
     </>
   );

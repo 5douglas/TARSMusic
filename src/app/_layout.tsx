@@ -53,6 +53,7 @@ import { RoutePickerSheet } from '../components/RoutePicker';
 import { OnboardingGuide } from '../components/OnboardingGuide';
 import { BackgroundPlaybackPromptModal } from '../components/BackgroundPlaybackPromptModal';
 import { SetRatingSheet } from '../components/SetRatingSheet';
+import { ReportProblemSheet } from '../components/ReportProblemSheet';
 import { SleepTimerSheet } from '../components/SleepTimerSheet';
 import { ChatNotifier } from '../components/ChatNotifier';
 import { PlaybackToast } from '../components/PlaybackToast';
@@ -387,6 +388,18 @@ export default function RootLayout() {
       tabletLayoutStore.getState().setPlayerExpanded(false);
     }
   }, [isWide]);
+
+  // Opening another screen from the expanded (full-screen) player, e.g. "Send in chat",
+  // collapses it so the new screen is visible instead of hidden behind the player.
+  const routeKey = segments.join('/');
+  const prevRouteKeyRef = useRef(routeKey);
+  useEffect(() => {
+    if (prevRouteKeyRef.current === routeKey) return;
+    prevRouteKeyRef.current = routeKey;
+    if (tabletLayoutStore.getState().playerExpanded) {
+      tabletLayoutStore.getState().setPlayerExpanded(false);
+    }
+  }, [routeKey]);
 
   // Dismiss the phone /player modal when rotating into wide mode, since
   // the player panel takes over and having both visible is confusing.
@@ -992,6 +1005,7 @@ export default function RootLayout() {
 
       {/* Global sleep timer sheet driven by sleepTimerStore */}
       <SleepTimerSheet />
+      <ReportProblemSheet />
 
       {/* Global audio route / cast picker driven by useRoutePickerStore */}
       <RoutePickerSheet />

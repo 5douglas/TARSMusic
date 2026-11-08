@@ -53,6 +53,7 @@ import {
 } from '../services/subsonicService';
 import { addToPlaylistStore } from '../store/addToPlaylistStore';
 import { scrobbleExclusionStore, type ScrobbleExclusionType } from '../store/scrobbleExclusionStore';
+import { reportProblemStore } from '../store/reportProblemStore';
 import { shareSheetStore } from '../store/shareSheetStore';
 import { sleepTimerStore } from '../store/sleepTimerStore';
 import { getOverride, mbidOverrideStore } from '../store/mbidOverrideStore';
@@ -533,6 +534,13 @@ export function MoreOptionsSheet() {
     }
   }, [entity]);
 
+  const handleReportProblem = useCallback(async () => {
+    if (!entity || entity.type !== 'song') return;
+    const song = entity.item;
+    await moreOptionsStore.getState().hideAndAwait();
+    reportProblemStore.getState().show({ id: song.id, title: song.title, artist: song.artist });
+  }, [entity]);
+
   const handleSleepTimer = useCallback(async () => {
     await moreOptionsStore.getState().hideAndAwait();
     sleepTimerStore.getState().showSheet();
@@ -693,6 +701,7 @@ export function MoreOptionsSheet() {
   const showSaveTopSongsPlaylist = !offline && entity?.type === 'artist' && !isVA;
   const showPlaySimilarArtistsMix = !offline && canPlaySimilarArtistsMix(entity) && !isVA;
   const showPlayMoreByArtist = canPlayMoreByArtist(entity) && !isVA;
+  const showReportProblem = !offline && entity?.type === 'song';
   const showSetMbid = (entity?.type === 'artist' || entity?.type === 'album') && !isVA;
   const showScrobbleExclusion = canExcludeFromScrobbling(entity);
 
@@ -920,6 +929,15 @@ export function MoreOptionsSheet() {
                   icon={<Ionicons name="information-circle-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
                   label={t('trackDetails')}
                   onPress={handleShowTrackDetails}
+                />
+              )}
+
+              {/* Report a problem (song): the server tries to fix it */}
+              {showReportProblem && (
+                <MoreOptionsRow
+                  icon={<Ionicons name="flag-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
+                  label={t('reportProblem')}
+                  onPress={handleReportProblem}
                 />
               )}
 
