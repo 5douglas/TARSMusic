@@ -746,7 +746,7 @@ export function PlaylistDetailScreen() {
           }
         />
       )}
-        <BottomChrome withSafeAreaPadding />
+        <BottomChrome withSafeAreaPadding withTabBar />
       </View>
     </>
   );

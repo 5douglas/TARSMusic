@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DownloadBanner } from './DownloadBanner';
 import { PlayerPhoneMini } from './player/PlayerPhoneMini';
 import { PlayerTabletPortraitMini } from './player/PlayerTabletPortraitMini';
+import { StackTabBar } from './StackTabBar';
 import { useIsTabletPortrait } from '../hooks/useIsTabletPortrait';
 import { useLayoutMode } from '../hooks/useLayoutMode';
 import { authStore } from '../store/authStore';
@@ -33,9 +34,11 @@ import { playerStore } from '../store/playerStore';
  */
 interface BottomChromeProps {
   withSafeAreaPadding?: boolean;
+  /** Content screens opened over the tabs (playlists, mixes...) also show the tab bar. */
+  withTabBar?: boolean;
 }
 
-export function BottomChrome({ withSafeAreaPadding = false }: BottomChromeProps = {}) {
+export function BottomChrome({ withSafeAreaPadding = false, withTabBar = false }: BottomChromeProps = {}) {
   const isWide = useLayoutMode() === 'wide';
   const isTabletPortrait = useIsTabletPortrait();
   const isLoggedIn = authStore((s) => s.isLoggedIn);
@@ -51,6 +54,17 @@ export function BottomChrome({ withSafeAreaPadding = false }: BottomChromeProps 
   const insets = useSafeAreaInsets();
 
   if (!isLoggedIn) return null;
+  if (withTabBar) {
+    return (
+      <View style={[styles.wrapper, withSafeAreaPadding ? { paddingBottom: insets.bottom } : null]}>
+        {hasDownloads && <DownloadBanner />}
+        {!isWide && hasCurrentTrack && (
+          isTabletPortrait ? <PlayerTabletPortraitMini /> : <PlayerPhoneMini />
+        )}
+        <StackTabBar />
+      </View>
+    );
+  }
   // On wide layouts the mini player never renders, so the chrome only has a
   // reason to mount when there are downloads.
   if (isWide && !hasDownloads) return null;

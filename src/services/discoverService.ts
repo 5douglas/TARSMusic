@@ -252,3 +252,30 @@ export function discoverPreviewUrl(trackId: number): string | null {
   if (!conn) return null;
   return `${conn.baseUrl}/preview/${trackId}?token=${encodeURIComponent(conn.token)}`;
 }
+
+export type ReportKind =
+  | 'lyrics_offset'
+  | 'lyrics_wrong'
+  | 'lyrics_missing'
+  | 'lyrics_unsynced'
+  | 'audio'
+  | 'tags'
+  | 'cover'
+  | 'other';
+
+export interface ReportResult {
+  /** fixed: corrected now; queued: audio downloading again; instrumental; not_found/pending: sent to the admin list. */
+  status: 'fixed' | 'queued' | 'instrumental' | 'not_found' | 'pending';
+  /** The new LRC text when the server replaced or shifted the lyrics. */
+  lyrics?: string;
+}
+
+/** Reports a problem with a library song; the server tries to fix it on its own. Null when it could not be sent. */
+export async function reportSongProblem(
+  songId: string,
+  kind: ReportKind,
+  extra: { offsetMs?: number; note?: string } = {},
+): Promise<ReportResult | null> {
+  const res = await postJson<ReportResult>('/report', { songId, kind, ...extra });
+  return res && typeof res.status === 'string' ? res : null;
+}

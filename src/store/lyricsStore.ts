@@ -34,6 +34,10 @@ interface LyricsState {
     artist?: string,
     title?: string,
   ) => Promise<LyricsData | null>;
+  /** Store lyrics the app got elsewhere (a fix from the server), in memory and on disk. */
+  setLyrics: (trackId: string, data: LyricsData) => Promise<void>;
+  /** Move one song's synced lyrics later (+) or earlier (-) by `deltaMs`; returns the new total offset. */
+  adjustOffset: (trackId: string, deltaMs: number) => number | null;
   /** Drop one song's cached lyrics, in memory and on disk. */
   removeLyrics: (trackId: string) => Promise<void>;
   /** Clear all cached lyrics, in memory and on disk. */
@@ -124,6 +128,20 @@ export const lyricsStore = create<LyricsState>()((set, get) => {
       } finally {
         clearLoading(trackId);
       }
+    },
+
+    setLyrics: async (trackId, data) => {
+      remember(trackId, data);
+      await saveLyrics(trackId, data);
+    },
+
+    adjustOffset: (trackId, deltaMs) => {
+      const entry = get().entries[trackId];
+      if (!entry || !entry.synced) return null;
+      const next = { ...entry, offsetMs: entry.offsetMs + deltaMs };
+      remember(trackId, next);
+      void saveLyrics(trackId, next);
+      return next.offsetMs;
     },
 
     removeLyrics: async (trackId) => {

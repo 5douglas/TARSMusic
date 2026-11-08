@@ -11,16 +11,20 @@ services:
       - DEEMIX_URL=http://deemix:6595
       - NAVIDROME_DB=/navidrome/navidrome.db
       - AUTODL_STATE=/autodl/state.json
+      # reportes: .lrc, capas e tags sao corrigidos direto na biblioteca
+      - MUSIC_DIR=/music
+      - ND_MUSIC_DIR=/music
     volumes:
       - ./data:/data
       - /home/ubuntu/navidrome/data:/navidrome:ro
       - /home/ubuntu/navidrome-autodl/data:/autodl:ro
+      - /home/ubuntu/gdrive_videos/music:/music
     ports:
       # so localhost; exposicao ao celular e decidida depois (Caddy/Cloudflare)
       - "127.0.0.1:8085:8085"
     networks:
       - navidrome_default
-    mem_limit: 192m
+    mem_limit: 256m
     logging:
       options:
         max-size: "5m"

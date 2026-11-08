@@ -8,6 +8,7 @@ import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DiscoverEntityRow, DiscoverTrackRow } from '../components/DiscoverRows';
+import { BottomChrome } from '../components/BottomChrome';
 import { EmptyState } from '../components/EmptyState';
 import { GradientBackground } from '../components/GradientBackground';
 import { useDiscoverActions } from '../hooks/useDiscoverActions';
@@ -276,6 +277,7 @@ export function DiscoverBrowseScreen() {
 
   return (
     <GradientBackground style={styles.container} scrollable>
+      <View style={styles.container}>
       <FlashList
         data={rows}
         keyExtractor={(row) => row.key}
@@ -284,7 +286,7 @@ export function DiscoverBrowseScreen() {
         extraData={`${playingId}:${releaseFilter}`}
         drawDistance={400}
         maintainVisibleContentPosition={{ disabled: true }}
-        contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: 24 }}
         ListHeaderComponent={header}
         ListEmptyComponent={empty}
         refreshControl={
@@ -296,6 +298,8 @@ export function DiscoverBrowseScreen() {
           />
         }
       />
+      <BottomChrome withSafeAreaPadding withTabBar />
+      </View>
     </GradientBackground>
   );
 }

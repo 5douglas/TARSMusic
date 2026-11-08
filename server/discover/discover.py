@@ -12,6 +12,8 @@ Endpoints (todos exigem token, exceto /health):
   GET  /download/queue                 -> fila do deemix (resumo)
   GET  /auth/info                      -> publico: hashes dos hosts do Navidrome servido
   POST /auth/session                   -> credenciais Subsonic (X-Subsonic-*) -> sessao
+  POST /report                         -> reportar problema numa musica (ver reports.py)
+  GET  /reports/view                   -> lista de reportes para o admin (so DISCOVER_TOKEN)
   GET  /                               -> pagina HTML de teste
 
 Somente biblioteca padrao do Python (3.11+).
@@ -37,6 +39,8 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+import reports as reports_mod
 
 log = logging.getLogger("discover")
 
@@ -918,6 +922,15 @@ class LoginLimiter:
 
 
 login_limiter = LoginLimiter()
+
+reports = reports_mod.Reports(
+    db_path=CACHE_DIR / "reports.db", nd_db=ND_DB,
+    music_dir=Path(os.environ.get("MUSIC_DIR", "/music")),
+    nd_music_dir=os.environ.get("ND_MUSIC_DIR", "/music"),
+    backup_dir=CACHE_DIR / "backup", deezer=deezer, deemix=deemix, http_get_json=http_get_json,
+    normalize=normalize, normalize_title=normalize_title, split_artists=split_artists,
+    navidrome_url=NAVIDROME_URL, nd_user=os.environ.get("ND_ADMIN_USER", ""),
+    nd_password=os.environ.get("ND_ADMIN_PASSWORD", ""))
 HOST_HASHES = [hashlib.sha256(h.encode()).hexdigest() for h in NAVIDROME_PUBLIC_HOSTS]
 
 
@@ -950,6 +963,19 @@ class Handler(BaseHTTPRequestHandler):
         if hmac.compare_digest(given.encode(), TOKEN.encode()):
             return True
         return session_user(given) is not None
+
+    def _is_admin(self, query: dict) -> bool:
+        auth = self.headers.get("Authorization", "")
+        given = auth[7:] if auth.lower().startswith("bearer ") else (query.get("token") or [""])[0]
+        return hmac.compare_digest(given.encode(), TOKEN.encode())
+
+    def _user(self, query: dict) -> str:
+        """Usuario do Navidrome da sessao, ou "admin" para o DISCOVER_TOKEN."""
+        if self._is_admin(query):
+            return "admin"
+        auth = self.headers.get("Authorization", "")
+        given = auth[7:] if auth.lower().startswith("bearer ") else (query.get("token") or [""])[0]
+        return session_user(given) or "?"
 
     def _client_ip(self) -> str:
         return (self.headers.get("CF-Connecting-IP") or self.client_address[0] or "?").strip()
@@ -995,6 +1021,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True})
         if path == "/auth/info":
             return self._send(200, {"login": "navidrome", "navidrome_hosts_sha256": HOST_HASHES})
+        if path in ("/reports", "/reports/view"):
+            if not self._is_admin(query):
+                return self._send(401, {"error": "unauthorized"})
+            if path == "/reports":
+                status = (query.get("status") or [None])[0]
+                return self._send(200, {"reports": reports.listing(status)})
+            token = (query.get("token") or [""])[0]
+            return self._send(200, reports.html(token), "text/html; charset=utf-8")
         if not self._authorized(query):
             return self._send(401, {"error": "unauthorized"})
         refresh = (query.get("refresh") or ["0"])[0] in ("1", "true")
@@ -1060,6 +1094,13 @@ class Handler(BaseHTTPRequestHandler):
         path = url.path.rstrip("/")
         if path == "/auth/session":
             return self._login()
+        m = re.fullmatch(r"/reports/(\d+)/resolve", path)
+        if m:
+            if not self._is_admin(query):
+                return self._send(401, {"error": "unauthorized"})
+            reports.resolve(int(m.group(1)))
+            token = urllib.parse.quote((query.get("token") or [""])[0])
+            return self._send(303, b"", headers={"Location": f"/reports/view?token={token}"})
         if not self._authorized(query):
             return self._send(401, {"error": "unauthorized"})
         try:
@@ -1067,6 +1108,13 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(min(length, 10000)) or b"{}")
         except (ValueError, json.JSONDecodeError):
             return self._send(400, {"error": "JSON invalido"})
+        if path == "/report":
+            try:
+                status, res = reports.handle(self._user(query), body)
+            except Exception as exc:  # noqa: BLE001
+                log.exception("Reporte falhou")
+                return self._send(502, {"error": str(exc)})
+            return self._send(status, res)
         if path in QUEUE_ACTIONS:
             route, needs_uuid = QUEUE_ACTIONS[path]
             uuid = str(body.get("uuid") or "")
@@ -1105,7 +1153,8 @@ def background():
                 cache.items.pop("new", None)
         except Exception:  # noqa: BLE001
             log.exception("Varredura falhou")
-        time.sleep(600)
+        reports.tick()
+        time.sleep(300)
 
 
 def main():

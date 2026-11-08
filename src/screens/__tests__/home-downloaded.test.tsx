@@ -459,32 +459,21 @@ describe('HomeScreen — Spotify-style shortcuts and Discover rows', () => {
     mockUseDiscoverHome.mockReturnValue({ home: { sections: [] }, refresh: jest.fn() });
   });
 
-  it('shows shortcuts first, charts last, no releases or mixes and no My listening', () => {
+  it('shows shortcuts and no Discover rows (charts live in the Discover tab)', () => {
     const r = render(<HomeScreen />);
     const tree = JSON.stringify(r.toJSON());
-    expect(mockUseDiscoverHome).toHaveBeenLastCalledWith(true);
-    expect(tree.indexOf('quick-access')).toBeLessThan(tree.indexOf('discover:charts'));
-    // Releases and Deezer mixes live in the Discover tab.
-    expect(tree).not.toContain('discover:releases');
-    expect(tree).not.toContain('discover:mixes');
+    expect(tree).toContain('quick-access');
+    expect(tree).not.toContain('discover:');
+    expect(mockUseDiscoverHome).not.toHaveBeenCalled();
     // Listening stats moved to the profile; the home screen no longer shows them.
     expect(tree).not.toContain('My Listening');
   });
 
-  it('turns Discover off offline and hides shortcuts under a filter', () => {
-    offlineModeStore.setState({ offlineMode: true });
-    mockUseDiscoverHome.mockReturnValue({ home: null, refresh: jest.fn() });
-    const r = render(<HomeScreen />);
-    expect(mockUseDiscoverHome).toHaveBeenLastCalledWith(false);
-    expect(r.queryByText(/^discover:/)).toBeNull();
-    r.unmount();
-
-    offlineModeStore.setState({ offlineMode: false });
+  it('hides shortcuts under a filter', () => {
     filterBarStore.setState({ favoritesOnly: true });
     albumListsStore.setState({ recentlyPlayed: [curated('a1')] as never });
     favoritesStore.setState({ albumIds: new Set(['a1']) });
     const r2 = render(<HomeScreen />);
-    expect(mockUseDiscoverHome).toHaveBeenLastCalledWith(false);
     expect(r2.queryByText('quick-access')).toBeNull();
   });
 });

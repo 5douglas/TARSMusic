@@ -175,3 +175,31 @@ vêm limitados a 50 itens; `completed` aos 30 mais recentes.
 | `LOOKBACK_DAYS` | 30 | janela de lançamentos |
 | `SCAN_INTERVAL_HOURS` | 12 | varredura de lançamentos |
 | `PLAYLIST_TTL` | 2400 | cache das playlists (s) |
+
+## Reportes ("Reportar problema" no app)
+
+`POST /report` com `{songId, kind, offsetMs?, note?}` (sessão do usuário ou token do admin).
+O código fica em `reports.py`. Tipos:
+
+| kind | O que o servidor faz |
+|---|---|
+| `lyrics_offset` | Desloca os tempos do `.lrc` pelo ajuste que o usuário fez no app (`offsetMs`, positivo = letra mais tarde) e devolve o `.lrc` novo |
+| `lyrics_wrong`, `lyrics_missing`, `lyrics_unsynced` | Busca candidatas no LRCLIB (artista+título+álbum+duração, busca aproximada) e no NetEase; confere título, artista e duração (±4 s), descarta a letra atual e letras mais longas que a faixa, prefere sincronizada e a de duração mais próxima; troca o `.lrc` |
+| `audio` | Acha a faixa no Deezer (ISRC do arquivo ou artista+título+duração), guarda o arquivo como `.<nome>.tarsbak` e baixa de novo pelo deemix. Se nada novo aparecer em 6 h, o original volta |
+| `tags` | Regrava título, artista, álbum, artista do álbum, ano, faixa, disco e gênero pelo Deezer (mutagen) |
+| `cover` | Grava `cover.jpg` do álbum do Deezer na pasta (só se a pasta tiver um álbum só) |
+| `other` | Só vai para a lista do admin |
+
+Resposta: `{status: fixed|queued|instrumental|not_found|pending, lyrics?}`. O que não deu
+para corrigir fica com estado `manual`. Lista para o admin:
+`https://discover.douglas.seg.br/reports/view?token=<DISCOVER_TOKEN>` (ou `GET /reports` em JSON).
+Backups de `.lrc`, capas e arquivos com tags trocadas ficam em `data/backup/`.
+Limite: 30 reportes por usuário por hora.
+
+A cada 4 h o serviço revisa um lote de 500 `.lrc` da biblioteca e troca os suspeitos
+(última linha depois do fim da faixa, `[length:]` ou `[ti:]` que não batem, letra sem
+tempo quando existe sincronizada). Cada faixa é revisada no máximo uma vez a cada 30 dias.
+
+Precisa da biblioteca montada com escrita em `/music` (ver `docker-compose.yml`).
+Opcional no `.env`: `ND_ADMIN_USER` e `ND_ADMIN_PASSWORD` para pedir um rescan do
+Navidrome depois das correções (sem isso, o rescan agendado do Navidrome pega).
