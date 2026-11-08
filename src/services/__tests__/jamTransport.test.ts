@@ -115,3 +115,39 @@ describe('writeOwnJamComment', () => {
     expect(mockApi.updatePlaylist).toHaveBeenNthCalledWith(2, { playlistId: 'mine', comment: '', public: true });
   });
 });
+
+describe('findJamSession without the REST API', () => {
+  it('falls back to Subsonic: one full list, then one small read per session playlist', async () => {
+    const mockGetPlaylist = jest.fn();
+    (mockApi as Record<string, jest.Mock>).getPlaylist = mockGetPlaylist;
+    // A proxy that only passes /rest answers the login with an HTML page.
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected token <');
+      },
+      headers: { get: () => null },
+    });
+    mockApi.getPlaylists.mockResolvedValueOnce({
+      playlists: {
+        playlist: [
+          { id: 'p1', name: NAME, owner: 'ana', comment: encodeJamComment('host', 'abc123def', hostDoc) },
+          { id: 'p9', name: 'TARSMusic backup (não apagar)', owner: 'ana', comment: 'huge' },
+          { id: 'p2', name: NAME, owner: 'bob', comment: '' },
+        ],
+      },
+    });
+
+    const first = await findJamSession('abc123def');
+    expect(first.map((e) => [e.playlistId, e.owner, e.role])).toEqual([['p1', 'ana', 'host']]);
+
+    mockGetPlaylist.mockImplementation(async ({ id }: { id: string }) => ({
+      playlist: { id, comment: id === 'p2' ? encodeJamComment('guest', 'abc123def', { at: 3, reqs: [] }) : '' },
+    }));
+    const second = await findJamSession('abc123def');
+    expect(second.map((e) => [e.playlistId, e.owner, e.role])).toEqual([['p2', 'bob', 'guest']]);
+    expect(mockApi.getPlaylists).toHaveBeenCalledTimes(1);
+    expect(mockGetPlaylist.mock.calls.map((c) => c[0].id)).toEqual(['p1', 'p2']);
+  });
+});

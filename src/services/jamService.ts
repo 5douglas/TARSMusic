@@ -334,7 +334,14 @@ async function applyHostRequest(req: JamRequest): Promise<void> {
 
 async function hostTick(sid: string): Promise<void> {
   const me = currentJamUser();
-  const entries = await findJamSession(sid);
+  let entries;
+  try {
+    entries = await findJamSession(sid);
+  } catch (err) {
+    // Reading the listeners failed, but they still need the host's heartbeat and changes.
+    if (hostDirty || Date.now() - lastPublishedAt > HOST_HEARTBEAT_MS) await publishHost();
+    throw err;
+  }
   const now = Date.now();
   const guests = entries.filter(
     (e) => e.role === 'guest' && e.sid === sid && !sameUser(e.owner, me) && isGuestFresh(e.doc, now),
