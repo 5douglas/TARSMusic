@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { type ThemeColors } from '../constants/theme';
 
@@ -43,6 +44,9 @@ export const ThemedAlert = memo(function ThemedAlert({
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.9);
   const hasAnimatedIn = useRef(false);
+  // The modal draws under the status and navigation bars: keep the card (and its buttons)
+  // clear of them, so a long message never pushes the buttons under the system keys.
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (visible) {
@@ -80,7 +84,9 @@ export const ThemedAlert = memo(function ThemedAlert({
 
   return (
     <Modal transparent visible={visible} onRequestClose={onDismiss} statusBarTranslucent>
-      <View style={styles.container}>
+      <View
+        style={[styles.container, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}
+      >
         <Animated.View style={[styles.backdrop, backdropStyle]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
         </Animated.View>
@@ -88,7 +94,9 @@ export const ThemedAlert = memo(function ThemedAlert({
         <Animated.View style={[styles.card, { backgroundColor: colors.card }, cardStyle]}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
           {message ? (
-            <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
+            <ScrollView style={styles.messageScroll} showsVerticalScrollIndicator>
+              <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
+            </ScrollView>
           ) : null}
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -155,6 +163,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
+    maxHeight: '100%',
     borderRadius: 16,
     paddingTop: 24,
     shadowColor: '#000',
@@ -168,6 +177,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     paddingHorizontal: 24,
+  },
+  messageScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   message: {
     fontSize: 14,

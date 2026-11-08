@@ -137,11 +137,32 @@ export async function downloadAndInstall(update: AppUpdate): Promise<void> {
   }
 }
 
+/**
+ * GitHub's generated release notes, readable in a plain-text dialog: no Markdown
+ * headings or bold, no "by @user in <PR link>" tails, no "Full Changelog" link.
+ */
+export function tidyReleaseNotes(notes: string | null | undefined): string {
+  if (!notes) return '';
+  return notes
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*#+\s/.test(line) && !/full changelog/i.test(line))
+    .map((line) =>
+      line
+        .replace(/\s+by @[\w-]+ in https?:\/\/\S+\s*$/, '')
+        .replace(/\*\*/g, '')
+        .replace(/^\s*[*-]\s+/, '• ')
+        .trimEnd(),
+    )
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** Offers a found update in a themed alert. */
 export function promptUpdate(update: AppUpdate): void {
   const message = [
     i18n.t('appUpdateAvailableBody', { version: update.version }),
-    update.notes,
+    tidyReleaseNotes(update.notes),
     Platform.OS === 'android' ? i18n.t('updateInstallHint') : '',
   ]
     .filter(Boolean)
