@@ -1,34 +1,37 @@
 import Ionicons from '@react-native-vector-icons/ionicons/static';
 import { useRouter } from 'expo-router';
 import { HeaderHeightContext } from 'expo-router/react-navigation';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { BottomChrome } from '../components/BottomChrome';
 import { ChatAvatar } from '../components/ChatAvatar';
 import { GradientBackground } from '../components/GradientBackground';
 import { useTheme } from '../hooks/useTheme';
-import { addContact, fetchChatUsers, removeContact, type ChatUser } from '../services/chatService';
+import { addContact, fetchContacts, lookupChatUser, removeContact, type ChatUser } from '../services/chatService';
 import { themedAlertStore } from '../store/themedAlertStore';
 
+type Lookup = { state: 'idle' } | { state: 'searching' } | { state: 'notFound' } | { state: 'found'; user: ChatUser };
+
 /**
- * Manage chat contacts: your contacts on top (tap to talk, remove), then everyone else on the
- * server (add). Contacts are stored on the chat server, so they follow the account.
+ * Your chat contacts (tap to talk, remove). The server's accounts are never listed: to add
+ * someone you type their exact Navidrome username. Contacts are stored on the chat server.
  */
 export function ChatContactsScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
-  const [users, setUsers] = useState<ChatUser[] | null>(null);
+  const [contacts, setContacts] = useState<ChatUser[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState('');
+  const [lookup, setLookup] = useState<Lookup>({ state: 'idle' });
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const data = await fetchChatUsers();
-    if (data) setUsers(data);
+    const data = await fetchContacts();
+    if (data) setContacts(data);
     setFailed(!data);
   }, []);
 
@@ -36,116 +39,146 @@ export function ChatContactsScreen() {
     void load();
   }, [load]);
 
-  const toggle = useCallback(
+  const search = useCallback(async () => {
+    const username = query.trim();
+    if (!username) return;
+    setLookup({ state: 'searching' });
+    const user = await lookupChatUser(username);
+    setLookup(user ? { state: 'found', user } : { state: 'notFound' });
+  }, [query]);
+
+  const add = useCallback(
     async (user: ChatUser) => {
       setBusy(user.username);
-      const ok = user.contact ? await removeContact(user.username) : await addContact(user.username);
+      const ok = await addContact(user.username);
       setBusy(null);
       if (ok) {
-        setUsers((cur) => (cur ?? []).map((u) => (u.username === user.username ? { ...u, contact: !u.contact } : u)));
+        setQuery('');
+        setLookup({ state: 'idle' });
+        await load();
       } else {
         themedAlertStore.getState().show(t('chatUnavailable'), undefined, [{ text: t('ok') }]);
       }
     },
-    [t],
+    [load, t],
   );
 
   const confirmRemove = useCallback(
     (user: ChatUser) => {
       themedAlertStore.getState().show(t('chatRemoveContactTitle', { name: user.name }), undefined, [
         { text: t('cancel'), style: 'cancel' },
-        { text: t('chatRemoveContact'), style: 'destructive', onPress: () => void toggle(user) },
+        {
+          text: t('chatRemoveContact'),
+          style: 'destructive',
+          onPress: () => {
+            void removeContact(user.username).then((ok) => {
+              if (ok) setContacts((cur) => (cur ?? []).filter((c) => c.username !== user.username));
+            });
+          },
+        },
       ]);
     },
-    [t, toggle],
+    [t],
   );
-
-  const sections = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = (users ?? []).filter(
-      (u) => !q || u.name.toLowerCase().includes(q) || u.username.includes(q),
-    );
-    return [
-      { key: 'contacts', title: t('chatYourContacts'), data: list.filter((u) => u.contact) },
-      { key: 'others', title: t('chatServerUsers'), data: list.filter((u) => !u.contact) },
-    ].filter((s) => s.data.length > 0);
-  }, [users, query, t]);
 
   const openConversation = (user: ChatUser) =>
     router.push({ pathname: '/conversation/[user]', params: { user: user.username, name: user.name } });
 
-  const renderItem = ({ item }: { item: ChatUser }) => (
+  const userRow = (user: ChatUser, trailing: React.ReactNode) => (
     <Pressable
-      onPress={() => openConversation(item)}
+      onPress={() => openConversation(user)}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
       accessibilityRole="button"
     >
-      <ChatAvatar name={item.name} size={44} />
+      <ChatAvatar name={user.name} size={44} />
       <View style={styles.rowText}>
         <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
-          {item.name}
+          {user.name}
         </Text>
-        {item.name.toLowerCase() !== item.username && (
-          <Text style={[styles.username, { color: colors.textSecondary }]} numberOfLines={1}>
-            @{item.username}
-          </Text>
-        )}
+        <Text style={[styles.username, { color: colors.textSecondary }]} numberOfLines={1}>
+          @{user.username}
+        </Text>
       </View>
-      {busy === item.username ? (
-        <ActivityIndicator color={colors.textSecondary} />
-      ) : item.contact ? (
-        <Pressable
-          onPress={() => confirmRemove(item)}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('chatRemoveContact')}
-        >
-          <Ionicons name="person-remove-outline" size={22} color={colors.textSecondary} />
-        </Pressable>
-      ) : (
-        <Pressable
-          onPress={() => void toggle(item)}
-          style={[styles.addButton, { borderColor: colors.textSecondary }]}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.addText, { color: colors.textPrimary }]}>{t('chatAddContact')}</Text>
-        </Pressable>
-      )}
+      {busy === user.username ? <ActivityIndicator color={colors.textSecondary} /> : trailing}
     </Pressable>
   );
 
+  const header = (
+    <View>
+      <View style={[styles.search, { backgroundColor: colors.inputBg }]}>
+        <Ionicons name="person-add-outline" size={18} color={colors.textSecondary} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.textPrimary }]}
+          value={query}
+          onChangeText={(text) => {
+            setQuery(text);
+            setLookup({ state: 'idle' });
+          }}
+          onSubmitEditing={() => void search()}
+          returnKeyType="search"
+          placeholder={t('chatAddByUsername')}
+          placeholderTextColor={colors.textSecondary}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {query.trim().length > 0 && (
+          <Pressable onPress={() => void search()} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('search')}>
+            <Ionicons name="search" size={20} color={colors.textPrimary} />
+          </Pressable>
+        )}
+      </View>
+      {lookup.state === 'searching' && <ActivityIndicator style={styles.lookupStatus} color={colors.textSecondary} />}
+      {lookup.state === 'notFound' && (
+        <Text style={[styles.lookupStatus, styles.hint, { color: colors.textSecondary }]}>
+          {t('chatUserNotFound', { username: query.trim() })}
+        </Text>
+      )}
+      {lookup.state === 'found' &&
+        userRow(
+          lookup.user,
+          lookup.user.contact ? (
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>{t('chatAlreadyContact')}</Text>
+          ) : (
+            <Pressable
+              onPress={() => void add(lookup.user)}
+              style={[styles.addButton, { borderColor: colors.textSecondary }]}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.addText, { color: colors.textPrimary }]}>{t('chatAddContact')}</Text>
+            </Pressable>
+          ),
+        )}
+      <Text style={[styles.section, { color: colors.textPrimary }]}>{t('chatYourContacts')}</Text>
+    </View>
+  );
+
   return (
-    <GradientBackground style={styles.container}>
-      <SectionList
-        sections={sections}
+    <GradientBackground scrollable style={styles.container}>
+      <FlatList
+        data={contacts ?? []}
         keyExtractor={(u) => u.username}
-        renderItem={renderItem}
-        stickySectionHeadersEnabled={false}
+        renderItem={({ item }) =>
+          userRow(
+            item,
+            <Pressable
+              onPress={() => confirmRemove(item)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('chatRemoveContact')}
+            >
+              <Ionicons name="person-remove-outline" size={22} color={colors.textSecondary} />
+            </Pressable>,
+          )
+        }
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingTop: headerHeight + 8, paddingBottom: 120 }}
-        ListHeaderComponent={
-          <View style={[styles.search, { backgroundColor: colors.inputBg }]}>
-            <Ionicons name="search" size={18} color={colors.textSecondary} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.textPrimary }]}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={t('chatSearchPeople')}
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-        }
-        renderSectionHeader={({ section }) => (
-          <Text style={[styles.section, { color: colors.textPrimary }]}>{section.title}</Text>
-        )}
+        ListHeaderComponent={header}
         ListEmptyComponent={
-          users === null && !failed ? (
+          contacts === null && !failed ? (
             <ActivityIndicator style={styles.loading} color={colors.textSecondary} />
           ) : (
             <Text style={[styles.empty, { color: colors.textSecondary }]}>
-              {failed ? t('chatUnavailable') : t('chatNoPeople')}
+              {failed ? t('chatUnavailable') : t('chatNoContacts')}
             </Text>
           )
         }
@@ -162,23 +195,29 @@ const styles = StyleSheet.create({
   search: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     marginHorizontal: 16,
-    marginBottom: 8,
     borderRadius: 10,
-    height: 38,
-    paddingHorizontal: 10,
+    height: 42,
+    paddingHorizontal: 12,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     paddingVertical: 0,
   },
+  lookupStatus: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+  },
+  hint: {
+    fontSize: 13,
+  },
   section: {
     fontSize: 18,
     fontWeight: '800',
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 20,
     paddingBottom: 6,
   },
   row: {
@@ -217,7 +256,7 @@ const styles = StyleSheet.create({
   },
   empty: {
     textAlign: 'center',
-    marginTop: 40,
+    marginTop: 24,
     paddingHorizontal: 32,
   },
 });

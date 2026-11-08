@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChatShareCard } from '../components/ChatShareCard';
@@ -29,7 +29,7 @@ import {
 import { authStore } from '../store/authStore';
 import { chatStore } from '../store/chatStore';
 import { themedAlertStore } from '../store/themedAlertStore';
-import { formatChatClock } from '../utils/chatTime';
+import { formatChatClock, formatChatDay } from '../utils/chatTime';
 
 const POLL_MS = 3_000;
 
@@ -62,6 +62,16 @@ export function ChatConversationScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({ title: params.name || peer });
   }, [navigation, params.name, peer]);
+
+  // While this conversation is on screen its new messages don't pop the chat banner.
+  useEffect(() => {
+    if (!focused) return;
+    chatStore.getState().setActivePeer(peer);
+    chatStore.getState().hideBanner();
+    return () => {
+      if (chatStore.getState().activePeer === peer) chatStore.getState().setActivePeer(null);
+    };
+  }, [focused, peer]);
 
   const markRead = useCallback(
     (list: ChatMessage[]) => {
@@ -151,7 +161,7 @@ export function ChatConversationScreen() {
       <View>
         {showDay && (
           <Text style={[styles.day, { color: colors.textSecondary }]}>
-            {new Date(item.sentAt).toLocaleDateString(undefined, { day: '2-digit', month: 'long', year: 'numeric' })}
+            {formatChatDay(item.sentAt)}
           </Text>
         )}
         <Pressable
@@ -189,11 +199,12 @@ export function ChatConversationScreen() {
   };
 
   return (
-    <GradientBackground style={styles.container}>
+    <GradientBackground scrollable style={styles.container}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={headerHeight}
+        // keyboard-controller's view also lifts the input on Android edge-to-edge, where
+        // the window no longer resizes for the keyboard.
+        behavior="padding"
       >
         {messages !== null && messages.length === 0 ? (
           <View style={[styles.center, { paddingTop: headerHeight }]}>

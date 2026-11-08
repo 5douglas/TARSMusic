@@ -1463,16 +1463,17 @@
   "chatSendFailed": "消息未发送，请重试。",
   "chatDeleteTitle": "要为所有人删除这条消息吗？",
   "chatYourContacts": "你的联系人",
-  "chatServerUsers": "服务器上的用户",
-  "chatSearchPeople": "搜索用户",
   "chatAddContact": "添加",
   "chatRemoveContact": "移除联系人",
   "chatRemoveContactTitle": "要将 {{name}} 从联系人中移除吗？",
-  "chatNoPeople": "服务器上还没有其他人。",
   "chatAddNote": "添加留言（可选）",
   "chatSendTo": "发送给",
   "chatShareSong": "歌曲",
   "chatShareAlbum": "专辑",
   "chatShareArtist": "艺人",
-  "chatSharePlaylist": "歌单"
+  "chatSharePlaylist": "歌单",
+  "chatAddByUsername": "按用户名添加",
+  "chatUserNotFound": "没有用户名为“{{username}}”的用户。",
+  "chatAlreadyContact": "已是联系人",
+  "chatNoContacts": "还没有联系人。在上方输入用户名添加。"
 }
