@@ -460,6 +460,18 @@ export async function getAlbum(albumId: string): Promise<AlbumWithSongsID3 | nul
   return result.status === 'ok' ? result.album : null;
 }
 
+/** One song by id, or `null` when the server doesn't have it or the fetch fails. */
+export async function getSong(songId: string): Promise<Child | null> {
+  const api = getApi();
+  if (!api) return null;
+  try {
+    const response = await api.getSong({ id: songId });
+    return response.song ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getAlbumInfo2(albumId: string): Promise<AlbumInfo | null> {
   const api = getApi();
   if (!api) return null;

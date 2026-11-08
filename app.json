@@ -57,6 +57,23 @@
         "REQUEST_INSTALL_PACKAGES"
       ],
       "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "discover.douglas.seg.br",
+              "pathPrefix": "/s/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "versionCode": 80000186,
       "package": "com.douglas.substreamer.discover"
     },
