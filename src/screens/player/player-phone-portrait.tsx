@@ -73,6 +73,7 @@ import { resolveCoverArtId } from '@/services/imageCacheService';
 import { type LyricsData } from '@/services/subsonicService';
 import { shareSheetStore } from '@/store/shareSheetStore';
 import { playbackSettingsStore } from '@/store/playbackSettingsStore';
+import { jamStore } from '@/store/jamStore';
 import { moreOptionsStore } from '@/store/moreOptionsStore';
 import { playerStore } from '@/store/playerStore';
 import { mixHexColors } from '@/utils/colors';
@@ -580,6 +581,7 @@ const PlayerContent = memo(function PlayerContent({
 
   const showSkipInterval = playbackSettingsStore((s) => s.showSkipIntervalButtons);
   const offlineMode = offlineModeStore((s) => s.offlineMode);
+  const jamActive = jamStore((s) => s.mode !== 'none');
   // The slot for the sung line is reserved whenever the setting is on, lyrics or not, so
   // the cover and the controls keep their place while lyrics load or are missing.
   const showCoverLyric = playbackSettingsStore((s) => s.coverLyricLine);
@@ -780,8 +782,9 @@ const PlayerContent = memo(function PlayerContent({
         </View>
       </View>
 
-      {/* Spotify's bottom row: the playing device on the left, share and the queue on the
-          right. The sleep timer and skip-interval buttons join it when turned on in Settings. */}
+      {/* Simple bottom row: the playing device on the left, share and the queue on the right.
+          "Ouvir junto" lives in the ⋯ menu and only shows here while a session is on; the sleep
+          timer and skip-interval buttons join the row only when turned on in Settings. */}
       <View style={styles.playerSpacer} />
       <View style={styles.secondaryControls}>
         <View style={[styles.controlSideLeft, styles.bottomRowSide]}>
@@ -795,7 +798,7 @@ const PlayerContent = memo(function PlayerContent({
           </View>
         )}
         <View style={[styles.controlSideRight, styles.bottomRowSide]}>
-          {!offlineMode && <JamIconButton />}
+          {!offlineMode && jamActive && <JamIconButton />}
           <Pressable
             onPress={() => { void handleShare(); }}
             hitSlop={10}

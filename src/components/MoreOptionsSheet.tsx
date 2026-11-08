@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AlbumDetailsModal } from './AlbumDetailsModal';
 import { BottomSheet } from './BottomSheet';
+import { PlaybackSpeedSheet } from './PlaybackSpeedSheet';
 import { TrackDetailsModal } from './TrackDetailsModal';
 import { CachedImage } from './CachedImage';
 import { useConfirmAlbumRemoval } from '../hooks/useConfirmAlbumRemoval';
@@ -303,6 +304,7 @@ export function MoreOptionsSheet() {
 
   const [busy, setBusy] = useState(false);
   const [detailsVisible, setDetailsVisible] = useState(false);
+  const [speedVisible, setSpeedVisible] = useState(false);
   const [detailsAlbum, setDetailsAlbum] = useState<AlbumID3 | null>(null);
   const [detailsTrack, setDetailsTrack] = useState<Child | null>(null);
 
@@ -534,6 +536,16 @@ export function MoreOptionsSheet() {
   const handleSleepTimer = useCallback(async () => {
     await moreOptionsStore.getState().hideAndAwait();
     sleepTimerStore.getState().showSheet();
+  }, []);
+
+  const handleJam = useCallback(async () => {
+    await moreOptionsStore.getState().hideAndAwait();
+    router.push('/jam');
+  }, [router]);
+
+  const handlePlaybackSpeed = useCallback(async () => {
+    await moreOptionsStore.getState().hideAndAwait();
+    setSpeedVisible(true);
   }, []);
 
   const handleSetRating = useCallback(async () => {
@@ -877,6 +889,22 @@ export function MoreOptionsSheet() {
                 />
               )}
 
+              {/* Listen together and playback speed: here instead of on the player screen */}
+              {isPlayerSource && !offline && (
+                <MoreOptionsRow
+                  icon={<Ionicons name="people-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
+                  label={t('jamTitle')}
+                  onPress={handleJam}
+                />
+              )}
+              {isPlayerSource && (
+                <MoreOptionsRow
+                  icon={<Ionicons name="speedometer-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
+                  label={t('playbackSpeed')}
+                  onPress={handlePlaybackSpeed}
+                />
+              )}
+
               {/* Album Details */}
               {showDetails && (
                 <MoreOptionsRow
@@ -1005,6 +1033,7 @@ export function MoreOptionsSheet() {
           }}
         />
       )}
+      <PlaybackSpeedSheet visible={speedVisible} onClose={() => setSpeedVisible(false)} />
     </>
   );
 }

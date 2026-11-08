@@ -36,13 +36,15 @@ export function JamIconButton({ size = 24, color }: { size?: number; color?: str
   );
 }
 
-/** A full-width pill for the bigger players (Windows side panel and full screen). */
+/** A pill for the bigger players (Windows side panel and full screen), shown only while a
+ *  session is on; starting one is in the ⋯ menu so the player stays simple. */
 export function JamPill() {
   const { t } = useTranslation();
   const router = useRouter();
   const { colors } = useTheme();
   const label = useJamLabel();
   const active = label !== null;
+  if (!active) return null;
   return (
     <Pressable
       onPress={() => router.push('/jam')}
