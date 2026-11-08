@@ -1464,16 +1464,17 @@
   "chatSendFailed": "Message not sent. Try again.",
   "chatDeleteTitle": "Delete this message for everyone?",
   "chatYourContacts": "Your contacts",
-  "chatServerUsers": "People on the server",
-  "chatSearchPeople": "Search people",
   "chatAddContact": "Add",
   "chatRemoveContact": "Remove contact",
   "chatRemoveContactTitle": "Remove {{name}} from your contacts?",
-  "chatNoPeople": "Nobody else on the server yet.",
   "chatAddNote": "Add a message (optional)",
   "chatSendTo": "Send to",
   "chatShareSong": "Song",
   "chatShareAlbum": "Album",
   "chatShareArtist": "Artist",
-  "chatSharePlaylist": "Playlist"
+  "chatSharePlaylist": "Playlist",
+  "chatAddByUsername": "Add by username",
+  "chatUserNotFound": "No one with the username \"{{username}}\".",
+  "chatAlreadyContact": "Already a contact",
+  "chatNoContacts": "No contacts yet. Add someone by their username above."
 }

@@ -53,6 +53,7 @@ import { OnboardingGuide } from '../components/OnboardingGuide';
 import { BackgroundPlaybackPromptModal } from '../components/BackgroundPlaybackPromptModal';
 import { SetRatingSheet } from '../components/SetRatingSheet';
 import { SleepTimerSheet } from '../components/SleepTimerSheet';
+import { ChatNotifier } from '../components/ChatNotifier';
 import { PlaybackToast } from '../components/PlaybackToast';
 import { ProcessingOverlay } from '../components/ProcessingOverlay';
 import { useDownloadBackgroundNotification } from '../hooks/useDownloadBackgroundNotification';
@@ -1018,6 +1019,9 @@ export default function RootLayout() {
           errors). Lifts itself above the BottomChrome (DownloadBanner +
           mini player) when present so it doesn't stack on top. */}
       <PlaybackToast />
+
+      {/* New chat message banner + unread badge polling */}
+      <ChatNotifier />
 
 
       {/* Onboarding welcome guide shown once after first login */}

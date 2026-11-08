@@ -71,10 +71,13 @@ export async function fetchConversations(): Promise<ChatConversation[] | null> {
   return Array.isArray(data?.items) ? data.items : null;
 }
 
-/** Every account on the server except the current one, with whether each is a contact. */
-export async function fetchChatUsers(): Promise<ChatUser[] | null> {
-  const data = await request<{ items: ChatUser[] }>('GET', '/users');
-  return Array.isArray(data?.items) ? data.items : null;
+/** The account with exactly this username (case ignored), or null when there is none. */
+export async function lookupChatUser(username: string): Promise<ChatUser | null> {
+  const data = await request<{ user?: ChatUser }>(
+    'GET',
+    `/users/lookup?username=${encodeURIComponent(username.trim())}`,
+  );
+  return data?.user ?? null;
 }
 
 export async function fetchContacts(): Promise<ChatUser[] | null> {
