@@ -1,0 +1,13 @@
+services:
+  tarsmusic-chat:
+    build: .
+    container_name: tarsmusic-chat
+    restart: unless-stopped
+    # host network: reaches Navidrome on 127.0.0.1:4533 and listens on 127.0.0.1:8087
+    network_mode: host
+    env_file: .env
+    environment:
+      NAVIDROME_URL: http://127.0.0.1:4533
+      PORT: "8087"
+    volumes:
+      - ./data:/data
