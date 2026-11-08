@@ -160,10 +160,46 @@ ipcMain.handle('tars:update-install', async () => {
   setImmediate(() => u.quitAndInstall(true, true));
 });
 
-app.on('second-instance', () => {
+// TARSMusic share links (substreamer://s/<kind>/<id>), from the "Open in TARSMusic"
+// button on a shared link's web page. Windows starts the app with the link as an
+// argument, or hands it to the running app through second-instance.
+const LINK_SCHEME = 'substreamer';
+let pendingLink = null;
+
+function linkFromArgs(argv) {
+  return argv.find((arg) => typeof arg === 'string' && arg.toLowerCase().startsWith(`${LINK_SCHEME}://`)) ?? null;
+}
+
+function deliverLink(url) {
+  if (!url) return;
+  if (mainWindow && !mainWindow.webContents.isLoading()) {
+    mainWindow.webContents.send('tars:open-link', url);
+  } else {
+    pendingLink = url;
+  }
+}
+
+if (process.defaultApp) {
+  // Development (electron .): register the script too, or Windows starts bare Electron.
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(LINK_SCHEME, process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient(LINK_SCHEME);
+}
+pendingLink = linkFromArgs(process.argv);
+
+ipcMain.handle('tars:take-link', () => {
+  const url = pendingLink;
+  pendingLink = null;
+  return url;
+});
+
+app.on('second-instance', (_event, argv) => {
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.focus();
+  deliverLink(linkFromArgs(argv));
 });
 
 app.whenReady().then(() => {

@@ -61,6 +61,7 @@ import {
   type MoreOptionsEntity,
   type MoreOptionsSource,
 } from '../store/moreOptionsStore';
+import { discoverSettingsStore } from '../store/discoverSettingsStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { playerStore } from '../store/playerStore';
 import { syncStatusStore } from '../store/syncStatusStore';
@@ -70,6 +71,8 @@ import { deletePlaylist as deletePlaylistRow } from '../db/repository/playlists'
 import { bumpDetailChanged } from '../db/detailNotifier';
 import { runWithOverlay } from '../store/processingOverlayStore';
 import { canUserShare, supports } from '../services/serverCapabilityService';
+import { shareItemLink } from '../services/shareLinkService';
+import { openChatShare } from '../utils/chatShare';
 import { setRatingStore } from '../store/setRatingStore';
 
 /* ------------------------------------------------------------------ */
@@ -528,6 +531,57 @@ export function MoreOptionsSheet() {
     }
   }, [entity]);
 
+  const handleShareLink = useCallback(async () => {
+    if (!entity) return;
+    await moreOptionsStore.getState().hideAndAwait();
+    switch (entity.type) {
+      case 'song':
+        await shareItemLink({ kind: 'song', id: entity.item.id, name: entity.item.title, artist: entity.item.artist });
+        break;
+      case 'album':
+        await shareItemLink({
+          kind: 'album',
+          id: entity.item.id,
+          name: entity.item.name,
+          artist: entity.item.artist ?? (entity.item as AlbumID3).displayArtist,
+        });
+        break;
+      case 'artist':
+        await shareItemLink({ kind: 'artist', id: entity.item.id, name: entity.item.name });
+        break;
+      case 'playlist':
+        await shareItemLink({ kind: 'playlist', id: entity.item.id, name: entity.item.name });
+        break;
+    }
+  }, [entity]);
+
+  const handleSendInChat = useCallback(async () => {
+    if (!entity) return;
+    if (!['song', 'album', 'artist', 'playlist'].includes(entity.type)) return;
+    const coverArt = (await resolveCoverArtId(coverSubject(entity))) ?? undefined;
+    await moreOptionsStore.getState().hideAndAwait();
+    switch (entity.type) {
+      case 'song':
+        openChatShare({ kind: 'song', id: entity.item.id, title: entity.item.title, subtitle: entity.item.artist ?? undefined, coverArt });
+        break;
+      case 'album':
+        openChatShare({
+          kind: 'album',
+          id: entity.item.id,
+          title: entity.item.name,
+          subtitle: (entity.item.artist ?? (entity.item as AlbumID3).displayArtist) || undefined,
+          coverArt,
+        });
+        break;
+      case 'artist':
+        openChatShare({ kind: 'artist', id: entity.item.id, title: entity.item.name, coverArt });
+        break;
+      case 'playlist':
+        openChatShare({ kind: 'playlist', id: entity.item.id, title: entity.item.name, coverArt });
+        break;
+    }
+  }, [entity]);
+
   const handleSetRating = useCallback(async () => {
     if (!entity) return;
     // The same cover the rest of the app shows for this entity.
@@ -653,6 +707,8 @@ export function MoreOptionsSheet() {
   const showDetails = hasAlbumDetails(entity);
   const showTrackDetails = hasTrackDetails(entity);
   const showShare = !offline && canShare(entity) && canUserShare();
+  const chatAvailable =
+    !offline && !!discoverSettingsStore.getState().baseUrl && !!entity && ['song', 'album', 'artist', 'playlist'].includes(entity.type);
   const showDownload = canDownload(entity);
   // Single-song download controls (song rows only).
   // - "Remove Download" when the song is explicitly downloaded (`song:${id}` item) OR
@@ -854,11 +910,27 @@ export function MoreOptionsSheet() {
                 />
               )}
 
-              {/* Share */}
+              {/* Share link (opens in TARSMusic for other users of the server) */}
+              <MoreOptionsRow
+                icon={<Ionicons name="share-social-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
+                label={t('share')}
+                onPress={handleShareLink}
+              />
+
+              {/* Send as a card to another user of the server, in the in-app chat */}
+              {chatAvailable && (
+                <MoreOptionsRow
+                  icon={<Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
+                  label={t('chatSendInChat')}
+                  onPress={handleSendInChat}
+                />
+              )}
+
+              {/* Public Navidrome share (plays in a browser, no account needed) */}
               {showShare && (
                 <MoreOptionsRow
-                  icon={<Ionicons name="share-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
-                  label={t('share')}
+                  icon={<Ionicons name="globe-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
+                  label={t('sharePublicLink')}
                   onPress={handleShare}
                 />
               )}

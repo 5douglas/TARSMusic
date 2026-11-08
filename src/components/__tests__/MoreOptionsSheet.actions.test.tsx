@@ -166,6 +166,10 @@ jest.mock('../../services/moreOptionsService', () => ({
   toggleStar: jest.fn(),
 }));
 
+const mockShareItemLink = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../services/shareLinkService', () => ({
+  shareItemLink: (...args: unknown[]) => mockShareItemLink(...args),
+}));
 jest.mock('../../services/musicCacheService', () => ({ deleteCachedItem: jest.fn() }));
 jest.mock('../../services/subsonicService', () => ({
   deletePlaylist: jest.fn(),
@@ -328,6 +332,7 @@ const ALL_OPTIONS = [
   'Go to Album',
   'Go to Artist',
   'Share',
+  'Public link (no app needed)',
   'Album Details',
   'Track Details',
   'Set MusicBrainz ID',
@@ -396,6 +401,7 @@ describe('MoreOptionsSheet — options per entity (online, default source)', () 
       'Go to Album',
       'Go to Artist',
       'Share',
+      'Public link (no app needed)',
       'Track Details',
       'Download Song',
     ]);
@@ -411,6 +417,7 @@ describe('MoreOptionsSheet — options per entity (online, default source)', () 
       'Add to Queue',
       'Go to Artist',
       'Share',
+      'Public link (no app needed)',
       'Album Details',
       'Set MusicBrainz ID',
       'Exclude from Scrobbling',
@@ -426,6 +433,7 @@ describe('MoreOptionsSheet — options per entity (online, default source)', () 
       'Save Top Songs Playlist',
       'Play Similar Artists',
       'Play More by This Artist',
+      'Share',
       'Set MusicBrainz ID',
       'Exclude from Scrobbling',
     ]);
@@ -433,7 +441,7 @@ describe('MoreOptionsSheet — options per entity (online, default source)', () 
 
   it('playlist', () => {
     open(playlistEntity);
-    expect(shownOptions()).toEqual(['Add to Queue', 'Share', 'Download', 'Delete Playlist']);
+    expect(shownOptions()).toEqual(['Add to Queue', 'Share', 'Public link (no app needed)', 'Download', 'Delete Playlist']);
   });
 });
 
@@ -444,7 +452,7 @@ describe('MoreOptionsSheet — options in offline mode', () => {
 
   it('song keeps only the local actions; Go to Album hidden when its album is not cached', () => {
     open(songEntity);
-    expect(shownOptions()).toEqual(['Play More by This Artist', 'Play Next', 'Add to Queue', 'Track Details']);
+    expect(shownOptions()).toEqual(['Play More by This Artist', 'Play Next', 'Add to Queue', 'Share', 'Track Details']);
   });
 
   it('song offers Go to Album when its album is cached', () => {
@@ -464,6 +472,7 @@ describe('MoreOptionsSheet — options in offline mode', () => {
     expect(shownOptions()).toEqual([
       'Play More by This Artist',
       'Add to Queue',
+      'Share',
       'Album Details',
       'Set MusicBrainz ID',
       'Exclude from Scrobbling',
@@ -473,19 +482,19 @@ describe('MoreOptionsSheet — options in offline mode', () => {
 
   it('artist', () => {
     open(artistEntity);
-    expect(shownOptions()).toEqual(['Play More by This Artist', 'Set MusicBrainz ID', 'Exclude from Scrobbling']);
+    expect(shownOptions()).toEqual(['Play More by This Artist', 'Share', 'Set MusicBrainz ID', 'Exclude from Scrobbling']);
   });
 
   it('playlist', () => {
     open(playlistEntity);
-    expect(shownOptions()).toEqual(['Add to Queue', 'Download']);
+    expect(shownOptions()).toEqual(['Add to Queue', 'Share', 'Download']);
   });
 
   it('player sources drop Add Queue to Playlist offline', () => {
     open(songEntity, 'player-phone-portrait');
     expect(screen.queryByText('Player Queue')).toBeNull();
     expect(screen.queryByText('Add Queue to Playlist')).toBeNull();
-    expect(shownOptions()).toEqual(['Play More by This Artist', 'Track Details']);
+    expect(shownOptions()).toEqual(['Play More by This Artist', 'Share', 'Track Details']);
   });
 });
 
@@ -493,7 +502,7 @@ describe('MoreOptionsSheet — option gating details', () => {
   it('Various Artists hides the per-artist actions', () => {
     mockIsVA = true;
     open(artistEntity);
-    expect(shownOptions()).toEqual(['Add to Favorites', 'Set Rating', 'Exclude from Scrobbling']);
+    expect(shownOptions()).toEqual(['Add to Favorites', 'Set Rating', 'Share', 'Exclude from Scrobbling']);
   });
 
   it('album/artist rating needs the server to support it; song rating does not', () => {
@@ -508,10 +517,11 @@ describe('MoreOptionsSheet — option gating details', () => {
     expect(screen.queryByText('Set Rating')).toBeTruthy();
   });
 
-  it('Share is hidden when the user may not share', () => {
+  it('the public link is hidden when the user may not share; the app link stays', () => {
     mockCanShare = false;
     open(albumEntity);
-    expect(screen.queryByText('Share')).toBeNull();
+    expect(screen.queryByText('Public link (no app needed)')).toBeNull();
+    expect(screen.queryByText('Share')).toBeTruthy();
   });
 
   it('a song or album without an artist id has no artist links', () => {
@@ -914,6 +924,35 @@ describe('MoreOptionsSheet — MusicBrainz ID', () => {
   });
 });
 
+describe('MoreOptionsSheet — share link', () => {
+  it('song shares its id, title and artist', async () => {
+    open(songEntity);
+    fireEvent.press(screen.getByText('Share'));
+    await waitFor(() =>
+      expect(mockShareItemLink).toHaveBeenCalledWith({ kind: 'song', id: 's1', name: 'Test Track', artist: 'Test Artist' }),
+    );
+    sheetClosed();
+  });
+
+  it('album shares its id, name and artist', async () => {
+    open(albumEntity);
+    fireEvent.press(screen.getByText('Share'));
+    await waitFor(() =>
+      expect(mockShareItemLink).toHaveBeenCalledWith({ kind: 'album', id: 'al1', name: 'Test Album', artist: 'Album Artist' }),
+    );
+  });
+
+  it('artist and playlist share their id and name', async () => {
+    const view = open(artistEntity);
+    fireEvent.press(screen.getByText('Share'));
+    await waitFor(() => expect(mockShareItemLink).toHaveBeenCalledWith({ kind: 'artist', id: 'ar1', name: 'Some Artist' }));
+    view.unmount();
+    open(playlistEntity);
+    fireEvent.press(screen.getByText('Share'));
+    await waitFor(() => expect(mockShareItemLink).toHaveBeenCalledWith({ kind: 'playlist', id: 'p1', name: 'Test Playlist' }));
+  });
+});
+
 describe('MoreOptionsSheet — share and rating resolve the cover', () => {
   function subjectPassed() {
     return (resolveCoverArtId as jest.Mock).mock.calls[0][0];
@@ -921,7 +960,7 @@ describe('MoreOptionsSheet — share and rating resolve the cover', () => {
 
   it('song share passes its cover art and album, and the resolved cover', async () => {
     open(songEntity);
-    fireEvent.press(screen.getByText('Share'));
+    fireEvent.press(screen.getByText('Public link (no app needed)'));
     await waitFor(() =>
       expect(mockShareShowSong).toHaveBeenCalledWith('s1', 'Test Track', 'Test Artist', 'resolved:cs1'),
     );
@@ -931,13 +970,13 @@ describe('MoreOptionsSheet — share and rating resolve the cover', () => {
 
   it('song share without an artist passes undefined', async () => {
     open({ type: 'song', item: { ...song, artist: null } as unknown as Child });
-    fireEvent.press(screen.getByText('Share'));
+    fireEvent.press(screen.getByText('Public link (no app needed)'));
     await waitFor(() => expect(mockShareShowSong).toHaveBeenCalledWith('s1', 'Test Track', undefined, 'resolved:cs1'));
   });
 
   it('album share passes only its cover art', async () => {
     open(albumEntity);
-    fireEvent.press(screen.getByText('Share'));
+    fireEvent.press(screen.getByText('Public link (no app needed)'));
     await waitFor(() =>
       expect(mockShareShowAlbum).toHaveBeenCalledWith('al1', 'Test Album', 'Album Artist', 'resolved:cal1'),
     );
@@ -946,7 +985,7 @@ describe('MoreOptionsSheet — share and rating resolve the cover', () => {
 
   it('playlist share passes only its cover art', async () => {
     open(playlistEntity);
-    fireEvent.press(screen.getByText('Share'));
+    fireEvent.press(screen.getByText('Public link (no app needed)'));
     await waitFor(() => expect(mockShareShowPlaylist).toHaveBeenCalledWith('p1', 'Test Playlist', 'resolved:cp1'));
     expect(subjectPassed()).toStrictEqual({ coverArt: 'cp1' });
   });

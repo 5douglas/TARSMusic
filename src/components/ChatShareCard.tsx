@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CachedImage } from './CachedImage';
 import type { ChatShare } from '../services/chatService';
-import { openChatShareTarget } from '../utils/chatShare';
+import { openShareTarget } from '../services/shareLinkService';
 
 const KIND_KEYS: Record<ChatShare['kind'], string> = {
   song: 'chatShareSong',
@@ -18,7 +18,7 @@ export const ChatShareCard = memo(function ChatShareCard({ share }: { share: Cha
   const { t } = useTranslation();
   return (
     <Pressable
-      onPress={() => void openChatShareTarget(share)}
+      onPress={() => void openShareTarget({ kind: share.kind, id: share.id })}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
       accessibilityRole="button"
     >

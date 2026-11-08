@@ -1,12 +1,8 @@
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
-jest.mock('../../services/playerService', () => ({ playTrack: jest.fn() }));
-jest.mock('../../services/subsonicService', () => ({ getSong: jest.fn() }));
 
 import { router } from 'expo-router';
 
-import { getSong } from '../../services/subsonicService';
-import { playTrack } from '../../services/playerService';
-import { openChatShare, openChatShareTarget, parseChatShareParam } from '../chatShare';
+import { openChatShare, parseChatShareParam } from '../chatShare';
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -22,13 +18,4 @@ it('rejects malformed params', () => {
   expect(parseChatShareParam(undefined)).toBeNull();
   expect(parseChatShareParam('not json')).toBeNull();
   expect(parseChatShareParam(JSON.stringify({ kind: 'video', id: 'x' }))).toBeNull();
-});
-
-it('opens pages and plays songs', async () => {
-  await openChatShareTarget({ kind: 'album', id: 'al1' });
-  expect(router.push).toHaveBeenCalledWith('/album/al1');
-  const song = { id: 's1' };
-  (getSong as jest.Mock).mockResolvedValue(song);
-  await openChatShareTarget({ kind: 'song', id: 's1' });
-  expect(playTrack).toHaveBeenCalledWith(song, [song]);
 });
