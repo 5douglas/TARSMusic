@@ -1,6 +1,6 @@
 /**
- * The mixed "Your Library" list, Spotify style: playlists, liked albums, liked artists and
- * recently played albums in one list, sortable by recents, recently added, name or creator.
+ * The mixed "Your Library" list, Spotify style: playlists, liked albums and liked artists
+ * in one list, sortable by recents, recently added, name or creator.
  * The "Downloaded" filter swaps the source for the downloaded albums and playlists.
  */
 import { albumListRowToAlbumID3 } from '../db/repository/albums';
@@ -59,8 +59,8 @@ function playlistItem(p: Playlist): LibraryItem {
 }
 
 /**
- * Builds the mixed list. Liked albums and recently played albums are merged by id, so an
- * album that is both shows once, ranked by whichever happened last.
+ * Builds the mixed list. Only liked (starred) albums are listed: playing a song does not put
+ * its album in the library. Recent plays only move a liked album up the "Recents" order.
  */
 export function composeLibraryItems(input: {
   playlists: Playlist[];
@@ -70,14 +70,15 @@ export function composeLibraryItems(input: {
 }): LibraryItem[] {
   const items: LibraryItem[] = input.playlists.map(playlistItem);
   const albums = new Map<string, LibraryItem>();
-  for (const album of [...input.starredAlbums, ...input.recentlyPlayed]) {
+  for (const album of input.starredAlbums) {
     const starred = epochOf(album.starred);
     const recent = Math.max(starred, epochOf(album.played));
-    const added = starred || epochOf(album.created);
+    albums.set(album.id, { kind: 'album', id: album.id, item: album, recent, added: starred || epochOf(album.created) });
+  }
+  for (const album of input.recentlyPlayed) {
     const existing = albums.get(album.id);
-    if (!existing || recent > existing.recent) {
-      albums.set(album.id, { kind: 'album', id: album.id, item: album, recent, added });
-    }
+    const played = epochOf(album.played);
+    if (existing && played > existing.recent) albums.set(album.id, { ...existing, recent: played });
   }
   items.push(...albums.values());
   for (const artist of input.starredArtists) {
