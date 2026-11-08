@@ -3,7 +3,7 @@ import { discoverSettingsStore } from '../discoverSettingsStore';
 jest.mock('../persistence/kvStorage', () => require('../persistence/__mocks__/kvStorage'));
 
 beforeEach(() => {
-  discoverSettingsStore.setState({ baseUrl: null, token: null });
+  discoverSettingsStore.setState({ baseUrl: null, token: null, mode: null, autoConnectDisabled: false });
 });
 
 describe('discoverSettingsStore', () => {
@@ -26,14 +26,31 @@ describe('discoverSettingsStore', () => {
     expect(discoverSettingsStore.getState()).toMatchObject({ baseUrl: null, token: null });
   });
 
-  it('persists only baseUrl, token and the Last.fm key', () => {
+  it('persists the connection, its session data and the Last.fm key', () => {
     const partialize = discoverSettingsStore.persist.getOptions().partialize!;
     discoverSettingsStore.getState().setConnection('https://d.example.com', 'tok');
     discoverSettingsStore.getState().setLastfmApiKey('key');
     expect(partialize(discoverSettingsStore.getState())).toEqual({
       baseUrl: 'https://d.example.com',
       token: 'tok',
+      mode: 'token',
+      tokenExpiresAt: null,
+      account: null,
+      autoConnectDisabled: false,
       lastfmApiKey: 'key',
+    });
+  });
+
+  it('stores a login session and re-enables automatic connection', () => {
+    discoverSettingsStore.setState({ autoConnectDisabled: true });
+    discoverSettingsStore.getState().setSession('https://d.example.com/', 's1.x', 123, 'srv|dino');
+    expect(discoverSettingsStore.getState()).toMatchObject({
+      baseUrl: 'https://d.example.com',
+      token: 's1.x',
+      mode: 'login',
+      tokenExpiresAt: 123,
+      account: 'srv|dino',
+      autoConnectDisabled: false,
     });
   });
 

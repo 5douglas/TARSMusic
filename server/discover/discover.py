@@ -10,11 +10,15 @@ Endpoints (todos exigem token, exceto /health):
   GET  /preview/{track_id}             -> 302 para um preview de 30s valido
   POST /download {"url": "..."}        -> envia para a fila do deemix
   GET  /download/queue                 -> fila do deemix (resumo)
+  GET  /auth/info                      -> publico: hashes dos hosts do Navidrome servido
+  POST /auth/session                   -> credenciais Subsonic (X-Subsonic-*) -> sessao
   GET  /                               -> pagina HTML de teste
 
 Somente biblioteca padrao do Python (3.11+).
 """
 
+import base64
+import hashlib
 import hmac
 import http.cookiejar
 import json
@@ -40,6 +44,17 @@ DEEZER_API = "https://api.deezer.com"
 USER_AGENT = "navidrome-discover/1.0"
 
 TOKEN = os.environ["DISCOVER_TOKEN"]
+# Login com a conta do Navidrome: o app manda as credenciais Subsonic do usuario, o
+# Navidrome confere (ping.view) e o discover devolve uma sessao assinada com um segredo
+# derivado do DISCOVER_TOKEN (trocar o token derruba todas as sessoes).
+NAVIDROME_URL = os.environ.get("NAVIDROME_URL", "http://navidrome:4533").rstrip("/")
+# hosts publicos do Navidrome (sem esquema); o app so manda credenciais se o servidor
+# dele estiver nesta lista. Publicados apenas como SHA-256.
+NAVIDROME_PUBLIC_HOSTS = [h.strip().lower() for h in
+                          os.environ.get("NAVIDROME_PUBLIC_HOSTS", "music.douglas.seg.br").split(",")
+                          if h.strip()]
+SESSION_TTL = int(os.environ.get("SESSION_TTL_HOURS", "24")) * 3600
+SESSION_KEY = hmac.new(TOKEN.encode(), b"discover-session-v1", hashlib.sha256).digest()
 DEEMIX_URL = os.environ.get("DEEMIX_URL", "http://deemix:6595").rstrip("/")
 DEEMIX_ARL = os.environ.get("DEEMIX_ARL", "")
 ND_DB = Path(os.environ.get("NAVIDROME_DB", "/navidrome/navidrome.db"))
@@ -825,6 +840,87 @@ QUEUE_ACTIONS = {
 # HTTP
 # --------------------------------------------------------------------------- #
 
+# --------------------------------------------------------------------------- #
+# Sessoes por usuario do Navidrome
+# --------------------------------------------------------------------------- #
+
+def _b64(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _unb64(text: str) -> bytes:
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def issue_session(user: str) -> tuple[str, int]:
+    expires = int(time.time()) + SESSION_TTL
+    body = f"s1.{_b64(user.encode())}.{expires}"
+    sig = _b64(hmac.new(SESSION_KEY, body.encode(), hashlib.sha256).digest())
+    return f"{body}.{sig}", expires
+
+
+def session_user(token: str) -> str | None:
+    """Usuario de uma sessao valida e nao expirada; None caso contrario."""
+    parts = token.split(".")
+    if len(parts) != 4 or parts[0] != "s1":
+        return None
+    body = ".".join(parts[:3])
+    expected = _b64(hmac.new(SESSION_KEY, body.encode(), hashlib.sha256).digest())
+    if not hmac.compare_digest(expected.encode(), parts[3].encode()):
+        return None
+    try:
+        if int(parts[2]) < time.time():
+            return None
+        return _unb64(parts[1]).decode()
+    except (ValueError, UnicodeDecodeError):
+        return None
+
+
+def navidrome_accepts(user: str, token: str, salt: str, password: str) -> bool:
+    params = {"u": user, "v": "1.16.1", "c": "tarsmusic-discover", "f": "json"}
+    if token and salt:
+        params.update(t=token, s=salt)
+    elif password:
+        params["p"] = password
+    else:
+        return False
+    try:
+        req = urllib.request.Request(f"{NAVIDROME_URL}/rest/ping.view?{urllib.parse.urlencode(params)}",
+                                     headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=10) as res:
+            body = json.loads(res.read().decode("utf-8"))
+    except (OSError, ValueError):
+        log.warning("Navidrome indisponivel para conferir login")
+        raise
+    return body.get("subsonic-response", {}).get("status") == "ok"
+
+
+class LoginLimiter:
+    """Freia tentativa de senha: no maximo `limit` falhas por IP a cada `window` segundos."""
+
+    def __init__(self, limit: int = 10, window: int = 600):
+        self.limit, self.window = limit, window
+        self.fails: dict[str, list[float]] = {}
+        self.lock = threading.Lock()
+
+    def blocked(self, ip: str) -> bool:
+        now = time.time()
+        with self.lock:
+            recent = [t for t in self.fails.get(ip, []) if now - t < self.window]
+            self.fails[ip] = recent
+            return len(recent) >= self.limit
+
+    def failed(self, ip: str):
+        with self.lock:
+            if len(self.fails) > 10000:
+                self.fails.clear()
+            self.fails.setdefault(ip, []).append(time.time())
+
+
+login_limiter = LoginLimiter()
+HOST_HASHES = [hashlib.sha256(h.encode()).hexdigest() for h in NAVIDROME_PUBLIC_HOSTS]
+
+
 PAGE = (Path(__file__).parent / "index.html").read_text(encoding="utf-8")
 
 
@@ -848,15 +944,45 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def _authorized(self, query: dict) -> bool:
+        """Token do admin (DISCOVER_TOKEN) ou sessao emitida por /auth/session."""
         auth = self.headers.get("Authorization", "")
         given = auth[7:] if auth.lower().startswith("bearer ") else (query.get("token") or [""])[0]
-        return hmac.compare_digest(given.encode(), TOKEN.encode())
+        if hmac.compare_digest(given.encode(), TOKEN.encode()):
+            return True
+        return session_user(given) is not None
+
+    def _client_ip(self) -> str:
+        return (self.headers.get("CF-Connecting-IP") or self.client_address[0] or "?").strip()
+
+    def _login(self):
+        ip = self._client_ip()
+        if login_limiter.blocked(ip):
+            return self._send(429, {"error": "muitas tentativas, tente mais tarde"})
+        h = self.headers
+        user = (h.get("X-Subsonic-User") or "").strip()
+        if not user or len(user) > 200:
+            return self._send(401, {"error": "unauthorized"})
+        try:
+            ok = navidrome_accepts(user, (h.get("X-Subsonic-Token") or "").strip(),
+                                   (h.get("X-Subsonic-Salt") or "").strip(),
+                                   (h.get("X-Subsonic-Password") or "").strip())
+        except (OSError, ValueError):
+            return self._send(503, {"error": "navidrome indisponivel"})
+        if not ok:
+            login_limiter.failed(ip)
+            log.info("Login recusado para %s", user)
+            return self._send(401, {"error": "unauthorized"})
+        token, expires = issue_session(user)
+        log.info("Sessao emitida para %s", user)
+        return self._send(200, {"token": token, "expires_at": expires, "user": user})
 
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        self.send_header("Access-Control-Allow-Headers",
+                         "Authorization, Content-Type, X-Subsonic-User, X-Subsonic-Token, "
+                         "X-Subsonic-Salt, X-Subsonic-Password")
         self.end_headers()
 
     def do_GET(self):
@@ -867,6 +993,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, PAGE, "text/html; charset=utf-8")
         if path == "/health":
             return self._send(200, {"ok": True})
+        if path == "/auth/info":
+            return self._send(200, {"login": "navidrome", "navidrome_hosts_sha256": HOST_HASHES})
         if not self._authorized(query):
             return self._send(401, {"error": "unauthorized"})
         refresh = (query.get("refresh") or ["0"])[0] in ("1", "true")
@@ -929,9 +1057,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         url = urllib.parse.urlsplit(self.path)
         query = urllib.parse.parse_qs(url.query)
+        path = url.path.rstrip("/")
+        if path == "/auth/session":
+            return self._login()
         if not self._authorized(query):
             return self._send(401, {"error": "unauthorized"})
-        path = url.path.rstrip("/")
         try:
             length = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(min(length, 10000)) or b"{}")

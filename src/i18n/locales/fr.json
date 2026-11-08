@@ -1190,7 +1190,7 @@
   "newMusicReleases_other": "{{count}} nouvelles sorties",
   "newMusicRequestArrived": "Votre téléchargement est prêt",
   "discoverConnectTitle": "Se connecter à Découvrir",
-  "discoverConnectHint": "Saisissez l'adresse et le jeton de votre service Découvrir.",
+  "discoverConnectHint": "Les comptes du serveur TARSMusic se connectent automatiquement avec leur identifiant.",
   "discoverServerUrl": "URL du serveur Découvrir",
   "discoverToken": "Jeton",
   "discoverLoadFailed": "Impossible de charger cette playlist",
@@ -1215,7 +1215,7 @@
   "discoverCancelAll": "Tout annuler",
   "discoverCancelAllTitle": "Annuler tous les téléchargements ?",
   "discoverCancelAllBody": "Tout ce qui est en cours de téléchargement ou en attente dans la file est supprimé.",
-  "discoverEditConnectionBody": "Se déconnecter de ce serveur Découvrir pour saisir une nouvelle adresse ou un nouveau jeton ?",
+  "discoverEditConnectionBody": "Se déconnecter de ce serveur Découvrir ? Il ne se reconnectera pas tout seul tant que vous ne vous reconnecterez pas.",
   "yourLibrary": "Bibliothèque",
   "likedSongs": "Titres likés",
   "discoverServer": "Découvrir",
@@ -1475,5 +1475,11 @@
   "chatShareSong": "Titre",
   "chatShareAlbum": "Album",
   "chatShareArtist": "Artiste",
-  "chatSharePlaylist": "Playlist"
+  "chatSharePlaylist": "Playlist",
+  "discoverConnectAuto": "Se connecter avec mon compte",
+  "discoverAutoFailed": "Votre compte n'a pas pu ouvrir Découvrir. Cela ne fonctionne qu'avec les comptes du serveur TARSMusic ; vérifiez la connexion et réessayez.",
+  "discoverManualHint": "Un autre service Découvrir ? Saisissez son adresse. Laissez le jeton vide pour vous connecter avec votre compte du serveur.",
+  "discoverTokenOptional": "Jeton (facultatif)",
+  "discoverLoginFailed": "Ce service Découvrir n'a pas accepté votre compte du serveur. Vérifiez l'adresse ou saisissez un jeton.",
+  "discoverLoginMode": "Connecté avec votre compte du serveur"
 }

@@ -16,14 +16,30 @@ sem Cloudflare Access; a proteção é o token abaixo).
 
 ## Autenticação
 
-Todo endpoint, exceto `/` e `/health`, exige o token (`DISCOVER_TOKEN` no `.env`):
+Todo endpoint, exceto `/`, `/health` e `/auth/*`, exige uma credencial no header
+`Authorization: Bearer <credencial>` (ou `?token=<credencial>`, usado pela tag
+`<audio>` em `/preview`). Duas credenciais valem:
 
-```
-Authorization: Bearer <token>
-```
+1. **Token do admin**: `DISCOVER_TOKEN` do `.env`. Continua funcionando como antes.
+2. **Sessão por usuário do Navidrome** (o que o app usa): qualquer conta do Navidrome
+   entra sozinha, sem digitar token.
+   - `GET /auth/info` (público) devolve `{"navidrome_hosts_sha256": [...]}`: o SHA-256
+     de cada host público do Navidrome servido (`NAVIDROME_PUBLIC_HOSTS`, padrão
+     `music.douglas.seg.br`). O app só manda credenciais se o host do servidor dele
+     estiver nessa lista, então quem usa o app com outro Navidrome nunca envia a senha
+     para cá.
+   - `POST /auth/session` com as credenciais Subsonic do usuário nos headers
+     `X-Subsonic-User` + `X-Subsonic-Token` + `X-Subsonic-Salt` (ou
+     `X-Subsonic-Password`). O discover confere no Navidrome (`ping.view` em
+     `NAVIDROME_URL`, padrão `http://navidrome:4533`) e responde
+     `{token, expires_at, user}`. A sessão vale 24 h (`SESSION_TTL_HOURS`) e é assinada
+     com HMAC usando uma chave derivada do `DISCOVER_TOKEN`: nenhum segredo fica no app,
+     e trocar o `DISCOVER_TOKEN` derruba todas as sessões.
+   - Mais de 10 logins errados do mesmo IP em 10 minutos → `429`.
+   - Conta apagada ou senha trocada no Navidrome perde o acesso quando a sessão vence
+     (no máximo 24 h).
 
-ou `?token=<token>` na query (usado pela tag `<audio>` em `/preview`).
-Sem token ou token errado: `401 {"error": "unauthorized"}`.
+Sem credencial ou credencial errada: `401 {"error": "unauthorized"}`.
 
 ## Endpoints
 

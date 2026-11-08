@@ -1190,7 +1190,7 @@
   "newMusicReleases_other": "{{count}} nuove uscite",
   "newMusicRequestArrived": "Il tuo download è pronto",
   "discoverConnectTitle": "Connetti a Scopri",
-  "discoverConnectHint": "Inserisci l'indirizzo e il token del servizio Scopri.",
+  "discoverConnectHint": "Gli account del server TARSMusic si collegano automaticamente con il proprio login.",
   "discoverServerUrl": "URL del server Scopri",
   "discoverToken": "Token",
   "discoverLoadFailed": "Impossibile caricare questa playlist",
@@ -1215,7 +1215,7 @@
   "discoverCancelAll": "Annulla tutto",
   "discoverCancelAllTitle": "Annullare tutti i download?",
   "discoverCancelAllBody": "Tutto ciò che è in download o in attesa nella coda viene rimosso.",
-  "discoverEditConnectionBody": "Disconnettersi da questo server Scopri per inserire un nuovo indirizzo o token?",
+  "discoverEditConnectionBody": "Disconnettersi da questo server Scopri? Non si ricollegherà da solo finché non ti colleghi di nuovo.",
   "yourLibrary": "La tua libreria",
   "likedSongs": "Mi piace",
   "discoverServer": "Scopri",
@@ -1475,5 +1475,11 @@
   "chatShareSong": "Brano",
   "chatShareAlbum": "Album",
   "chatShareArtist": "Artista",
-  "chatSharePlaylist": "Playlist"
+  "chatSharePlaylist": "Playlist",
+  "discoverConnectAuto": "Collegati con il mio account",
+  "discoverAutoFailed": "Il tuo account non è riuscito ad aprire Scopri. Funziona solo con gli account del server TARSMusic; controlla la connessione e riprova.",
+  "discoverManualHint": "Usi un altro servizio Scopri? Inserisci l'indirizzo. Lascia vuoto il token per accedere con il tuo account del server.",
+  "discoverTokenOptional": "Token (facoltativo)",
+  "discoverLoginFailed": "Questo servizio Scopri non ha accettato il tuo account del server. Controlla l'indirizzo o inserisci un token.",
+  "discoverLoginMode": "Collegato con il tuo account del server"
 }

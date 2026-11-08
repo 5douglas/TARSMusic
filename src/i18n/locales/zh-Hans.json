@@ -1190,7 +1190,7 @@
   "newMusicReleases_other": "{{count}} 个新发行",
   "newMusicRequestArrived": "你的下载已就绪",
   "discoverConnectTitle": "连接到“发现”",
-  "discoverConnectHint": "输入“发现”服务的地址和令牌。",
+  "discoverConnectHint": "TARSMusic 服务器上的账户会用自己的登录信息自动连接。",
   "discoverServerUrl": "“发现”服务器网址",
   "discoverToken": "令牌",
   "discoverLoadFailed": "无法加载此歌单",
@@ -1215,7 +1215,7 @@
   "discoverCancelAll": "全部取消",
   "discoverCancelAllTitle": "取消所有下载？",
   "discoverCancelAllBody": "所有仍在下载或在队列中等待的内容都会被移除。",
-  "discoverEditConnectionBody": "断开与此“发现”服务器的连接，以输入新的地址或令牌？",
+  "discoverEditConnectionBody": "断开与此“发现”服务器的连接？在你再次连接之前，它不会自动重新连接。",
   "yourLibrary": "你的资料库",
   "likedSongs": "喜欢",
   "discoverServer": "发现",
@@ -1474,5 +1474,11 @@
   "chatShareSong": "歌曲",
   "chatShareAlbum": "专辑",
   "chatShareArtist": "艺人",
-  "chatSharePlaylist": "歌单"
+  "chatSharePlaylist": "歌单",
+  "discoverConnectAuto": "用我的账户连接",
+  "discoverAutoFailed": "你的账户无法打开“发现”。只适用于 TARSMusic 服务器上的账户；请检查网络后重试。",
+  "discoverManualHint": "使用其他“发现”服务？请输入地址。令牌留空即可用服务器账户登录。",
+  "discoverTokenOptional": "令牌（可选）",
+  "discoverLoginFailed": "该“发现”服务不接受你的服务器账户。请检查地址或输入令牌。",
+  "discoverLoginMode": "已用你的服务器账户连接"
 }
