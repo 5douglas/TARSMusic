@@ -105,8 +105,8 @@ export function PersonalMixesSection() {
 
   const cards = useMemo<MixCard[]>(
     () => [
-      ...dailyMixes.map((mix) => ({ kind: 'dailyMix' as const, mix })),
       { kind: 'daily' as const },
+      ...dailyMixes.map((mix) => ({ kind: 'dailyMix' as const, mix })),
       ...artists.map((artist) => ({ kind: 'artist' as const, artist })),
     ],
     [artists, dailyMixes],

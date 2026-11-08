@@ -176,7 +176,7 @@ export function DiscoverTabScreen() {
       {trimmed.length === 0 ? (
         <>
           <Text style={[styles.hint, { color: colors.textSecondary }]}>{t('discoverTabHint')}</Text>
-          {home && <DiscoverHomeSections home={home} ids={['releases', 'charts']} />}
+          {home && <DiscoverHomeSections home={home} ids={['mixes', 'releases', 'charts']} />}
         </>
       ) : loading && !results ? (
         <ActivityIndicator testID="discover-loading" style={styles.spinner} color={colors.primary} />
