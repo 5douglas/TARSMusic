@@ -176,3 +176,19 @@ describe('checkForUpdateInteractive', () => {
     expect(themedAlertStore.getState().visible).toBe(false);
   });
 });
+
+describe('tidyReleaseNotes', () => {
+  it('turns GitHub generated notes into a plain list', () => {
+    const { tidyReleaseNotes } = require('../appUpdateService');
+    const notes = [
+      "## What's Changed",
+      '* Chat: contatos pelo nome by @5douglas in https://github.com/5douglas/TARSMusic/pull/34',
+      '* Player moderno by @5douglas in https://github.com/5douglas/TARSMusic/pull/35',
+      '',
+      '',
+      '**Full Changelog**: https://github.com/5douglas/TARSMusic/compare/v8.3.15...v8.3.16',
+    ].join('\n');
+    expect(tidyReleaseNotes(notes)).toBe('• Chat: contatos pelo nome\n• Player moderno');
+    expect(tidyReleaseNotes('')).toBe('');
+  });
+});
