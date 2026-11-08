@@ -11,6 +11,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   type LayoutChangeEvent,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -120,7 +121,10 @@ export const MarqueeText = memo(function MarqueeText({
     };
   }, [shouldScroll, isActive, scrollDistance, speed, pauseDuration, initialDelay, translateX, childrenKey]);
 
-  const innerWidth = (textWidth > 0 && !isStale) ? textWidth : 10000;
+  // react-native-web rounds layout widths down, so the measured width can be a hair short
+  // of the real text and the browser ellipsizes it ("2.."). Pad it a little there.
+  const measuredWidth = Platform.OS === 'web' ? Math.ceil(textWidth) + 2 : textWidth;
+  const innerWidth = (textWidth > 0 && !isStale) ? measuredWidth : 10000;
 
   return (
     <View style={styles.container} onLayout={handleContainerLayout} pointerEvents="none">

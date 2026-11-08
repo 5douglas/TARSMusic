@@ -506,7 +506,7 @@ export function HomeScreen() {
         >
           {!hasAnyFilters && <QuickAccessGrid albums={recentlyPlayed} />}
           {!hasAnyFilters && !offlineMode && <PersonalMixesSection />}
-          {discoverHome && <DiscoverHomeSections home={discoverHome} ids={['mixes', 'releases']} />}
+          {discoverHome && <DiscoverHomeSections home={discoverHome} ids={['releases']} />}
           {/* Listening stats live on the profile (avatar menu), as in Spotify. */}
           <GenreChipSection genreCounts={genreCounts} colors={colors} />
           <ResumeBookmarksSection />
