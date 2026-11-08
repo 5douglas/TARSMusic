@@ -459,12 +459,14 @@ describe('HomeScreen — Spotify-style shortcuts and Discover rows', () => {
     mockUseDiscoverHome.mockReturnValue({ home: { sections: [] }, refresh: jest.fn() });
   });
 
-  it('shows shortcuts, mixes and releases first, charts last and no My listening', () => {
+  it('shows shortcuts first, charts last, no releases or mixes and no My listening', () => {
     const r = render(<HomeScreen />);
     const tree = JSON.stringify(r.toJSON());
     expect(mockUseDiscoverHome).toHaveBeenLastCalledWith(true);
-    expect(tree.indexOf('quick-access')).toBeLessThan(tree.indexOf('discover:mixes,releases'));
-    expect(tree.indexOf('discover:mixes,releases')).toBeLessThan(tree.indexOf('discover:charts'));
+    expect(tree.indexOf('quick-access')).toBeLessThan(tree.indexOf('discover:charts'));
+    // Releases and Deezer mixes live in the Discover tab.
+    expect(tree).not.toContain('discover:releases');
+    expect(tree).not.toContain('discover:mixes');
     // Listening stats moved to the profile; the home screen no longer shows them.
     expect(tree).not.toContain('My Listening');
   });

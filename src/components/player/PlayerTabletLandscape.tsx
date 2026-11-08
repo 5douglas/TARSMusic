@@ -26,6 +26,7 @@ import { LyricsContent } from '@/components/LyricsContent';
 import { BookmarkButton } from '@/components/BookmarkButton';
 import { CachedImage } from '@/components/CachedImage';
 import { FavoriteButton } from '@/components/FavoriteButton';
+import { JamPill } from '@/components/JamButton';
 import { MarqueeText } from '@/components/MarqueeText';
 import { MoreOptionsButton } from '@/components/MoreOptionsButton';
 import { PlaybackRateButton } from '@/components/PlaybackRateButton';
@@ -468,6 +469,8 @@ export function PlayerTabletLandscape({
                   <VolumeControl colors={colors} />
                 </View>
               )}
+
+              <JamPill />
 
               {/* Quality badge */}
               {qualityLabel && (

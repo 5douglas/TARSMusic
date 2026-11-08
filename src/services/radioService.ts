@@ -7,6 +7,7 @@
  * engine. Off while repeat is on (the queue loops anyway), in offline mode, or when the
  * server cannot be reached.
  */
+import { isJamGuestActive } from './jamControl';
 import { addToQueue } from './playerService';
 import {
   getRandomSongsFiltered,
@@ -126,6 +127,8 @@ export async function buildRadioBatch(
 
 function radioAllowed(): boolean {
   if (!autoplayStore.getState().autoplayEnabled) return false;
+  // A listener in someone's session plays the host's queue; the host's radio extends it.
+  if (isJamGuestActive()) return false;
   if (playbackSettingsStore.getState().repeatMode !== 'off') return false;
   if (offlineModeStore.getState().offlineMode) return false;
   const { hasConnection, isServerReachable } = connectivityStore.getState();

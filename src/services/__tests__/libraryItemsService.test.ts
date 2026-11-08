@@ -20,6 +20,16 @@ describe('composeLibraryItems', () => {
     const merged = items.find((i) => i.id === 'a1')!;
     expect(merged.recent).toBe(Date.parse('2026-10-20T00:00:00Z'));
   });
+
+  it('leaves out played albums that are not liked', () => {
+    const items = composeLibraryItems({
+      playlists: [],
+      starredAlbums: [],
+      starredArtists: [],
+      recentlyPlayed: [album('a2', 'Riot!', 'Paramore', { played: '2026-11-08T00:00:00Z' })],
+    });
+    expect(items).toEqual([]);
+  });
 });
 
 describe('sortLibraryItems', () => {
