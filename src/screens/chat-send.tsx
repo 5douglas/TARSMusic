@@ -8,7 +8,7 @@ import { ChatAvatar } from '../components/ChatAvatar';
 import { ChatShareCard } from '../components/ChatShareCard';
 import { GradientBackground } from '../components/GradientBackground';
 import { useTheme } from '../hooks/useTheme';
-import { fetchChatUsers, sendChatMessage, type ChatUser } from '../services/chatService';
+import { fetchContacts, sendChatMessage, type ChatUser } from '../services/chatService';
 import { themedAlertStore } from '../store/themedAlertStore';
 import { parseChatShareParam } from '../utils/chatShare';
 
@@ -26,9 +26,8 @@ export function ChatSendScreen() {
   const [sendingTo, setSendingTo] = useState<string | null>(null);
 
   useEffect(() => {
-    void fetchChatUsers().then((data) => {
-      // Contacts first, then the rest of the server.
-      if (data) setUsers([...data.filter((u) => u.contact), ...data.filter((u) => !u.contact)]);
+    void fetchContacts().then((data) => {
+      if (data) setUsers(data);
       setFailed(!data);
     });
   }, []);
@@ -46,7 +45,7 @@ export function ChatSendScreen() {
   };
 
   return (
-    <GradientBackground style={styles.container}>
+    <GradientBackground scrollable style={styles.container}>
       <FlatList
         data={users ?? []}
         keyExtractor={(u) => u.username}
@@ -84,7 +83,7 @@ export function ChatSendScreen() {
             <ActivityIndicator style={styles.loading} color={colors.textSecondary} />
           ) : (
             <Text style={[styles.empty, { color: colors.textSecondary }]}>
-              {failed ? t('chatUnavailable') : t('chatNoPeople')}
+              {failed ? t('chatUnavailable') : t('chatNoContacts')}
             </Text>
           )
         }

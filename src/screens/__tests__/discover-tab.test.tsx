@@ -51,7 +51,7 @@ describe('DiscoverTabScreen', () => {
       items: type === 'artist' ? [artist] : type === 'album' ? [album] : [],
     }));
     render(<DiscoverTabScreen />);
-    fireEvent.changeText(screen.getByLabelText('Search Deezer for artists, albums, songs…'), 'jao');
+    fireEvent.changeText(screen.getByLabelText('Search Deezer'), 'jao');
     await act(async () => {
       jest.advanceTimersByTime(600);
     });
@@ -67,7 +67,7 @@ describe('DiscoverTabScreen', () => {
   it('narrows the search to one kind', async () => {
     mockSearch.mockResolvedValue({ items: [album] });
     render(<DiscoverTabScreen />);
-    fireEvent.changeText(screen.getByLabelText('Search Deezer for artists, albums, songs…'), 'jao');
+    fireEvent.changeText(screen.getByLabelText('Search Deezer'), 'jao');
     await act(async () => {
       jest.advanceTimersByTime(600);
     });

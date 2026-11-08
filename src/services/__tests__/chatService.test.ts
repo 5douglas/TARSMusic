@@ -19,6 +19,7 @@ import {
   fetchMessages,
   fetchUnreadCount,
   isChatConfigured,
+  lookupChatUser,
   removeContact,
   sendChatMessage,
 } from '../chatService';
@@ -72,6 +73,14 @@ it('adds and removes contacts', async () => {
   await expect(removeContact('a b')).resolves.toBe(true);
   expect(mockFetch.mock.calls[1][0]).toBe(`${BASE}/chat/contacts/a%20b`);
   expect(mockFetch.mock.calls[1][1].method).toBe('DELETE');
+});
+
+it('looks a user up by exact username', async () => {
+  mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ user: { username: 'leo', name: 'Leonardo' } }) });
+  await expect(lookupChatUser(' Leo ')).resolves.toEqual({ username: 'leo', name: 'Leonardo' });
+  expect(mockFetch.mock.calls[0][0]).toBe(`${BASE}/chat/users/lookup?username=Leo`);
+  mockFetch.mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+  await expect(lookupChatUser('nobody')).resolves.toBeNull();
 });
 
 it('returns null on HTTP errors and when offline', async () => {

@@ -70,9 +70,8 @@ import { usePlayerAlbumInfo } from '@/hooks/usePlayerAlbumInfo';
 import { usePlayerLyrics, type PlayerLyricsResult } from '@/hooks/usePlayerLyrics';
 import { useLyricsActiveLine } from '@/hooks/useLyricsActiveLine';
 import { resolveCoverArtId } from '@/services/imageCacheService';
-import { canUserShare } from '@/services/serverCapabilityService';
 import { type LyricsData } from '@/services/subsonicService';
-import { createShareStore } from '@/store/createShareStore';
+import { shareSheetStore } from '@/store/shareSheetStore';
 import { playbackSettingsStore } from '@/store/playbackSettingsStore';
 import { moreOptionsStore } from '@/store/moreOptionsStore';
 import { playerStore } from '@/store/playerStore';
@@ -586,7 +585,13 @@ const PlayerContent = memo(function PlayerContent({
   const showCoverLyric = playbackSettingsStore((s) => s.coverLyricLine);
   const handleShare = useCallback(async () => {
     const coverArtId = await resolveCoverArtId({ coverArt: currentTrack.coverArt, albumId: currentTrack.albumId });
-    createShareStore.getState().showSong(currentTrack.id, currentTrack.title, currentTrack.artist ?? undefined, coverArtId);
+    shareSheetStore.getState().show({
+      kind: 'song',
+      id: currentTrack.id,
+      name: currentTrack.title,
+      artist: currentTrack.artist,
+      coverArt: coverArtId ?? undefined,
+    });
   }, [currentTrack]);
   const showSleepTimer = playbackSettingsStore((s) => s.showSleepTimerButton);
   const { canSkipNext, canSkipPrevious } = useCanSkip();
@@ -791,17 +796,15 @@ const PlayerContent = memo(function PlayerContent({
         )}
         <View style={[styles.controlSideRight, styles.bottomRowSide]}>
           {!offlineMode && <JamIconButton />}
-          {!offlineMode && canUserShare() && (
-            <Pressable
-              onPress={() => { void handleShare(); }}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={t('share')}
-              style={({ pressed }) => pressed && styles.pressed}
-            >
-              <Ionicons name="share-social-outline" size={24} color={colors.textPrimary} />
-            </Pressable>
-          )}
+          <Pressable
+            onPress={() => { void handleShare(); }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={t('share')}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Ionicons name="share-social-outline" size={24} color={colors.textPrimary} />
+          </Pressable>
           <Pressable
             onPress={onOpenQueue}
             hitSlop={10}

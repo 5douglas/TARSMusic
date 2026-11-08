@@ -1,17 +1,13 @@
 import Ionicons from '@react-native-vector-icons/ionicons/static';
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../hooks/useTheme';
-import { isChatConfigured } from '../services/chatService';
 import { chatStore } from '../store/chatStore';
 import { discoverSettingsStore } from '../store/discoverSettingsStore';
 
-const POLL_MS = 30_000;
-
-/** Opens the chat; a badge shows unread messages, checked every 30 s while the app is open. */
+/** Opens the chat; the badge shows unread messages (kept current by ChatNotifier). */
 export function ChatHeaderButton() {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -19,21 +15,6 @@ export function ChatHeaderButton() {
   const unread = chatStore((s) => s.unread);
   const configured = discoverSettingsStore((s) => !!s.baseUrl);
 
-  useEffect(() => {
-    if (!configured) return;
-    const tick = () => {
-      if (AppState.currentState === 'active' && isChatConfigured()) void chatStore.getState().refreshUnread();
-    };
-    tick();
-    const timer = setInterval(tick, POLL_MS);
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') tick();
-    });
-    return () => {
-      clearInterval(timer);
-      sub.remove();
-    };
-  }, [configured]);
 
   if (!configured) return null;
 

@@ -52,7 +52,8 @@ import {
 } from '../services/subsonicService';
 import { addToPlaylistStore } from '../store/addToPlaylistStore';
 import { scrobbleExclusionStore, type ScrobbleExclusionType } from '../store/scrobbleExclusionStore';
-import { createShareStore } from '../store/createShareStore';
+import { shareSheetStore } from '../store/shareSheetStore';
+import { sleepTimerStore } from '../store/sleepTimerStore';
 import { getOverride, mbidOverrideStore } from '../store/mbidOverrideStore';
 import { mbidSearchStore } from '../store/mbidSearchStore';
 import { musicCacheStore } from '../store/musicCacheStore';
@@ -70,9 +71,7 @@ import { getArtistBioRow } from '../db/repository/details';
 import { deletePlaylist as deletePlaylistRow } from '../db/repository/playlists';
 import { bumpDetailChanged } from '../db/detailNotifier';
 import { runWithOverlay } from '../store/processingOverlayStore';
-import { canUserShare, supports } from '../services/serverCapabilityService';
-import { shareItemLink } from '../services/shareLinkService';
-import { openChatShare } from '../utils/chatShare';
+import { supports } from '../services/serverCapabilityService';
 import { setRatingStore } from '../store/setRatingStore';
 
 /* ------------------------------------------------------------------ */
@@ -145,10 +144,6 @@ function hasAlbumDetails(entity: MoreOptionsEntity): boolean {
 
 function hasTrackDetails(entity: MoreOptionsEntity): boolean {
   return entity.type === 'song';
-}
-
-function canShare(entity: MoreOptionsEntity): boolean {
-  return entity.type === 'song' || entity.type === 'album' || entity.type === 'playlist';
 }
 
 function canDownload(entity: MoreOptionsEntity): boolean {
@@ -510,77 +505,36 @@ export function MoreOptionsSheet() {
     handleRemoveSongDownload(song);
   }, [entity, handleClose]);
 
-  const handleShare = useCallback(async () => {
-    if (!entity) return;
-    const coverArtId = await resolveCoverArtId(coverSubject(entity));
-    await moreOptionsStore.getState().hideAndAwait();
-    if (entity.type === 'album') {
-      createShareStore.getState().showAlbum(entity.item.id, entity.item.name, entity.item.artist, coverArtId);
-    } else if (entity.type === 'playlist') {
-      createShareStore.getState().showPlaylist(entity.item.id, entity.item.name, coverArtId);
-    } else if (entity.type === 'song') {
-      // Subsonic createShare accepts a single song/mediafile id; Navidrome maps
-      // it to ResourceType="media_file" and other servers behave the same.
-      const song = entity.item;
-      createShareStore.getState().showSong(
-        song.id,
-        song.title,
-        song.artist ?? undefined,
-        coverArtId,
-      );
-    }
-  }, [entity]);
-
   const handleShareLink = useCallback(async () => {
     if (!entity) return;
-    await moreOptionsStore.getState().hideAndAwait();
-    switch (entity.type) {
-      case 'song':
-        await shareItemLink({ kind: 'song', id: entity.item.id, name: entity.item.title, artist: entity.item.artist });
-        break;
-      case 'album':
-        await shareItemLink({
-          kind: 'album',
-          id: entity.item.id,
-          name: entity.item.name,
-          artist: entity.item.artist ?? (entity.item as AlbumID3).displayArtist,
-        });
-        break;
-      case 'artist':
-        await shareItemLink({ kind: 'artist', id: entity.item.id, name: entity.item.name });
-        break;
-      case 'playlist':
-        await shareItemLink({ kind: 'playlist', id: entity.item.id, name: entity.item.name });
-        break;
-    }
-  }, [entity]);
-
-  const handleSendInChat = useCallback(async () => {
-    if (!entity) return;
-    if (!['song', 'album', 'artist', 'playlist'].includes(entity.type)) return;
     const coverArt = (await resolveCoverArtId(coverSubject(entity))) ?? undefined;
     await moreOptionsStore.getState().hideAndAwait();
     switch (entity.type) {
       case 'song':
-        openChatShare({ kind: 'song', id: entity.item.id, title: entity.item.title, subtitle: entity.item.artist ?? undefined, coverArt });
+        shareSheetStore.getState().show({ kind: 'song', id: entity.item.id, name: entity.item.title, artist: entity.item.artist, coverArt });
         break;
       case 'album':
-        openChatShare({
+        shareSheetStore.getState().show({
           kind: 'album',
           id: entity.item.id,
-          title: entity.item.name,
-          subtitle: (entity.item.artist ?? (entity.item as AlbumID3).displayArtist) || undefined,
+          name: entity.item.name,
+          artist: entity.item.artist ?? (entity.item as AlbumID3).displayArtist,
           coverArt,
         });
         break;
       case 'artist':
-        openChatShare({ kind: 'artist', id: entity.item.id, title: entity.item.name, coverArt });
+        shareSheetStore.getState().show({ kind: 'artist', id: entity.item.id, name: entity.item.name, coverArt });
         break;
       case 'playlist':
-        openChatShare({ kind: 'playlist', id: entity.item.id, title: entity.item.name, coverArt });
+        shareSheetStore.getState().show({ kind: 'playlist', id: entity.item.id, name: entity.item.name, coverArt });
         break;
     }
   }, [entity]);
+
+  const handleSleepTimer = useCallback(async () => {
+    await moreOptionsStore.getState().hideAndAwait();
+    sleepTimerStore.getState().showSheet();
+  }, []);
 
   const handleSetRating = useCallback(async () => {
     if (!entity) return;
@@ -706,9 +660,6 @@ export function MoreOptionsSheet() {
   const showPlayMoreLikeThis = !offline && canPlayMoreLikeThis(entity);
   const showDetails = hasAlbumDetails(entity);
   const showTrackDetails = hasTrackDetails(entity);
-  const showShare = !offline && canShare(entity) && canUserShare();
-  const chatAvailable =
-    !offline && !!discoverSettingsStore.getState().baseUrl && !!entity && ['song', 'album', 'artist', 'playlist'].includes(entity.type);
   const showDownload = canDownload(entity);
   // Single-song download controls (song rows only).
   // - "Remove Download" when the song is explicitly downloaded (`song:${id}` item) OR
@@ -910,28 +861,19 @@ export function MoreOptionsSheet() {
                 />
               )}
 
-              {/* Share link (opens in TARSMusic for other users of the server) */}
+              {/* Share: chat, copy link, other apps, public link (ShareLinkSheet) */}
               <MoreOptionsRow
                 icon={<Ionicons name="share-social-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
                 label={t('share')}
                 onPress={handleShareLink}
               />
 
-              {/* Send as a card to another user of the server, in the in-app chat */}
-              {chatAvailable && (
+              {/* Sleep timer: lives here so the player's bottom row stays short */}
+              {isPlayerSource && (
                 <MoreOptionsRow
-                  icon={<Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
-                  label={t('chatSendInChat')}
-                  onPress={handleSendInChat}
-                />
-              )}
-
-              {/* Public Navidrome share (plays in a browser, no account needed) */}
-              {showShare && (
-                <MoreOptionsRow
-                  icon={<Ionicons name="globe-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
-                  label={t('sharePublicLink')}
-                  onPress={handleShare}
+                  icon={<Ionicons name="moon-outline" size={22} color={colors.textPrimary} style={styles.optionIcon} />}
+                  label={t('sleepTimer')}
+                  onPress={handleSleepTimer}
                 />
               )}
 

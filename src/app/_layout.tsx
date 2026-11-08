@@ -42,6 +42,7 @@ import { runWhenIdle } from '../utils/runWhenIdle';
 import AnimatedSplashScreen from '../components/AnimatedSplashScreen';
 import { CertificatePromptModal } from '../components/CertificatePromptModal';
 import { CreateShareSheet } from '../components/CreateShareSheet';
+import { ShareLinkSheet } from '../components/ShareLinkSheet';
 import { PlayerTabletLandscape } from '../components/player/PlayerTabletLandscape';
 import { PlayerTabletSplitview } from '../components/player/PlayerTabletSplitview';
 import { SplitLayout } from '../components/SplitLayout';
@@ -53,6 +54,7 @@ import { OnboardingGuide } from '../components/OnboardingGuide';
 import { BackgroundPlaybackPromptModal } from '../components/BackgroundPlaybackPromptModal';
 import { SetRatingSheet } from '../components/SetRatingSheet';
 import { SleepTimerSheet } from '../components/SleepTimerSheet';
+import { ChatNotifier } from '../components/ChatNotifier';
 import { PlaybackToast } from '../components/PlaybackToast';
 import { ProcessingOverlay } from '../components/ProcessingOverlay';
 import { useDownloadBackgroundNotification } from '../hooks/useDownloadBackgroundNotification';
@@ -977,6 +979,7 @@ export default function RootLayout() {
 
       {/* Global create-share bottom sheet driven by createShareStore */}
       <CreateShareSheet />
+      <ShareLinkSheet />
 
       {/* Global set-rating bottom sheet driven by setRatingStore */}
       <SetRatingSheet />
@@ -1020,6 +1023,9 @@ export default function RootLayout() {
           errors). Lifts itself above the BottomChrome (DownloadBanner +
           mini player) when present so it doesn't stack on top. */}
       <PlaybackToast />
+
+      {/* New chat message banner + unread badge polling */}
+      <ChatNotifier />
 
 
       {/* Onboarding welcome guide shown once after first login */}

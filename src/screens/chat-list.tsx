@@ -71,7 +71,7 @@ export function ChatListScreen() {
 
   if (!configured) {
     return (
-      <GradientBackground style={styles.container}>
+      <GradientBackground scrollable style={styles.container}>
         <View style={{ paddingTop: headerHeight }}>
           <DiscoverConnectHint />
         </View>
@@ -120,7 +120,7 @@ export function ChatListScreen() {
   };
 
   return (
-    <GradientBackground style={styles.container}>
+    <GradientBackground scrollable style={styles.container}>
       {items === null && !failed ? (
         <View style={[styles.center, { paddingTop: headerHeight }]}>
           <ActivityIndicator color={colors.textSecondary} />

@@ -107,15 +107,21 @@ class ChatServerTest(unittest.TestCase):
             self.assertEqual(json.loads(res.read())["username"], "ana")
 
     def test_users_contacts_and_messages(self):
+        # The account list is never exposed: /users only holds the caller's contacts.
         status, users = self.call("Douglas", "GET", "/users")
         self.assertEqual(status, 200)
-        names = [u["username"] for u in users["items"]]
-        self.assertEqual(sorted(names), ["ana", "bruno"])
+        self.assertEqual(users["items"], [])
+        status, found = self.call("douglas", "GET", "/users/lookup?username=ANA")
+        self.assertEqual((status, found["user"]["username"], found["user"]["contact"]), (200, "ana", False))
+        self.assertEqual(self.call("douglas", "GET", "/users/lookup?username=an")[0], 404)
+        self.assertEqual(self.call("douglas", "GET", "/users/lookup?username=douglas")[0], 404)
 
         self.assertEqual(self.call("douglas", "POST", "/contacts", {"username": "Ana"})[0], 200)
         self.assertEqual(self.call("douglas", "POST", "/contacts", {"username": "ghost"})[0], 404)
         _, contacts = self.call("douglas", "GET", "/contacts")
         self.assertEqual([c["username"] for c in contacts["items"]], ["ana"])
+        self.assertEqual([u["username"] for u in self.call("douglas", "GET", "/users")[1]["items"]], ["ana"])
+        self.assertTrue(self.call("douglas", "GET", "/users/lookup?username=ana")[1]["user"]["contact"])
 
         _, sent = self.call("douglas", "POST", "/messages", {"to": "ana", "text": " oi "})
         self.assertEqual(sent["message"]["text"], "oi")

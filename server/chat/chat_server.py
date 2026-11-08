@@ -286,14 +286,27 @@ class Handler(BaseHTTPRequestHandler):
             return 200, {"username": me}
 
         if method == "GET" and path == "/users":
+            # Nobody can browse the server's accounts: this lists only the caller's own
+            # contacts (kept for app versions that read it as the people list).
             users = all_users(conn)
-            contacts = {r["contact"] for r in conn.execute("SELECT contact FROM contacts WHERE owner = ?", (me,))}
+            rows = conn.execute("SELECT contact FROM contacts WHERE owner = ?", (me,)).fetchall()
             items = [
-                {"username": u, "name": n, "contact": u in contacts}
-                for u, n in sorted(users.items(), key=lambda kv: kv[1].lower())
-                if u != me
+                {"username": r["contact"], "name": users.get(r["contact"], r["contact"]), "contact": True}
+                for r in rows
             ]
+            items.sort(key=lambda c: c["name"].lower())
             return 200, {"items": items}
+
+        if method == "GET" and path == "/users/lookup":
+            # Exact username only, so the account list can't be enumerated by prefix.
+            target = (query.get("username") or [""])[0].strip().lower()
+            users = all_users(conn)
+            if not target or target == me or target not in users:
+                return 404, {"error": "unknown user"}
+            row = conn.execute(
+                "SELECT 1 FROM contacts WHERE owner = ? AND contact = ?", (me, target)
+            ).fetchone()
+            return 200, {"user": {"username": target, "name": users[target], "contact": row is not None}}
 
         if method == "GET" and path == "/contacts":
             users = all_users(conn)
