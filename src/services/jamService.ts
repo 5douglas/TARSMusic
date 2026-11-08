@@ -59,8 +59,12 @@ const HOST_STALE_PLAYING_MS = 90_000;
 const HOST_STALE_PAUSED_MS = 15 * 60_000;
 /** After a listener's own action, give the host this long to carry it out before following again. */
 const GUEST_ACTION_GRACE_MS = 8000;
-/** After the follower moved the player, let it settle before judging drift again. */
-const SETTLE_MS = 4000;
+/** After the follower moved the player, or the song changed, let it settle before judging drift again. */
+const SETTLE_MS = 6000;
+/** A listener already on the host's next song while the host has this little left waits for the host. */
+const NEAR_END_SECONDS = 10;
+/** Most a host's write can take between stamping `at` and the server having it. */
+const MAX_WRITE_MS = 1000;
 /** Requests kept in a listener's comment (the host only needs the ones it has not done yet). */
 const MAX_REQUESTS = 15;
 /** Consecutive missing-host answers before a listener leaves (one can be a write in flight). */
@@ -70,10 +74,109 @@ const MISSING_HOST_LIMIT = 3;
 /*  Pure helpers                                                       */
 /* ------------------------------------------------------------------ */
 
-/** Where in the song the host is now, by the host's last report. */
-export function expectedPosition(doc: Pick<JamHostDoc, 'at' | 'pos' | 'playing'>, now: number): number {
-  const elapsed = doc.playing ? Math.max(0, (now - doc.at) / 1000) : 0;
+/**
+ * Where in the song the host is now, by the host's last report. `offset` is this device's
+ * clock minus the host's (`ClockSync`), so a phone and a PC whose clocks differ still agree.
+ */
+export function expectedPosition(
+  doc: Pick<JamHostDoc, 'at' | 'pos' | 'playing'>,
+  now: number,
+  offset = 0,
+): number {
+  const elapsed = doc.playing ? Math.max(0, (now - offset - doc.at) / 1000) : 0;
   return doc.pos + elapsed;
+}
+
+/**
+ * Learns how far this device's clock is from the host's, from when host reports show up.
+ * A report stamped `at` (host clock) was on the server by the time a read ended, so
+ * offset <= readEnd - at; one that was new since the previous read was written after that
+ * read started, so offset > previousReadStart - at - MAX_WRITE_MS. The bounds tighten with
+ * every report; the offset used is 0 (clocks agree) unless the bounds rule that out.
+ */
+export class ClockSync {
+  private lo = -Infinity;
+  private hi = Infinity;
+  private prevAt: number | null = null;
+  private prevReadStart = 0;
+
+  note(at: number, readStart: number, readEnd: number): void {
+    const hi = readEnd - at;
+    const lo = this.prevAt !== null && at !== this.prevAt ? this.prevReadStart - at - MAX_WRITE_MS : -Infinity;
+    const newLo = Math.max(this.lo, lo);
+    const newHi = Math.min(this.hi, hi);
+    if (newLo > newHi) {
+      // A clock was changed: start over from this report.
+      this.lo = lo;
+      this.hi = hi;
+    } else {
+      this.lo = newLo;
+      this.hi = newHi;
+    }
+    this.prevAt = at;
+    this.prevReadStart = readStart;
+  }
+
+  offset(): number {
+    return Math.min(Math.max(0, this.lo), this.hi);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Where this player really is                                        */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The store's position only moves when the player reports progress: every 0.5 s in the
+ * foreground, but every ~10 s with the screen off, and right after a song change it still
+ * holds the old song's position until the first report. Reading it as is put listeners
+ * up to 10 s off and sent them deep into a new song. This keeps the last report and
+ * when it came, and counts the time since while playing.
+ */
+let posTrack: string | null = null;
+let posValue = 0;
+let posAt = 0;
+let posPlaying = false;
+let trackChangedAt = 0;
+
+function trackPosition(state: ReturnType<typeof playerStore.getState>, prev: ReturnType<typeof playerStore.getState>): void {
+  const now = Date.now();
+  const id = state.currentTrack?.id ?? null;
+  const playing = state.playbackState === 'playing';
+  if (id !== posTrack) {
+    posTrack = id;
+    posValue = 0;
+    posAt = now;
+    posPlaying = playing;
+    trackChangedAt = now;
+    return;
+  }
+  if (state.position !== prev.position) {
+    posValue = state.position;
+    posAt = now;
+  } else if (playing !== posPlaying) {
+    posValue = livePosition(now);
+    posAt = now;
+  }
+  posPlaying = playing;
+}
+
+/** This player's position now, in seconds. */
+export function livePosition(now = Date.now()): number {
+  const st = playerStore.getState();
+  if ((st.currentTrack?.id ?? null) !== posTrack) return 0;
+  const pos = posValue + (posPlaying ? Math.max(0, (now - posAt) / 1000) : 0);
+  const duration = st.duration || st.currentTrack?.duration || 0;
+  return duration > 0 ? Math.min(pos, duration) : pos;
+}
+
+function resetPositionTracking(): void {
+  const st = playerStore.getState();
+  posTrack = st.currentTrack?.id ?? null;
+  posValue = st.position;
+  posAt = Date.now();
+  posPlaying = st.playbackState === 'playing';
+  trackChangedAt = 0;
 }
 
 export function isHostFresh(doc: Pick<JamHostDoc, 'at' | 'playing'>, now: number): boolean {
@@ -196,6 +299,7 @@ let lastOwnActionAt = 0;
 let lastFollowAt = 0;
 let missingHost = 0;
 let following = false;
+let clock = new ClockSync();
 
 function tickInterval(): number {
   return jamStore.getState().mode === 'host' ? HOST_TICK_MS : GUEST_TICK_MS;
@@ -241,14 +345,14 @@ function tick(): Promise<void> {
 /* ---------------------------- Host ---------------------------- */
 
 function buildHostDoc(): JamHostDoc {
-  const { currentTrack, currentTrackIndex, queue, position, playbackState } = playerStore.getState();
+  const { currentTrack, currentTrackIndex, queue, playbackState } = playerStore.getState();
   const idx = currentTrackIndex ?? -1;
   const q = currentTrack ? [currentTrack.id, ...queue.slice(idx + 1, idx + 1 + QUEUE_WINDOW).map((c) => c.id)] : [];
   return {
     at: Date.now(),
     track: currentTrack?.id ?? null,
     q,
-    pos: Math.max(0, position),
+    pos: Math.max(0, livePosition()),
     playing: playbackState === 'playing' || playbackState === 'buffering' || playbackState === 'loading',
     handled,
     members: jamStore.getState().members,
@@ -385,6 +489,7 @@ function onPlayerChange(
   state: ReturnType<typeof playerStore.getState>,
   prev: ReturnType<typeof playerStore.getState>,
 ): void {
+  trackPosition(state, prev);
   const { mode } = jamStore.getState();
   if (mode === 'none') return;
 
@@ -435,7 +540,9 @@ async function guestTick(sid: string): Promise<void> {
   if (guestDirty || Date.now() - lastGuestWriteAt > GUEST_HEARTBEAT_MS) await writeGuest();
 
   const { host } = jamStore.getState();
+  const readStart = Date.now();
   const entries = await findJamSession(sid);
+  const readEnd = Date.now();
   const hostEntry = entries.find((e) => e.role === 'host' && e.sid === sid && sameUser(e.owner, host));
   const now = Date.now();
   if (!hostEntry || !isHostFresh(hostEntry.doc as JamHostDoc, now)) {
@@ -445,6 +552,7 @@ async function guestTick(sid: string): Promise<void> {
   }
   missingHost = 0;
   const doc = hostEntry.doc as JamHostDoc;
+  clock.note(doc.at, readStart, readEnd);
   jamStore.getState().setMembers(doc.members.filter((m) => !sameUser(m, host)));
 
   // The host has not carried out our last request yet: don't undo it locally meanwhile.
@@ -468,10 +576,18 @@ async function follow(doc: JamHostDoc): Promise<void> {
       return;
     }
 
-    const expected = expectedPosition(doc, now);
+    const offset = clock.offset();
+    const expected = expectedPosition(doc, now, offset);
 
     if (local.currentTrack?.id !== doc.track) {
       if (local.queueLoading) return;
+      // Already on the host's next song while the host finishes this one (this player ended
+      // it a moment sooner): wait for the host instead of going back to the old song.
+      if (local.currentTrack?.id === doc.q[1]) {
+        const hostSong = local.queue.find((c) => c.id === doc.track) ?? songCache.get(doc.track);
+        const hostDuration = hostSong?.duration ?? 0;
+        if (hostDuration > 0 && hostDuration - expected < NEAR_END_SECONDS) return;
+      }
       const localIdx = local.queue.findIndex(
         (c, i) => c.id === doc.track && i > (local.currentTrackIndex ?? -1) - 2,
       );
@@ -484,7 +600,9 @@ async function follow(doc: JamHostDoc): Promise<void> {
         if (!first) return;
         await runAsJamFollower(() => playTrack(first, songs));
       }
-      if (expected > 2) await runAsJamFollower(() => seekTo(expected));
+      // Loading took a moment: aim for where the host is now.
+      const target = expectedPosition(doc, Date.now(), offset);
+      if (target > 2) await runAsJamFollower(() => seekTo(target));
       if (!doc.playing) await runAsJamFollower(togglePlayPause);
       lastFollowAt = Date.now();
       return;
@@ -503,7 +621,7 @@ async function follow(doc: JamHostDoc): Promise<void> {
         const songs = await resolveSongs(doc.q);
         const first = songs.find((s) => s.id === doc.track);
         if (first) {
-          const at = playerStore.getState().position;
+          const at = livePosition();
           const wasPlaying = playerStore.getState().playbackState === 'playing';
           await runAsJamFollower(() => playTrack(first, songs));
           await runAsJamFollower(() => seekTo(at));
@@ -526,10 +644,12 @@ async function follow(doc: JamHostDoc): Promise<void> {
       await runAsJamFollower(togglePlayPause);
       lastFollowAt = Date.now();
     }
-    if (now - lastFollowAt > SETTLE_MS && Math.abs(fresh.position - expected) > DRIFT_SECONDS) {
+    const settled = now - lastFollowAt > SETTLE_MS && now - trackChangedAt > SETTLE_MS;
+    if (settled && fresh.playbackState === 'playing' && doc.playing) {
+      const target = expectedPosition(doc, Date.now(), offset);
       const duration = fresh.duration || fresh.currentTrack?.duration || 0;
-      if (!duration || expected < duration - 1) {
-        await runAsJamFollower(() => seekTo(expected));
+      if (Math.abs(livePosition() - target) > DRIFT_SECONDS && (!duration || target < duration - 2)) {
+        await runAsJamFollower(() => seekTo(target));
         lastFollowAt = Date.now();
       }
     }
@@ -548,6 +668,7 @@ let installed = false;
 export function initJamService(): void {
   if (installed) return;
   installed = true;
+  resetPositionTracking();
   playerStore.subscribe(onPlayerChange);
   AppState.addEventListener('change', (next) => {
     if (next === 'active' && jamStore.getState().mode !== 'none') void tick();
@@ -596,6 +717,7 @@ export async function joinSession(sid: string, host: string): Promise<void> {
   lastOwnActionAt = 0;
   lastFollowAt = 0;
   missingHost = 0;
+  clock = new ClockSync();
   jamStore.getState().setEnded(null);
   jamStore.getState().setSession('guest', sid, host);
   try {

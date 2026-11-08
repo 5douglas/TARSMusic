@@ -70,7 +70,16 @@ export type DiscoverSectionId = DiscoverHome['sections'][number]['id'];
  * Discover carousels (release, mix and chart cards) for embedding in Home. Renders the
  * sections named in `ids`, in that order, skipping empty ones.
  */
-export function DiscoverHomeSections({ home, ids }: { home: DiscoverHome; ids: readonly DiscoverSectionId[] }) {
+export function DiscoverHomeSections({
+  home,
+  ids,
+  inset = 0,
+}: {
+  home: DiscoverHome;
+  ids: readonly DiscoverSectionId[];
+  /** Side padding for titles and the start of each carousel, when the parent has none. */
+  inset?: number;
+}) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { handleOpen } = useDiscoverActions();
@@ -87,7 +96,7 @@ export function DiscoverHomeSections({ home, ids }: { home: DiscoverHome; ids: r
         if (!section || section.items.length === 0) return null;
         return (
           <View key={id} style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary, paddingHorizontal: inset }]}>
               {t(SECTION_TITLE_KEYS[id])}
             </Text>
             <FlatList
@@ -96,7 +105,7 @@ export function DiscoverHomeSections({ home, ids }: { home: DiscoverHome; ids: r
               keyExtractor={(card) => `${card.type}-${card.id}`}
               renderItem={renderCard}
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.carousel}
+              contentContainerStyle={[styles.carousel, { paddingHorizontal: inset }]}
             />
           </View>
         );
