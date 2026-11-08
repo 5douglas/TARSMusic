@@ -36,11 +36,16 @@ function currentAccount(): { key: string; serverUrl: string } | null {
   return { key: `${normalized}|${username.toLowerCase()}`, serverUrl: normalized };
 }
 
-function hostOf(url: string): string | null {
-  const match = /^[a-z]+:\/\/([^/?#]+)/i.exec(url.trim());
+/** Host (and non-default port) of a server address, with or without a scheme. */
+export function hostOf(url: string): string | null {
+  const match = /^(?:([a-z][a-z0-9+.-]*):\/\/)?([^/?#\s]+)/i.exec(url.trim());
   if (!match) return null;
-  // Drop userinfo; keep the port, since one host can run several servers.
-  return match[1].replace(/^.*@/, '').toLowerCase();
+  const scheme = (match[1] ?? '').toLowerCase();
+  // Drop userinfo; keep a port only when it is not the scheme's default.
+  let host = match[2].replace(/^.*@/, '').toLowerCase();
+  if ((scheme === 'https' || scheme === '') && host.endsWith(':443')) host = host.slice(0, -4);
+  if ((scheme === 'http' || scheme === '') && host.endsWith(':80')) host = host.slice(0, -3);
+  return host || null;
 }
 
 async function sha256(text: string): Promise<string> {
