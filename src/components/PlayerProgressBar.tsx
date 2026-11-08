@@ -287,7 +287,7 @@ export function PlayerProgressBar({
           </Text>
         )}
         <Text style={[styles.timeText, { color: colors.textSecondary }]}>
-          {formatTrackDuration(remaining)}
+          {`-${formatTrackDuration(remaining)}`}
         </Text>
       </View>
     </View>

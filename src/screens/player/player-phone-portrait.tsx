@@ -787,7 +787,7 @@ const PlayerContent = memo(function PlayerContent({
           timer and skip-interval buttons join the row only when turned on in Settings. */}
       <View style={styles.playerSpacer} />
       <View style={styles.secondaryControls}>
-        <View style={[styles.controlSideLeft, styles.bottomRowSide]}>
+        <View style={[styles.bottomRowSide, styles.bottomRowLeft]}>
           <CastButton />
           {m.showSecondaryRow && showSleepTimer && <SleepTimerButton />}
         </View>
@@ -797,7 +797,7 @@ const PlayerContent = memo(function PlayerContent({
             <SkipIntervalButton direction="forward" size={32} />
           </View>
         )}
-        <View style={[styles.controlSideRight, styles.bottomRowSide]}>
+        <View style={[styles.bottomRowSide, styles.bottomRowRight]}>
           {!offlineMode && jamActive && <JamIconButton />}
           <Pressable
             onPress={() => { void handleShare(); }}
@@ -1393,6 +1393,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+  },
+  // The device label takes the free space (and shrinks first); share and queue keep their
+  // natural width, flush with the right edge of the progress bar.
+  bottomRowLeft: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'flex-start',
+  },
+  bottomRowRight: {
+    flexShrink: 0,
+    justifyContent: 'flex-end',
+    marginLeft: 16,
   },
   headerTitle: {
     alignItems: 'center',
