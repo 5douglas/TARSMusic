@@ -6,10 +6,15 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { BottomChrome } from '../components/BottomChrome';
 import { GradientBackground } from '../components/GradientBackground';
 import { useTheme } from '../hooks/useTheme';
+import { connectWithLogin, disconnectDiscover, enableAutoConnect } from '../services/discoverAuthService';
 import { discoverSettingsStore } from '../store/discoverSettingsStore';
 import { themedAlertStore } from '../store/themedAlertStore';
 
-/** Address and token of the navidrome-discover backend that feeds Discover content and downloads. */
+/**
+ * Connection to the navidrome-discover backend that feeds Discover content and downloads.
+ * Accounts of the TARSMusic server connect on their own with their Navidrome login; another
+ * backend takes an address plus either a token or, with the token left blank, the login.
+ */
 export function SettingsDiscoverScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -20,14 +25,34 @@ export function SettingsDiscoverScreen() {
   const [newToken, setNewToken] = useState('');
   const lastfmApiKey = discoverSettingsStore((s) => s.lastfmApiKey);
   const [newLastfmKey, setNewLastfmKey] = useState(lastfmApiKey ?? '');
+  const mode = discoverSettingsStore((s) => s.mode);
   const connected = !!baseUrl && !!token;
-  const canSave = !!url.trim() && !!newToken.trim();
+  const [busy, setBusy] = useState(false);
+  const canSave = !!url.trim() && !busy;
 
   const handleDisconnect = () => {
     themedAlertStore.getState().show(t('discoverEditConnection'), t('discoverEditConnectionBody'), [
       { text: t('cancel'), style: 'cancel' },
-      { text: t('ok'), onPress: () => discoverSettingsStore.getState().clearConnection() },
+      { text: t('ok'), onPress: () => disconnectDiscover() },
     ]);
+  };
+
+  const handleAuto = async () => {
+    setBusy(true);
+    const ok = await enableAutoConnect();
+    setBusy(false);
+    if (!ok) themedAlertStore.getState().show(t('discoverConnectAuto'), t('discoverAutoFailed'), [{ text: t('ok') }]);
+  };
+
+  const handleSave = async () => {
+    if (newToken.trim()) {
+      discoverSettingsStore.getState().setConnection(url, newToken);
+      return;
+    }
+    setBusy(true);
+    const ok = await connectWithLogin(url);
+    setBusy(false);
+    if (!ok) themedAlertStore.getState().show(t('discoverConnectTitle'), t('discoverLoginFailed'), [{ text: t('ok') }]);
   };
 
   const inputStyle = [styles.input, { color: colors.textPrimary, backgroundColor: colors.inputBg }];
@@ -38,6 +63,9 @@ export function SettingsDiscoverScreen() {
           <View style={styles.gap}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>{t('discoverConnected')}</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{baseUrl}</Text>
+            {mode === 'login' ? (
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('discoverLoginMode')}</Text>
+            ) : null}
             <Pressable
               onPress={handleDisconnect}
               style={({ pressed }) => [styles.button, { backgroundColor: colors.inputBg }, pressed && styles.pressed]}
@@ -50,6 +78,19 @@ export function SettingsDiscoverScreen() {
           <View style={styles.gap}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>{t('discoverConnectTitle')}</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('discoverConnectHint')}</Text>
+            <Pressable
+              onPress={handleAuto}
+              disabled={busy}
+              style={({ pressed }) => [
+                styles.button,
+                { backgroundColor: colors.primary },
+                (pressed || busy) && styles.pressed,
+              ]}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.buttonLabel, { color: '#fff' }]}>{t('discoverConnectAuto')}</Text>
+            </Pressable>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('discoverManualHint')}</Text>
             <TextInput
               value={url}
               onChangeText={setUrl}
@@ -64,7 +105,7 @@ export function SettingsDiscoverScreen() {
             <TextInput
               value={newToken}
               onChangeText={setNewToken}
-              placeholder={t('discoverToken')}
+              placeholder={t('discoverTokenOptional')}
               placeholderTextColor={colors.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -73,16 +114,16 @@ export function SettingsDiscoverScreen() {
               accessibilityLabel={t('discoverToken')}
             />
             <Pressable
-              onPress={() => discoverSettingsStore.getState().setConnection(url, newToken)}
+              onPress={handleSave}
               disabled={!canSave}
               style={({ pressed }) => [
                 styles.button,
-                { backgroundColor: colors.primary },
+                { backgroundColor: colors.inputBg },
                 (pressed || !canSave) && styles.pressed,
               ]}
               accessibilityRole="button"
             >
-              <Text style={[styles.buttonLabel, { color: '#fff' }]}>{t('save')}</Text>
+              <Text style={[styles.buttonLabel, { color: colors.textPrimary }]}>{t('save')}</Text>
             </Pressable>
           </View>
         )}

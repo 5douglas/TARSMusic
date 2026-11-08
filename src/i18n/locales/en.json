@@ -1193,7 +1193,7 @@
   "newMusicReleases_other": "{{count}} new releases",
   "newMusicRequestArrived": "Your download is ready",
   "discoverConnectTitle": "Connect to Discover",
-  "discoverConnectHint": "Enter the address and token of your discover service.",
+  "discoverConnectHint": "Accounts on the TARSMusic server connect automatically with their login.",
   "discoverServerUrl": "Discover server URL",
   "discoverToken": "Token",
   "discoverLoadFailed": "Could not load this playlist",
@@ -1218,7 +1218,7 @@
   "discoverCancelAll": "Cancel all",
   "discoverCancelAllTitle": "Cancel all downloads?",
   "discoverCancelAllBody": "Everything still downloading or waiting in the queue is removed.",
-  "discoverEditConnectionBody": "Disconnect from this discover server to enter a new address or token?",
+  "discoverEditConnectionBody": "Disconnect from this discover server? It will not reconnect on its own until you connect again.",
   "yourLibrary": "Your Library",
   "likedSongs": "Liked",
   "discoverServer": "Discover",
@@ -1479,5 +1479,11 @@
   "chatAddByUsername": "Add by username",
   "chatUserNotFound": "No one with the username \"{{username}}\".",
   "chatAlreadyContact": "Already a contact",
-  "chatNoContacts": "No contacts yet. Add someone by their username above."
+  "chatNoContacts": "No contacts yet. Add someone by their username above.",
+  "discoverConnectAuto": "Connect with my account",
+  "discoverAutoFailed": "Your server account could not open Discover. It only works for accounts on the TARSMusic server; check your connection and try again.",
+  "discoverManualHint": "Using another discover service? Enter its address. Leave the token blank to sign in with your server account.",
+  "discoverTokenOptional": "Token (optional)",
+  "discoverLoginFailed": "This discover service did not accept your server account. Check the address or enter a token.",
+  "discoverLoginMode": "Signed in with your server account"
 }
