@@ -123,3 +123,23 @@ it('logs in to a backend the user typed without the host check', async () => {
   expect(mockFetch.mock.calls[0][0]).toBe('https://d.example.com/auth/session');
   expect(discoverSettingsStore.getState()).toMatchObject({ baseUrl: 'https://d.example.com', token: 'typed' });
 });
+
+it('accepts a server address saved without a scheme', async () => {
+  login('music.douglas.seg.br');
+  mockFetch.mockResolvedValueOnce(info(['music.douglas.seg.br'])).mockResolvedValueOnce(session());
+  await expect(ensureDiscoverSession()).resolves.toBe(true);
+});
+
+describe('hostOf', () => {
+  const { hostOf } = require('../discoverAuthService');
+  it.each([
+    ['https://music.douglas.seg.br', 'music.douglas.seg.br'],
+    ['music.douglas.seg.br', 'music.douglas.seg.br'],
+    ['MUSIC.douglas.seg.br/', 'music.douglas.seg.br'],
+    ['https://music.douglas.seg.br:443/navidrome', 'music.douglas.seg.br'],
+    ['http://192.168.0.5:4533', '192.168.0.5:4533'],
+    ['https://u:p@music.douglas.seg.br', 'music.douglas.seg.br'],
+  ])('%s -> %s', (url, host) => {
+    expect(hostOf(url)).toBe(host);
+  });
+});
