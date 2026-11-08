@@ -29,7 +29,7 @@ import {
 import { authStore } from '../store/authStore';
 import { chatStore } from '../store/chatStore';
 import { themedAlertStore } from '../store/themedAlertStore';
-import { formatChatClock, formatChatDay } from '../utils/chatTime';
+import { formatChatClock, formatChatDay, isSameChatDay } from '../utils/chatTime';
 
 const POLL_MS = 3_000;
 
@@ -155,8 +155,7 @@ export function ChatConversationScreen() {
     const mine = item.from === me;
     // The list is inverted: index + 1 is the message shown above this one.
     const above = messages?.[index + 1];
-    const day = new Date(item.sentAt).toDateString();
-    const showDay = !above || new Date(above.sentAt).toDateString() !== day;
+    const showDay = !above || !isSameChatDay(above.sentAt, item.sentAt);
     return (
       <View>
         {showDay && (
