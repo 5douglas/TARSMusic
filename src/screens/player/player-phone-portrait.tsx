@@ -33,6 +33,7 @@ import { CachedImage } from '@/components/CachedImage';
 import { CastButton } from '@/components/RoutePicker';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { EmptyState } from '@/components/EmptyState';
+import { JamIconButton } from '@/components/JamButton';
 import { MarqueeText } from '@/components/MarqueeText';
 import { MoreOptionsButton } from '@/components/MoreOptionsButton';
 import { PlayerProgressBar } from '@/components/PlayerProgressBar';
@@ -789,6 +790,7 @@ const PlayerContent = memo(function PlayerContent({
           </View>
         )}
         <View style={[styles.controlSideRight, styles.bottomRowSide]}>
+          {!offlineMode && <JamIconButton />}
           {!offlineMode && canUserShare() && (
             <Pressable
               onPress={() => { void handleShare(); }}

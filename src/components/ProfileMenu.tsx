@@ -62,6 +62,7 @@ export function ProfileMenu() {
   const entries: MenuEntry[] = [
     { key: 'stats', labelKey: 'profileListeningStats', icon: 'stats-chart-outline', action: () => go('/my-listening') },
     { key: 'wrapped', labelKey: 'wrapped', icon: 'sparkles-outline', action: () => go('/wrapped') },
+    { key: 'jam', labelKey: 'jamTitle', icon: 'people-outline', action: () => go('/jam') },
     { key: 'recents', labelKey: 'profileRecents', icon: 'time-outline', action: () => go('/scrobble-browser') },
     { key: 'downloads', labelKey: 'deemixDownloads', icon: 'cloud-download-outline', action: () => go('/discover-downloads') },
     ...((Platform.OS === 'android' || Platform.OS === 'web')

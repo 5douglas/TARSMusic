@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GradientBackground } from '@/components/GradientBackground';
 import { CachedImage } from '@/components/CachedImage';
 import { FavoriteButton } from '@/components/FavoriteButton';
+import { JamPill } from '@/components/JamButton';
 import { MarqueeText } from '@/components/MarqueeText';
 import { MoreOptionsButton } from '@/components/MoreOptionsButton';
 import { PlaybackRateButton } from '@/components/PlaybackRateButton';
@@ -363,6 +364,8 @@ const PanelHeader = memo(function PanelHeader({
               <VolumeControl colors={colors} />
             </View>
           )}
+
+          <JamPill />
 
     </View>
   );
