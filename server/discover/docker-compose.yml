@@ -1,0 +1,31 @@
+services:
+  discover:
+    build: .
+    image: navidrome-discover
+    container_name: navidrome-discover
+    restart: unless-stopped
+    user: "${UID_GID:-1000:1000}"
+    env_file: .env
+    environment:
+      - TZ=America/Bahia
+      - DEEMIX_URL=http://deemix:6595
+      - NAVIDROME_DB=/navidrome/navidrome.db
+      - AUTODL_STATE=/autodl/state.json
+    volumes:
+      - ./data:/data
+      - /home/ubuntu/navidrome/data:/navidrome:ro
+      - /home/ubuntu/navidrome-autodl/data:/autodl:ro
+    ports:
+      # so localhost; exposicao ao celular e decidida depois (Caddy/Cloudflare)
+      - "127.0.0.1:8085:8085"
+    networks:
+      - navidrome_default
+    mem_limit: 192m
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  navidrome_default:
+    external: true

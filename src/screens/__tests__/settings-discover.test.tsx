@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 
 describe('SettingsDiscoverScreen', () => {
-  it('saves a new connection only when both fields are filled', () => {
+  it('saves a new connection with a token', () => {
     render(<SettingsDiscoverScreen />);
     fireEvent.press(screen.getAllByText('Save')[0]);
     expect(discoverSettingsStore.getState().baseUrl).toBeNull();
@@ -46,7 +46,32 @@ describe('SettingsDiscoverScreen', () => {
     const alert = themedAlertStore.getState();
     act(() => alert.buttons.find((b) => b.text === 'OK')?.onPress?.());
     expect(discoverSettingsStore.getState().baseUrl).toBeNull();
+    expect(discoverSettingsStore.getState().autoConnectDisabled).toBe(true);
     expect(screen.getByText('Connect to Discover')).toBeTruthy();
+  });
+
+  it('signs in with the server account when the token is left blank', async () => {
+    const auth = require('../../services/discoverAuthService');
+    const spy = jest.spyOn(auth, 'connectWithLogin').mockResolvedValue(true);
+    render(<SettingsDiscoverScreen />);
+    fireEvent.changeText(screen.getByLabelText('Discover server URL'), 'https://d.example.com');
+    await act(async () => {
+      fireEvent.press(screen.getAllByText('Save')[0]);
+    });
+    expect(spy).toHaveBeenCalledWith('https://d.example.com');
+    spy.mockRestore();
+  });
+
+  it('connects automatically on request', async () => {
+    const auth = require('../../services/discoverAuthService');
+    const spy = jest.spyOn(auth, 'enableAutoConnect').mockResolvedValue(false);
+    render(<SettingsDiscoverScreen />);
+    await act(async () => {
+      fireEvent.press(screen.getByText('Connect with my account'));
+    });
+    expect(spy).toHaveBeenCalled();
+    expect(themedAlertStore.getState().visible).toBe(true);
+    spy.mockRestore();
   });
 
   it('saves a Last.fm API key', () => {

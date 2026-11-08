@@ -181,3 +181,22 @@ describe('discoverPreviewUrl', () => {
     expect(discoverPreviewUrl(42)).toBeNull();
   });
 });
+
+describe('login sessions', () => {
+  it('renews a rejected session once and retries', async () => {
+    const auth = require('../discoverAuthService');
+    const spy = jest.spyOn(auth, 'ensureDiscoverSession').mockImplementation(async () => {
+      discoverSettingsStore.setState({ token: 'fresh' });
+      return true;
+    });
+    discoverSettingsStore.setState({ token: 'stale', mode: 'login' });
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => playlist });
+    await expect(fetchDiscoverPlaylist('/playlists/mix/5')).resolves.toEqual(playlist);
+    expect(spy).toHaveBeenCalledWith(true);
+    expect(mockFetch.mock.calls[1][1]).toEqual({ headers: { Authorization: 'Bearer fresh' } });
+    spy.mockRestore();
+    discoverSettingsStore.setState({ mode: null });
+  });
+});

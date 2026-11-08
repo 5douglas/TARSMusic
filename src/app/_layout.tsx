@@ -59,6 +59,7 @@ import { PlaybackToast } from '../components/PlaybackToast';
 import { ProcessingOverlay } from '../components/ProcessingOverlay';
 import { useDownloadBackgroundNotification } from '../hooks/useDownloadBackgroundNotification';
 import { useNewMusicAlerts } from '../hooks/useNewMusicAlerts';
+import { useDiscoverAutoConnect } from '../hooks/useDiscoverAutoConnect';
 import { useAppUpdateCheck } from '../hooks/useAppUpdateCheck';
 import { useShareLinkHandler } from '../hooks/useShareLinkHandler';
 import { useDownloadKeepAwake } from '../hooks/useDownloadKeepAwake';
@@ -413,6 +414,7 @@ export default function RootLayout() {
   useLibrarySyncBackgroundNotification();
   useAppUpdateCheck(!startupBlocked && rehydrated && isLoggedIn);
   useNewMusicAlerts(!startupBlocked && rehydrated && isLoggedIn);
+  useDiscoverAutoConnect(!startupBlocked && rehydrated && isLoggedIn);
   useShareLinkHandler(!startupBlocked && rehydrated && isLoggedIn);
 
   // --- Global SSL cert prompt driven by certPromptStore ---

@@ -1193,7 +1193,7 @@
   "newMusicReleases_other": "{{count}} nuevos lanzamientos",
   "newMusicRequestArrived": "Tu descarga está lista",
   "discoverConnectTitle": "Conectar a Descubrir",
-  "discoverConnectHint": "Introduce la dirección y el token de tu servicio Descubrir.",
+  "discoverConnectHint": "Las cuentas del servidor TARSMusic se conectan automáticamente con su inicio de sesión.",
   "discoverServerUrl": "URL del servidor Descubrir",
   "discoverToken": "Token",
   "discoverLoadFailed": "No se pudo cargar esta lista",
@@ -1218,7 +1218,7 @@
   "discoverCancelAll": "Cancelar todo",
   "discoverCancelAllTitle": "¿Cancelar todas las descargas?",
   "discoverCancelAllBody": "Se elimina todo lo que aún se está descargando o espera en la cola.",
-  "discoverEditConnectionBody": "¿Desconectarte de este servidor Descubrir para introducir una dirección o un token nuevos?",
+  "discoverEditConnectionBody": "¿Desconectar de este servidor Descubrir? No volverá a conectarse solo hasta que conectes de nuevo.",
   "yourLibrary": "Tu biblioteca",
   "likedSongs": "Me gusta",
   "discoverServer": "Descubrir",
@@ -1479,5 +1479,11 @@
   "chatAddByUsername": "Añadir por nombre de usuario",
   "chatUserNotFound": "Nadie con el usuario \"{{username}}\".",
   "chatAlreadyContact": "Ya es contacto",
-  "chatNoContacts": "Aún no hay contactos. Añade a alguien por su nombre de usuario arriba."
+  "chatNoContacts": "Aún no hay contactos. Añade a alguien por su nombre de usuario arriba.",
+  "discoverConnectAuto": "Conectar con mi cuenta",
+  "discoverAutoFailed": "Tu cuenta no pudo abrir Descubrir. Solo funciona con cuentas del servidor TARSMusic; revisa la conexión e inténtalo de nuevo.",
+  "discoverManualHint": "¿Usas otro servicio Descubrir? Escribe su dirección. Deja el token vacío para entrar con tu cuenta del servidor.",
+  "discoverTokenOptional": "Token (opcional)",
+  "discoverLoginFailed": "Este servicio Descubrir no aceptó tu cuenta del servidor. Revisa la dirección o escribe un token.",
+  "discoverLoginMode": "Conectado con tu cuenta del servidor"
 }
