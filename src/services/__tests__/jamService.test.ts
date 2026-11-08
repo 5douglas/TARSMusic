@@ -45,7 +45,9 @@ import { jamStore } from '../../store/jamStore';
 import { playerStore } from '../../store/playerStore';
 import { reportJamAction } from '../jamControl';
 import {
+  ClockSync,
   expectedPosition,
+  livePosition,
   findQueueIndex,
   joinSession,
   leaveSession,
@@ -61,16 +63,17 @@ import { encodeJamComment, parseJamComment, type JamHostDoc } from '../jamTransp
 const song = (id: string) => ({ id, title: id, isDir: false }) as never;
 
 function setPlayer(ids: string[], index: number, state: 'playing' | 'paused', position = 0) {
-  const queue = ids.map(song);
+  const queue = ids.map((id) => ({ id, title: id, isDir: false, duration: 200 }) as never);
+  // Like the real player: the song changes first, its first progress report follows.
   playerStore.setState({
     queue,
     currentTrack: queue[index] ?? null,
     currentTrackIndex: index,
     playbackState: state,
-    position,
     duration: 200,
     queueLoading: false,
   });
+  playerStore.setState({ position });
 }
 
 beforeEach(async () => {
@@ -97,6 +100,27 @@ describe('helpers', () => {
   it('extrapolates the host position only while playing', () => {
     expect(expectedPosition({ at: 1000, pos: 10, playing: true }, 6000)).toBe(15);
     expect(expectedPosition({ at: 1000, pos: 10, playing: false }, 6000)).toBe(10);
+  });
+
+  it('corrects for a host clock that is off', () => {
+    // The host clock runs 7 s behind ours.
+    expect(expectedPosition({ at: 1000, pos: 10, playing: true }, 13_000, 7000)).toBe(15);
+  });
+
+  it('learns the clock offset from when reports show up', () => {
+    const clock = new ClockSync();
+    // Clocks agree: 0 stays inside the bounds.
+    clock.note(10_000, 10_100, 10_300);
+    clock.note(12_000, 12_100, 12_300);
+    expect(clock.offset()).toBe(0);
+
+    // Host clock 7 s behind ours: a report stamped at host 20 000 shows up at our 27 300.
+    const skew = new ClockSync();
+    skew.note(20_000, 26_900, 27_300); // first sight: offset <= 7300
+    skew.note(20_000, 28_900, 29_300); // same report
+    skew.note(22_000, 30_900, 31_300); // new since our read at 28 900: offset > 28 900 - 22 000 - 1000
+    expect(skew.offset()).toBeGreaterThan(5000);
+    expect(skew.offset()).toBeLessThanOrEqual(7300);
   });
 
   it('plans the queue sync', () => {
@@ -137,6 +161,20 @@ describe('helpers', () => {
   });
 });
 
+describe('position', () => {
+  it('counts time since the last progress report, and starts a new song at 0', async () => {
+    setPlayer(['s1', 's2'], 0, 'playing', 50);
+    await startHosting(); // installs the tracker
+    const now = Date.now();
+    expect(livePosition(now + 9000)).toBeGreaterThanOrEqual(58.9);
+    // The song changes; the store still holds the old position until the next report.
+    playerStore.setState({ currentTrack: playerStore.getState().queue[1], currentTrackIndex: 1 });
+    expect(livePosition()).toBeLessThan(0.5);
+    const doc = parseJamComment(encodeJamComment('host', 'x'.repeat(8), { at: 0, track: null, q: [], pos: 0, playing: true, handled: {}, members: [] }));
+    expect(doc).not.toBeNull();
+  });
+});
+
 describe('hosting', () => {
   it('publishes the player and carries out a listener request', async () => {
     setPlayer(['s1', 's2', 's3'], 0, 'playing', 42);
@@ -144,7 +182,7 @@ describe('hosting', () => {
     const mine = parseJamComment(mockServer.get('dino'));
     expect(mine?.role).toBe('host');
     const doc = mine!.doc as JamHostDoc;
-    expect(doc).toMatchObject({ track: 's1', q: ['s1', 's2', 's3'], pos: 42, playing: true, members: [] });
+    expect(doc).toMatchObject({ track: 's1', q: ['s1', 's2', 's3'], pos: expect.closeTo(42, 1), playing: true, members: [] });
 
     mockServer.set('bob', encodeJamComment('guest', mine!.sid, { at: Date.now(), reqs: [{ kind: 'next', n: 5 }] }));
     await syncJamNow();
@@ -231,6 +269,15 @@ describe('listening', () => {
     // Until the host has done them, the follower leaves the listener's player alone.
     setPlayer(['s3'], 0, 'playing', 0);
     await syncJamNow();
+    expect(mockPlayer.playTrack).not.toHaveBeenCalled();
+  });
+
+  it("doesn't go back when it reached the host's next song a moment early", async () => {
+    setPlayer(['s2', 's3'], 1, 'playing', 1);
+    hostAt({ track: 's2', q: ['s2', 's3'], pos: 195, playing: true });
+    await joinSession(SID, 'ana');
+    await syncJamNow();
+    expect(mockPlayer.skipToTrack).not.toHaveBeenCalled();
     expect(mockPlayer.playTrack).not.toHaveBeenCalled();
   });
 
