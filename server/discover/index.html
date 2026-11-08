@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descobrir</title>
+<style>
+  :root { --bg:#111; --fg:#eee; --muted:#999; --card:#1c1c1c; --accent:#1db954; }
+  body { margin:0; font:15px system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:12px 16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; position:sticky; top:0; background:var(--bg); border-bottom:1px solid #222; }
+  input, select, button { font:inherit; padding:6px 10px; border-radius:6px; border:1px solid #333; background:var(--card); color:var(--fg); }
+  button { cursor:pointer; } button.on { border-color:var(--accent); color:var(--accent); }
+  main { padding:8px 16px 40px; max-width:900px; }
+  .meta { color:var(--muted); margin:8px 0 12px; font-size:13px; }
+  .row { display:flex; gap:10px; align-items:center; padding:6px 0; border-bottom:1px solid #1e1e1e; }
+  .row img { width:48px; height:48px; border-radius:4px; object-fit:cover; flex:none; }
+  .info { flex:1; min-width:0; } .info div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sub { color:var(--muted); font-size:13px; }
+  .tag { font-size:11px; padding:1px 6px; border-radius:8px; background:#2a2a2a; color:var(--muted); margin-left:6px; }
+  .lib { background:#143; color:#7d7; }
+  #msg { color:#fa6; }
+</style>
+</head>
+<body>
+<header>
+  <input id="token" type="password" placeholder="token" size="14">
+  <button data-p="/playlists/new-releases">Lançamentos</button>
+  <button data-p="/playlists/recommended">Recomendadas</button>
+  <button data-p="/playlists/charts?country=BR">Top Brasil</button>
+  <button data-p="/playlists/charts?country=GLOBAL">Top Global</button>
+  <button data-p="/download/queue">Fila deemix</button>
+  <span id="msg"></span>
+</header>
+<main><div class="meta" id="meta">Informe o token e escolha uma playlist.</div><div id="list"></div></main>
+<audio id="audio"></audio>
+<script>
+const $ = s => document.querySelector(s);
+let tok = ''; try { tok = localStorage.getItem('discoverToken') || ''; } catch (e) {}
+$('#token').value = tok;
+$('#token').onchange = e => { tok = e.target.value; try { localStorage.setItem('discoverToken', tok); } catch (e) {} };
+const api = (p, opt = {}) => fetch(p, { ...opt, headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' } })
+  .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c]);
+const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+document.querySelectorAll('button[data-p]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('button[data-p]').forEach(x => x.classList.toggle('on', x === b));
+  load(b.dataset.p);
+});
+
+async function load(p) {
+  $('#meta').textContent = 'Carregando… (a 1ª montagem pode levar ~1 min)'; $('#list').innerHTML = '';
+  try {
+    const d = await api(p);
+    if (p.startsWith('/download')) {
+      const c = d.counts;
+      $('#meta').textContent = `baixando ${c.active} · na fila ${c.queued} · falhas ${c.failed} · concluídos ${c.completed}`;
+      const items = [...d.active, ...d.queued, ...d.failed, ...d.completed];
+      $('#list').innerHTML = items.map(i => `<div class="row"><div class="info"><div>${esc(i.title)}</div>
+        <div class="sub">${esc(i.artist)} · ${esc(i.type)} · ${esc(i.status)} · ${i.downloaded}/${i.size} · ${Math.round(i.progress)}%</div></div></div>`).join('');
+      return;
+    }
+    $('#meta').textContent = `${d.title} — ${d.count} faixas · ${d.description}` + (d.seeds ? ` · sementes: ${d.seeds.join(', ')}` : '');
+    $('#list').innerHTML = d.items.map(i => `<div class="row">
+      <img src="${esc(i.cover_small)}" alt="" loading="lazy">
+      <div class="info"><div>${i.position ? i.position + '. ' : ''}${esc(i.title)}${i.in_library ? '<span class="tag lib">na biblioteca</span>' : ''}${i.record_type ? `<span class="tag">${esc(i.record_type)} ${esc(i.release_date)}</span>` : ''}</div>
+      <div class="sub">${esc(i.artist)} · ${esc(i.album)} · ${fmt(i.duration)}${i.reason ? ' · ' + esc(i.reason) : ''}</div></div>
+      <button onclick="play(${i.id})">▶</button>
+      <button onclick="dl('${esc(i.link)}')">⬇ faixa</button>
+      ${i.album_link ? `<button onclick="dl('${esc(i.album_link)}')">⬇ álbum</button>` : ''}
+    </div>`).join('');
+  } catch (e) { $('#meta').textContent = 'Erro: ' + e.message; }
+}
+
+function play(id) {
+  const a = $('#audio'); a.src = `/preview/${id}?token=${encodeURIComponent(tok)}`; a.play();
+}
+async function dl(url) {
+  if (!confirm('Baixar com o deemix?\n' + url)) return;
+  try { const r = await api('/download', { method: 'POST', body: JSON.stringify({ url }) }); $('#msg').textContent = 'Na fila: ' + url; }
+  catch (e) { $('#msg').textContent = 'Erro: ' + e.message; }
+}
+</script>
+</body>
+</html>
