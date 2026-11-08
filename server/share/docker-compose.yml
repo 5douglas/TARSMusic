@@ -1,0 +1,10 @@
+services:
+  tarsmusic-share:
+    build: .
+    container_name: tarsmusic-share
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    environment:
+      PORT: "8086"
+      NAVIDROME_URL: http://127.0.0.1:4533

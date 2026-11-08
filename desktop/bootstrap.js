@@ -48,3 +48,19 @@ try {
 } catch {
   /* not in the desktop app */
 }
+
+// TARSMusic share links opened from the browser (substreamer://s/...), handed over by
+// the main process; useShareLinkHandler opens them.
+try {
+  const { ipcRenderer } = window.require('electron');
+  globalThis.tarsDesktopLinks = {
+    take: () => ipcRenderer.invoke('tars:take-link'),
+    onLink: (listener) => {
+      const handler = (_event, url) => listener(url);
+      ipcRenderer.on('tars:open-link', handler);
+      return () => ipcRenderer.removeListener('tars:open-link', handler);
+    },
+  };
+} catch {
+  /* not in the desktop app */
+}
