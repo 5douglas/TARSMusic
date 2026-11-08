@@ -192,7 +192,13 @@ export function JamScreen() {
                   </View>
                 ))}
               </View>
-              {error && <Text style={[styles.error, { color: colors.textSecondary }]}>{t('jamConnectionTrouble')}</Text>}
+              {error && (
+                <Text style={[styles.error, { color: colors.textSecondary }]}>
+                  {t('jamConnectionTrouble')}
+                  {'\n'}
+                  <Text style={styles.errorDetail}>{error}</Text>
+                </Text>
+              )}
               <PrimaryButton
                 label={mode === 'host' ? t('jamEnd') : t('jamLeave')}
                 icon="exit-outline"
@@ -214,7 +220,7 @@ export function JamScreen() {
           <Text style={[styles.empty, { color: colors.textSecondary }]}>{t('jamOffline')}</Text>
         ) : others.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textSecondary }]}>
-            {sessionsError ? t('jamListFailed') : sessionsLoading ? '' : t('jamNoSessions')}
+            {sessionsError ? `${t('jamListFailed')} (${sessionsError})` : sessionsLoading ? '' : t('jamNoSessions')}
           </Text>
         ) : (
           others.map((s) => (
@@ -260,6 +266,7 @@ const styles = StyleSheet.create({
   avatar: { alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#fff', fontWeight: '700' },
   error: { fontSize: 13, marginTop: 12, textAlign: 'center' },
+  errorDetail: { fontSize: 11, opacity: 0.7 },
   empty: { fontSize: 14, paddingVertical: 12 },
   row: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: 10, marginBottom: 10, gap: 12 },
   rowCover: { width: 52, height: 52, borderRadius: 6 },

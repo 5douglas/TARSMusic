@@ -108,6 +108,22 @@ export function parseJamComment(comment: string | null | undefined): Omit<JamEnt
 
 let ndToken: { key: string; token: string } | null = null;
 
+/** No answer in this long counts as a failure, so a stuck request never stalls the session. */
+const REQUEST_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) throw new Error(`${url.replace(/^https?:\/\/[^/]+/, '')}: timeout`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function accountKey(): string | null {
   const { serverUrl, username } = authStore.getState();
   return serverUrl && username ? `${serverUrl}|${username.toLowerCase()}` : null;
@@ -123,7 +139,7 @@ async function login(): Promise<string> {
   const base = baseUrl();
   const key = accountKey();
   if (!base || !key || !username || !password) throw new Error('not signed in');
-  const res = await fetch(`${base}/auth/login`, {
+  const res = await fetchWithTimeout(`${base}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
@@ -142,7 +158,7 @@ async function ndGet<T>(path: string): Promise<T> {
   if (!getApi()) throw new Error('offline');
   for (let attempt = 0; attempt < 2; attempt++) {
     const token = ndToken && ndToken.key === key && attempt === 0 ? ndToken.token : await login();
-    const res = await fetch(`${base}${path}`, { headers: { 'X-ND-Authorization': `Bearer ${token}` } });
+    const res = await fetchWithTimeout(`${base}${path}`, { headers: { 'X-ND-Authorization': `Bearer ${token}` } });
     if (res.status === 401) {
       ndToken = null;
       continue;
@@ -164,8 +180,7 @@ interface NdPlaylist {
   public?: boolean;
 }
 
-/** Every session part whose comment contains `needle` (a session id, or the host marker). */
-export async function findJamEntries(needle: string): Promise<JamEntry[]> {
+async function findViaRest(needle: string): Promise<JamEntry[]> {
   const q = encodeURIComponent(needle);
   const list = await ndGet<NdPlaylist[]>(`/api/playlist?q=${q}&_start=0&_end=200`);
   const out: JamEntry[] = [];
@@ -176,6 +191,75 @@ export async function findJamEntries(needle: string): Promise<JamEntry[]> {
     out.push({ playlistId: p.id, owner: p.ownerName, ...parsed });
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Subsonic fallback (read side)                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * When the REST API cannot be used (a proxy in front of Navidrome that only passes
+ * `/rest`, a login refused, …), the session playlists are found through Subsonic instead:
+ * `getPlaylists` (every comment, so heavy) only every `JAM_LIST_REFRESH_MS` to learn which
+ * session playlists exist, and in between one small `getPlaylist` per session playlist.
+ */
+const JAM_LIST_REFRESH_MS = 15_000;
+/** After the REST API failed, how long to use the fallback before trying REST again. */
+const REST_RETRY_MS = 10 * 60_000;
+
+let restBrokenUntil = 0;
+let restError: string | null = null;
+let knownJamPlaylists: { key: string; at: number; list: { id: string; owner: string; comment?: string }[] } | null = null;
+
+/** Why the REST API was given up on, while the fallback is in use (for the session screen). */
+export function jamRestError(): string | null {
+  return Date.now() < restBrokenUntil ? restError : null;
+}
+
+async function findViaSubsonic(needle: string): Promise<JamEntry[]> {
+  const api = getApi();
+  const key = accountKey();
+  if (!api || !key) throw new Error('offline');
+  let list: { id: string; owner: string; comment?: string }[];
+  if (!knownJamPlaylists || knownJamPlaylists.key !== key || Date.now() - knownJamPlaylists.at > JAM_LIST_REFRESH_MS) {
+    const res = await api.getPlaylists();
+    list = (res.playlists?.playlist ?? [])
+      .filter((p) => p.name === JAM_PLAYLIST_NAME && !!p.owner)
+      .map((p) => ({ id: p.id, owner: p.owner as string, comment: p.comment }));
+    knownJamPlaylists = { key, at: Date.now(), list: list.map(({ id, owner }) => ({ id, owner })) };
+  } else {
+    list = await Promise.all(
+      knownJamPlaylists.list.map(async (p) => {
+        try {
+          const res = await api.getPlaylist({ id: p.id });
+          return { ...p, comment: res.playlist?.comment };
+        } catch {
+          return p; // deleted since the last list: dropped below (no comment)
+        }
+      }),
+    );
+  }
+  const out: JamEntry[] = [];
+  for (const p of list) {
+    if (!p.comment || !p.comment.includes(needle)) continue;
+    const parsed = parseJamComment(p.comment);
+    if (parsed) out.push({ playlistId: p.id, owner: p.owner, ...parsed });
+  }
+  return out;
+}
+
+/** Every session part whose comment contains `needle` (a session id, or the host marker). */
+export async function findJamEntries(needle: string): Promise<JamEntry[]> {
+  if (Date.now() >= restBrokenUntil) {
+    try {
+      return await findViaRest(needle);
+    } catch (err) {
+      if (!getApi()) throw err;
+      restError = err instanceof Error ? err.message : String(err);
+      restBrokenUntil = Date.now() + REST_RETRY_MS;
+    }
+  }
+  return findViaSubsonic(needle);
 }
 
 /** All sessions hosted right now (by anyone, this account included). */
