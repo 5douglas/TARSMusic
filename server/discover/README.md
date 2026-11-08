@@ -200,6 +200,6 @@ A cada 4 h o serviço revisa um lote de 500 `.lrc` da biblioteca e troca os susp
 (última linha depois do fim da faixa, `[length:]` ou `[ti:]` que não batem, letra sem
 tempo quando existe sincronizada). Cada faixa é revisada no máximo uma vez a cada 30 dias.
 
-Precisa da biblioteca montada com escrita em `/music` (ver `docker-compose.yml`).
+Precisa da pasta de músicas montada com escrita no mesmo caminho que o container do Navidrome usa (`/home/ubuntu/gdrive_videos` em `/music`, ver `docker-compose.yml`); caminhos relativos do Navidrome 0.55+ são resolvidos pela tabela `library`.
 Opcional no `.env`: `ND_ADMIN_USER` e `ND_ADMIN_PASSWORD` para pedir um rescan do
 Navidrome depois das correções (sem isso, o rescan agendado do Navidrome pega).

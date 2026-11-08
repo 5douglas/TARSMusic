@@ -76,6 +76,16 @@ class ReportsTest(unittest.TestCase):
         self.assertIsNone(self.rep.local_path("../../etc/passwd"))
         self.assertIsNone(self.rep.local_path(""))
 
+    def test_relative_path_uses_navidrome_library_folder(self):
+        conn = sqlite3.connect(self.nd)
+        conn.execute("create table library (id int, path text)")
+        conn.execute("insert into library values (1, '/music/Artist')")
+        conn.execute("alter table media_file add column library_id int")
+        conn.execute("update media_file set path = 'Album/01 - Song.mp3', library_id = 1")
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.rep.song("s1")["file"], self.audio.resolve())
+
     def test_validation(self):
         self.assertEqual(self.rep.handle("u", {"kind": "nope", "songId": "s1"})[0], 400)
         self.assertEqual(self.rep.handle("u", {"kind": "other", "songId": "../x"})[0], 400)

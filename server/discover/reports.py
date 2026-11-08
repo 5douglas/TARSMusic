@@ -194,18 +194,28 @@ class Reports:
             shutil.rmtree(tmp, ignore_errors=True)
 
     def song(self, song_id: str) -> dict | None:
-        rows = self._nd_query(
-            "select id, path, title, artist, album, album_artist, album_id, duration"
-            " from media_file where id = ?", (song_id,))
+        rows = self._nd_query("select * from media_file where id = ?", (song_id,))
         if not rows:
             return None
         s = dict(rows[0])
-        s["file"] = self.local_path(s["path"])
+        s["file"] = self.local_path(s["path"], s.get("library_id"))
         return s
 
-    def local_path(self, nd_path: str) -> Path | None:
+    def _libraries(self) -> dict:
+        """id -> pasta de cada biblioteca do Navidrome 0.55+ (caminhos de faixa sao relativos a ela)."""
+        if getattr(self, "_libs", None) is None:
+            try:
+                self._libs = {r["id"]: r["path"] for r in self._nd_query("select id, path from library")}
+            except sqlite3.Error:
+                self._libs = {}
+        return self._libs
+
+    def local_path(self, nd_path: str, library_id=None) -> Path | None:
         """Caminho do Navidrome -> caminho neste container, sem sair de MUSIC_DIR."""
         rel = nd_path or ""
+        lib = self._libraries().get(library_id) if library_id is not None else None
+        if rel and not rel.startswith("/") and lib:
+            rel = f"{lib.rstrip('/')}/{rel}"
         if rel.startswith(self.nd_music_dir + "/"):
             rel = rel[len(self.nd_music_dir) + 1:]
         rel = rel.lstrip("/")
@@ -671,7 +681,7 @@ class Reports:
             done = {r["song_id"] for r in conn.execute(
                 "select song_id from reviewed where at > ?", (time.time() - REVIEW_AGAIN_DAYS * 86400,))}
         rows = self._nd_query(
-            "select id, path, title, artist, album, album_artist, album_id, duration from media_file"
+            "select * from media_file"
             " where missing = 0 and id > ? order by id limit ?", (cursor, REVIEW_BATCH))
         if not rows:
             with self._db() as conn:
@@ -682,7 +692,7 @@ class Reports:
             song = dict(r)
             if song["id"] in done:
                 continue
-            song["file"] = self.local_path(song["path"])
+            song["file"] = self.local_path(song["path"], song.get("library_id"))
             text = self.read_lrc(song)
             reason = self.suspicious(song, text) if text else None
             if reason:
