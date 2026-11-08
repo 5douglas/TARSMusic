@@ -176,7 +176,7 @@ export function DiscoverTabScreen() {
       {trimmed.length === 0 ? (
         <>
           <Text style={[styles.hint, { color: colors.textSecondary }]}>{t('discoverTabHint')}</Text>
-          {home && <DiscoverHomeSections home={home} ids={['mixes', 'releases', 'charts']} />}
+          {home && <DiscoverHomeSections home={home} ids={['mixes', 'releases', 'charts']} inset={16} />}
         </>
       ) : loading && !results ? (
         <ActivityIndicator testID="discover-loading" style={styles.spinner} color={colors.primary} />
@@ -243,10 +243,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   hint: {
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 4,
+    paddingBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
