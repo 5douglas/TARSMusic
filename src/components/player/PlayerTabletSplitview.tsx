@@ -41,6 +41,7 @@ import {
 } from '@/services/playerService';
 import { type Child } from '@/services/subsonicService';
 import { moreOptionsStore } from '@/store/moreOptionsStore';
+import { playbackSettingsStore } from '@/store/playbackSettingsStore';
 import { playerStore } from '@/store/playerStore';
 import { tabletLayoutStore } from '@/store/tabletLayoutStore';
 
@@ -230,6 +231,8 @@ const PanelHeader = memo(function PanelHeader({
   const retrying = playerStore((s) => s.retrying);
 
   const { canSkipNext, canSkipPrevious } = useCanSkip();
+  // The speed shows only when it isn't 1x, to keep the side panel simple.
+  const playbackRate = playbackSettingsStore((s) => s.playbackRate);
 
   const marqueeStyle = useMemo(
     () => [styles.trackTitle, { color: colors.textPrimary }],
@@ -311,7 +314,7 @@ const PanelHeader = memo(function PanelHeader({
           {/* Playback controls */}
           <View style={styles.controls}>
             <View style={styles.controlSideLeft}>
-              <PlaybackRateButton />
+              {playbackRate !== 1 && <PlaybackRateButton />}
             </View>
 
             <View style={styles.transportControls}>

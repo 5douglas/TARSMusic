@@ -23,7 +23,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AlbumInfoContent } from '@/components/AlbumInfoContent';
 import { LyricsContent } from '@/components/LyricsContent';
-import { BookmarkButton } from '@/components/BookmarkButton';
 import { CachedImage } from '@/components/CachedImage';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { JamPill } from '@/components/JamButton';
@@ -93,6 +92,7 @@ export function PlayerTabletLandscape({
 
   const showSkipInterval = playbackSettingsStore((s) => s.showSkipIntervalButtons);
   const showSleepTimer = playbackSettingsStore((s) => s.showSleepTimerButton);
+  const playbackRate = playbackSettingsStore((s) => s.playbackRate);
   const offlineMode = offlineModeStore((s) => s.offlineMode);
   // This overlay is root-mounted and stays mounted (transparent, non-interactive)
   // while collapsed, so "the player is open" is the expanded flag, not the mount.
@@ -442,27 +442,27 @@ export function PlayerTabletLandscape({
                 </View>
               </View>
 
-              {/* Secondary controls row — sleep timer, then skip-interval
-                  buttons under prev/next with the playback rate between them */}
-              <View style={styles.secondaryControls}>
-                <View style={[styles.controlSideLeft, styles.secondaryLeftInset]}>
-                  {showSleepTimer && <SleepTimerButton />}
-                </View>
-                <View style={[styles.secondaryCenter, styles.secondaryCenterRow]}>
-                  {showSkipInterval && (
-                    <SkipIntervalButton direction="backward" size={32} />
-                  )}
-                  <View style={styles.secondaryRateSlot}>
-                    <PlaybackRateButton />
+              {/* Secondary controls row: only what was turned on in Settings (sleep timer,
+                  skip-interval buttons) and the speed when it isn't 1x, so the player stays simple */}
+              {(showSleepTimer || showSkipInterval || playbackRate !== 1) && (
+                <View style={styles.secondaryControls}>
+                  <View style={[styles.controlSideLeft, styles.secondaryLeftInset]}>
+                    {showSleepTimer && <SleepTimerButton />}
                   </View>
-                  {showSkipInterval && (
-                    <SkipIntervalButton direction="forward" size={32} />
-                  )}
+                  <View style={[styles.secondaryCenter, styles.secondaryCenterRow]}>
+                    {showSkipInterval && (
+                      <SkipIntervalButton direction="backward" size={32} />
+                    )}
+                    <View style={styles.secondaryRateSlot}>
+                      {playbackRate !== 1 && <PlaybackRateButton />}
+                    </View>
+                    {showSkipInterval && (
+                      <SkipIntervalButton direction="forward" size={32} />
+                    )}
+                  </View>
+                  <View style={styles.controlSideRight} />
                 </View>
-                <View style={styles.controlSideRight}>
-                  <BookmarkButton style={styles.bookmarkButton} />
-                </View>
-              </View>
+              )}
 
               {Platform.OS === 'web' && (
                 <View style={styles.volumeRow}>

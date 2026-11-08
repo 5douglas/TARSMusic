@@ -17,7 +17,6 @@ import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BookmarkButton } from '@/components/BookmarkButton';
 import { CachedImage } from '@/components/CachedImage';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { EmptyState } from '@/components/EmptyState';
@@ -408,6 +407,7 @@ const PlaybackControls = memo(function PlaybackControls({
   const { isPlaying, isBuffering } = usePlaybackState();
   const showSkipInterval = playbackSettingsStore((s) => s.showSkipIntervalButtons);
   const showSleepTimer = playbackSettingsStore((s) => s.showSleepTimerButton);
+  const playbackRate = playbackSettingsStore((s) => s.playbackRate);
   const { canSkipNext, canSkipPrevious } = useCanSkip();
 
   return (
@@ -474,21 +474,22 @@ const PlaybackControls = memo(function PlaybackControls({
         </View>
       </View>
 
-      <View style={styles.secondaryControls}>
-        <View style={[styles.controlSideLeft, styles.secondaryLeftInset]}>
-          {showSleepTimer && <SleepTimerButton />}
-        </View>
-        <View style={[styles.secondaryCenter, styles.secondaryCenterRow]}>
-          {showSkipInterval && <SkipIntervalButton direction="backward" size={32} />}
-          <View style={styles.secondaryRateSlot}>
-            <PlaybackRateButton />
+      {/* Only what was turned on in Settings, plus the speed when it isn't 1x: a simple player */}
+      {(showSleepTimer || showSkipInterval || playbackRate !== 1) && (
+        <View style={styles.secondaryControls}>
+          <View style={[styles.controlSideLeft, styles.secondaryLeftInset]}>
+            {showSleepTimer && <SleepTimerButton />}
           </View>
-          {showSkipInterval && <SkipIntervalButton direction="forward" size={32} />}
+          <View style={[styles.secondaryCenter, styles.secondaryCenterRow]}>
+            {showSkipInterval && <SkipIntervalButton direction="backward" size={32} />}
+            <View style={styles.secondaryRateSlot}>
+              {playbackRate !== 1 && <PlaybackRateButton />}
+            </View>
+            {showSkipInterval && <SkipIntervalButton direction="forward" size={32} />}
+          </View>
+          <View style={styles.controlSideRight} />
         </View>
-        <View style={styles.controlSideRight}>
-          <BookmarkButton style={styles.favoriteButton} />
-        </View>
-      </View>
+      )}
     </>
   );
 });
