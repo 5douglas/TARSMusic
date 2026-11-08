@@ -60,6 +60,7 @@ export function ProfileMenu() {
   const scrimStyle = useAnimatedStyle(() => ({ opacity: progress.value * 0.6 }));
 
   const entries: MenuEntry[] = [
+    { key: 'chat', labelKey: 'chatTitle', icon: 'chatbubble-ellipses-outline', action: () => go('/chat') },
     { key: 'stats', labelKey: 'profileListeningStats', icon: 'stats-chart-outline', action: () => go('/my-listening') },
     { key: 'wrapped', labelKey: 'wrapped', icon: 'sparkles-outline', action: () => go('/wrapped') },
     { key: 'recents', labelKey: 'profileRecents', icon: 'time-outline', action: () => go('/scrobble-browser') },

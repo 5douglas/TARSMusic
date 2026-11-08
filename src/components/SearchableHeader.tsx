@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ChatHeaderButton } from './ChatHeaderButton';
 import { CreatePlaylistSheet } from './CreatePlaylistSheet';
 import { DARK_MIX, GRADIENT_LOCATIONS, GRADIENT_MIX_CURVE, LIGHT_MIX } from './GradientBackground';
 import { ProfileAvatar } from './ProfileAvatar';
@@ -135,6 +136,12 @@ export function SearchableHeader({ route }: BottomTabHeaderProps) {
         <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
           {t(titleKey)}
         </Text>
+      )}
+      {route.name === 'index' && (
+        <>
+          <View style={styles.spacer} />
+          <ChatHeaderButton />
+        </>
       )}
       {isLibrary && (
         <>
@@ -256,6 +263,9 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingTop: 8,
+  },
+  spacer: {
+    flex: 1,
   },
   title: {
     flex: 1,

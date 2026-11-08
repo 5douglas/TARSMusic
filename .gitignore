@@ -88,3 +88,7 @@ play-store-key.json
 # Local reference copies of Subsonic server implementations — read-only, never committed.
 # Clone/refresh with scripts or by hand; see plans/research-search3-paging-behaviour.md
 reference/
+
+# chat server local data
+server/chat/data/
+server/chat/.env

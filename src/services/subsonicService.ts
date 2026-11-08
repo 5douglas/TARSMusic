@@ -277,6 +277,20 @@ function applyUrlAuth(params: URLSearchParams, username: string): void {
   }
 }
 
+/**
+ * The current user's Subsonic credentials as X-Subsonic-* headers, for the chat service,
+ * which checks them against Navidrome's ping. Null without a session.
+ */
+export async function getSubsonicAuthHeaders(): Promise<Record<string, string> | null> {
+  await ensureCoverArtAuth();
+  const { username } = authStore.getState();
+  if (!username || !cachedCoverArtToken) return null;
+  if (cachedCoverArtSalt != null) {
+    return { 'X-Subsonic-User': username, 'X-Subsonic-Token': cachedCoverArtToken, 'X-Subsonic-Salt': cachedCoverArtSalt };
+  }
+  return { 'X-Subsonic-User': username, 'X-Subsonic-Password': cachedCoverArtToken };
+}
+
 export function getCoverArtUrl(
   coverArtId: string,
   size?: number,
@@ -458,6 +472,18 @@ export async function getAlbumResult(albumId: string): Promise<AlbumFetchResult>
 export async function getAlbum(albumId: string): Promise<AlbumWithSongsID3 | null> {
   const result = await getAlbumResult(albumId);
   return result.status === 'ok' ? result.album : null;
+}
+
+/** One song by id, or null on any failure. */
+export async function getSong(id: string): Promise<Child | null> {
+  const api = getApi();
+  if (!api) return null;
+  try {
+    const response = await api.getSong({ id });
+    return response.song ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getAlbumInfo2(albumId: string): Promise<AlbumInfo | null> {

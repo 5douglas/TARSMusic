@@ -910,6 +910,22 @@ export default function RootLayout() {
           options={{ ...blurHeaderOptions, title: i18n.t('deemixDownloads'), headerBackTitle: i18n.t('back') }}
         />
         <Stack.Screen
+          name="chat"
+          options={{ ...blurHeaderOptions, title: i18n.t('chatTitle'), headerBackTitle: i18n.t('back') }}
+        />
+        <Stack.Screen
+          name="chat-contacts"
+          options={{ ...blurHeaderOptions, title: i18n.t('chatContacts'), headerBackTitle: i18n.t('back') }}
+        />
+        <Stack.Screen
+          name="chat-send"
+          options={{ ...blurHeaderOptions, title: i18n.t('chatSendInChat'), headerBackTitle: i18n.t('back') }}
+        />
+        <Stack.Screen
+          name="conversation/[user]"
+          options={{ ...blurHeaderOptions, title: '', headerBackTitle: i18n.t('back') }}
+        />
+        <Stack.Screen
           name="tuned-in"
           options={{ ...blurHeaderOptions, title: i18n.t('tunedIn'), headerBackTitle: i18n.t('back') }}
         />
