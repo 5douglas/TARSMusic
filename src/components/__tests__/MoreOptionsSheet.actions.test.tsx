@@ -166,9 +166,13 @@ jest.mock('../../services/moreOptionsService', () => ({
   toggleStar: jest.fn(),
 }));
 
-const mockShareItemLink = jest.fn().mockResolvedValue(undefined);
-jest.mock('../../services/shareLinkService', () => ({
-  shareItemLink: (...args: unknown[]) => mockShareItemLink(...args),
+const mockShareSheetShow = jest.fn();
+jest.mock('../../store/shareSheetStore', () => ({
+  shareSheetStore: { getState: () => ({ show: (...args: unknown[]) => mockShareSheetShow(...args) }) },
+}));
+const mockSleepSheetShow = jest.fn();
+jest.mock('../../store/sleepTimerStore', () => ({
+  sleepTimerStore: { getState: () => ({ showSheet: () => mockSleepSheetShow() }) },
 }));
 jest.mock('../../services/musicCacheService', () => ({ deleteCachedItem: jest.fn() }));
 jest.mock('../../services/subsonicService', () => ({
@@ -332,7 +336,7 @@ const ALL_OPTIONS = [
   'Go to Album',
   'Go to Artist',
   'Share',
-  'Public link (no app needed)',
+  'Sleep Timer',
   'Album Details',
   'Track Details',
   'Set MusicBrainz ID',
@@ -401,7 +405,6 @@ describe('MoreOptionsSheet — options per entity (online, default source)', () 
       'Go to Album',
       'Go to Artist',
       'Share',
-      'Public link (no app needed)',
       'Track Details',
       'Download Song',
     ]);
@@ -417,7 +420,6 @@ describe('MoreOptionsSheet — options per entity (online, default source)', () 
       'Add to Queue',
       'Go to Artist',
       'Share',
-      'Public link (no app needed)',
       'Album Details',
       'Set MusicBrainz ID',
       'Exclude from Scrobbling',
@@ -441,7 +443,7 @@ describe('MoreOptionsSheet — options per entity (online, default source)', () 
 
   it('playlist', () => {
     open(playlistEntity);
-    expect(shownOptions()).toEqual(['Add to Queue', 'Share', 'Public link (no app needed)', 'Download', 'Delete Playlist']);
+    expect(shownOptions()).toEqual(['Add to Queue', 'Share', 'Download', 'Delete Playlist']);
   });
 });
 
@@ -494,7 +496,7 @@ describe('MoreOptionsSheet — options in offline mode', () => {
     open(songEntity, 'player-phone-portrait');
     expect(screen.queryByText('Player Queue')).toBeNull();
     expect(screen.queryByText('Add Queue to Playlist')).toBeNull();
-    expect(shownOptions()).toEqual(['Play More by This Artist', 'Share', 'Track Details']);
+    expect(shownOptions()).toEqual(['Play More by This Artist', 'Share', 'Sleep Timer', 'Track Details']);
   });
 });
 
@@ -517,10 +519,9 @@ describe('MoreOptionsSheet — option gating details', () => {
     expect(screen.queryByText('Set Rating')).toBeTruthy();
   });
 
-  it('the public link is hidden when the user may not share; the app link stays', () => {
+  it('Share shows even when the user may not make public Navidrome links', () => {
     mockCanShare = false;
     open(albumEntity);
-    expect(screen.queryByText('Public link (no app needed)')).toBeNull();
     expect(screen.queryByText('Share')).toBeTruthy();
   });
 
@@ -925,11 +926,18 @@ describe('MoreOptionsSheet — MusicBrainz ID', () => {
 });
 
 describe('MoreOptionsSheet — share link', () => {
+  it('the player menu opens the sleep timer', async () => {
+    open(songEntity, 'player-phone-portrait');
+    fireEvent.press(screen.getByText('Sleep Timer'));
+    await waitFor(() => expect(mockSleepSheetShow).toHaveBeenCalled());
+  });
+
+
   it('song shares its id, title and artist', async () => {
     open(songEntity);
     fireEvent.press(screen.getByText('Share'));
     await waitFor(() =>
-      expect(mockShareItemLink).toHaveBeenCalledWith({ kind: 'song', id: 's1', name: 'Test Track', artist: 'Test Artist' }),
+      expect(mockShareSheetShow).toHaveBeenCalledWith({ kind: 'song', id: 's1', name: 'Test Track', artist: 'Test Artist', coverArt: 'resolved:cs1' }),
     );
     sheetClosed();
   });
@@ -938,18 +946,18 @@ describe('MoreOptionsSheet — share link', () => {
     open(albumEntity);
     fireEvent.press(screen.getByText('Share'));
     await waitFor(() =>
-      expect(mockShareItemLink).toHaveBeenCalledWith({ kind: 'album', id: 'al1', name: 'Test Album', artist: 'Album Artist' }),
+      expect(mockShareSheetShow).toHaveBeenCalledWith({ kind: 'album', id: 'al1', name: 'Test Album', artist: 'Album Artist', coverArt: 'resolved:cal1' }),
     );
   });
 
   it('artist and playlist share their id and name', async () => {
     const view = open(artistEntity);
     fireEvent.press(screen.getByText('Share'));
-    await waitFor(() => expect(mockShareItemLink).toHaveBeenCalledWith({ kind: 'artist', id: 'ar1', name: 'Some Artist' }));
+    await waitFor(() => expect(mockShareSheetShow).toHaveBeenCalledWith({ kind: 'artist', id: 'ar1', name: 'Some Artist', coverArt: 'resolved:car1' }));
     view.unmount();
     open(playlistEntity);
     fireEvent.press(screen.getByText('Share'));
-    await waitFor(() => expect(mockShareItemLink).toHaveBeenCalledWith({ kind: 'playlist', id: 'p1', name: 'Test Playlist' }));
+    await waitFor(() => expect(mockShareSheetShow).toHaveBeenCalledWith({ kind: 'playlist', id: 'p1', name: 'Test Playlist', coverArt: 'resolved:cp1' }));
   });
 });
 
@@ -957,38 +965,6 @@ describe('MoreOptionsSheet — share and rating resolve the cover', () => {
   function subjectPassed() {
     return (resolveCoverArtId as jest.Mock).mock.calls[0][0];
   }
-
-  it('song share passes its cover art and album, and the resolved cover', async () => {
-    open(songEntity);
-    fireEvent.press(screen.getByText('Public link (no app needed)'));
-    await waitFor(() =>
-      expect(mockShareShowSong).toHaveBeenCalledWith('s1', 'Test Track', 'Test Artist', 'resolved:cs1'),
-    );
-    expect(subjectPassed()).toStrictEqual({ coverArt: 'cs1', albumId: 'al1' });
-    sheetClosed();
-  });
-
-  it('song share without an artist passes undefined', async () => {
-    open({ type: 'song', item: { ...song, artist: null } as unknown as Child });
-    fireEvent.press(screen.getByText('Public link (no app needed)'));
-    await waitFor(() => expect(mockShareShowSong).toHaveBeenCalledWith('s1', 'Test Track', undefined, 'resolved:cs1'));
-  });
-
-  it('album share passes only its cover art', async () => {
-    open(albumEntity);
-    fireEvent.press(screen.getByText('Public link (no app needed)'));
-    await waitFor(() =>
-      expect(mockShareShowAlbum).toHaveBeenCalledWith('al1', 'Test Album', 'Album Artist', 'resolved:cal1'),
-    );
-    expect(subjectPassed()).toStrictEqual({ coverArt: 'cal1' });
-  });
-
-  it('playlist share passes only its cover art', async () => {
-    open(playlistEntity);
-    fireEvent.press(screen.getByText('Public link (no app needed)'));
-    await waitFor(() => expect(mockShareShowPlaylist).toHaveBeenCalledWith('p1', 'Test Playlist', 'resolved:cp1'));
-    expect(subjectPassed()).toStrictEqual({ coverArt: 'cp1' });
-  });
 
   it('song rating passes its cover art and album, title and current rating', async () => {
     mockRating = 3;

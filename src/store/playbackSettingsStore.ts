@@ -241,6 +241,11 @@ export function migratePlaybackSettings(persisted: any, version: number) {
       replayGainMode: 'track',
     };
   }
+  if (version !== undefined && version < 3) {
+    // The player's bottom row was too crowded: the sleep timer moved to the player's
+    // "more" menu and the skip-interval buttons are off unless turned on in Settings.
+    next = { ...next, showSkipIntervalButtons: false, showSleepTimerButton: false };
+  }
   return next;
 }
 
@@ -255,8 +260,8 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       pitchCorrection: 'none',
       downloadMaxBitRate: 320,
       downloadFormat: 'mp3',
-      showSkipIntervalButtons: true,
-      showSleepTimerButton: true,
+      showSkipIntervalButtons: false,
+      showSleepTimerButton: false,
       skipBackwardInterval: 15,
       skipForwardInterval: 30,
       remoteControlMode: 'skip-track',
@@ -295,7 +300,7 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
     }),
     {
       name: PERSIST_KEY,
-      version: 2,
+      version: 3,
       migrate: migratePlaybackSettings,
       storage: createJSONStorage(() => kvStorage),
       partialize: (state) => ({

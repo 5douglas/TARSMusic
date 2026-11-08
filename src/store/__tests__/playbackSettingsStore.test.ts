@@ -111,13 +111,13 @@ describe('playbackSettingsStore', () => {
   });
 
   describe('migratePlaybackSettings (v0 → v1)', () => {
-    it('force-enables both button flags for users upgrading from v0', () => {
+    it('chains v0 → v3: the button flags end up off', () => {
       const result = migratePlaybackSettings(
-        { showSkipIntervalButtons: false, showSleepTimerButton: false, repeatMode: 'all' },
+        { showSkipIntervalButtons: true, showSleepTimerButton: true, repeatMode: 'all' },
         0,
       );
-      expect(result.showSkipIntervalButtons).toBe(true);
-      expect(result.showSleepTimerButton).toBe(true);
+      expect(result.showSkipIntervalButtons).toBe(false);
+      expect(result.showSleepTimerButton).toBe(false);
       // Unrelated settings are preserved.
       expect(result.repeatMode).toBe('all');
     });
@@ -127,9 +127,19 @@ describe('playbackSettingsStore', () => {
       expect(result.showSleepTimerButton).toBe(true);
     });
 
-    it('leaves a v2+ blob untouched so later user changes persist', () => {
-      const blob = { showSkipIntervalButtons: false, showSleepTimerButton: false, playbackMode: 'gapless' };
-      expect(migratePlaybackSettings(blob, 2)).toBe(blob);
+    it('leaves a v3 blob untouched so later user changes persist', () => {
+      const blob = { showSkipIntervalButtons: true, showSleepTimerButton: true, playbackMode: 'gapless' };
+      expect(migratePlaybackSettings(blob, 3)).toBe(blob);
+    });
+
+    it('v2 → v3 turns the sleep timer and skip-interval buttons off once', () => {
+      const result = migratePlaybackSettings(
+        { showSkipIntervalButtons: true, showSleepTimerButton: true, playbackMode: 'gapless' },
+        2,
+      );
+      expect(result.showSkipIntervalButtons).toBe(false);
+      expect(result.showSleepTimerButton).toBe(false);
+      expect(result.playbackMode).toBe('gapless');
     });
 
     it('passes through a null/invalid blob unchanged', () => {
@@ -149,9 +159,9 @@ describe('playbackSettingsStore', () => {
       expect(result.showSleepTimerButton).toBe(false);
     });
 
-    it('chains v0 → v2', () => {
-      const result = migratePlaybackSettings({ showSleepTimerButton: false }, 0);
-      expect(result.showSleepTimerButton).toBe(true);
+    it('chains v0 → v3', () => {
+      const result = migratePlaybackSettings({ showSleepTimerButton: true }, 0);
+      expect(result.showSleepTimerButton).toBe(false);
       expect(result.playbackMode).toBe('crossfade');
       expect(result.replayGainMode).toBe('track');
     });

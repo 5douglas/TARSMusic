@@ -42,6 +42,7 @@ import { runWhenIdle } from '../utils/runWhenIdle';
 import AnimatedSplashScreen from '../components/AnimatedSplashScreen';
 import { CertificatePromptModal } from '../components/CertificatePromptModal';
 import { CreateShareSheet } from '../components/CreateShareSheet';
+import { ShareLinkSheet } from '../components/ShareLinkSheet';
 import { PlayerTabletLandscape } from '../components/player/PlayerTabletLandscape';
 import { PlayerTabletSplitview } from '../components/player/PlayerTabletSplitview';
 import { SplitLayout } from '../components/SplitLayout';
@@ -976,6 +977,7 @@ export default function RootLayout() {
 
       {/* Global create-share bottom sheet driven by createShareStore */}
       <CreateShareSheet />
+      <ShareLinkSheet />
 
       {/* Global set-rating bottom sheet driven by setRatingStore */}
       <SetRatingSheet />
