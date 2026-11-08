@@ -18,7 +18,8 @@ services:
       - ./data:/data
       - /home/ubuntu/navidrome/data:/navidrome:ro
       - /home/ubuntu/navidrome-autodl/data:/autodl:ro
-      - /home/ubuntu/gdrive_videos/music:/music
+      # mesma pasta e mesmo caminho que o container do Navidrome usa
+      - /home/ubuntu/gdrive_videos:/music
     ports:
       # so localhost; exposicao ao celular e decidida depois (Caddy/Cloudflare)
       - "127.0.0.1:8085:8085"
