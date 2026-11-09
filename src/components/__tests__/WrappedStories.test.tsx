@@ -12,7 +12,7 @@ jest.mock('react-native-view-shot', () => ({ captureRef: (...a: unknown[]) => mo
 const mockShare = jest.fn();
 jest.mock('expo-sharing', () => ({ shareAsync: (...a: unknown[]) => mockShare(...a) }));
 
-import { storyIds, WrappedStories, type WrappedStoriesData } from '../WrappedStories';
+import { STORY_MS, storyIds, WrappedStories, type WrappedStoriesData } from '../WrappedStories';
 import type { WrappedSummary } from '../../utils/wrapped';
 
 const summary: WrappedSummary = {
@@ -53,12 +53,31 @@ it('moves with taps and closes after the last story', () => {
   const onClose = jest.fn();
   render(<WrappedStories visible data={data} onClose={onClose} />);
   expect(screen.getByText('2026')).toBeTruthy();
-  fireEvent.press(screen.getByLabelText('Next story'));
+  fireEvent.press(screen.getAllByLabelText('Next story')[0]);
   expect(screen.getByText('120')).toBeTruthy(); // minutes
-  fireEvent.press(screen.getByLabelText('Previous story'));
+  fireEvent.press(screen.getAllByLabelText('Previous story')[0]);
   expect(screen.getByText('2026')).toBeTruthy();
-  for (let i = 0; i < 8; i++) fireEvent.press(screen.getByLabelText('Next story'));
+  for (let i = 0; i < 8; i++) fireEvent.press(screen.getAllByLabelText('Next story')[0]);
   expect(onClose).toHaveBeenCalled();
+});
+
+it('moves on by itself, even when the screen behind re-renders', () => {
+  jest.useFakeTimers();
+  try {
+    const onClose = jest.fn();
+    const view = render(<WrappedStories visible data={data} onClose={onClose} />);
+    act(() => {
+      jest.advanceTimersByTime(STORY_MS / 2);
+    });
+    // A new onClose on every render of the parent must not restart the story.
+    view.rerender(<WrappedStories visible data={data} onClose={() => onClose()} />);
+    act(() => {
+      jest.advanceTimersByTime(STORY_MS / 2 + 200);
+    });
+    expect(screen.getByText('120')).toBeTruthy(); // minutes, the second story
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 it('shares the current story as an image', async () => {

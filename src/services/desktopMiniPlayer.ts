@@ -100,7 +100,12 @@ export function installMiniPlayerSync(): void {
 export function openMiniPlayer(): void {
   const b = bridge();
   if (!b) return;
-  installMiniPlayerSync();
+  // Open first: nothing in the sync may keep the window from showing.
   b.open();
-  b.sendState(miniStateFrom(playerStore.getState()));
+  try {
+    installMiniPlayerSync();
+    b.sendState(miniStateFrom(playerStore.getState()));
+  } catch (err) {
+    console.warn('[mini player]', err);
+  }
 }

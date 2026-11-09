@@ -1522,7 +1522,7 @@
   "jamGuestListenOnly": "The host set you to listen only in this session.",
   "jamNotAllowed": "The host doesn't allow that in this session",
   "wrappedStoriesOpen": "Watch your recap",
-  "wrappedStoriesOpenHint": "As stories, like Spotify Wrapped. Share any of them.",
+  "wrappedStoriesOpenHint": "As stories. Share any of them.",
   "wrappedStoriesIntroKicker": "Your recap",
   "wrappedStoriesIntroBody": "Let's see what you listened to most.",
   "wrappedStoriesMinutesKicker": "You listened to",

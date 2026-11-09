@@ -4,7 +4,7 @@
 // react-native-web), with the native modules replaced by desktop/shims. It needs
 // Node in the renderer for the database (node:sqlite) and the file system, and it
 // talks to the user's own servers, which do not all send CORS headers.
-const { app, BrowserWindow, ipcMain, net, protocol, shell, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, net, protocol, screen, shell, Menu, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -141,11 +141,22 @@ function miniBoundsFile() {
 function readMiniBounds() {
   try {
     const b = JSON.parse(fs.readFileSync(miniBoundsFile(), 'utf8'));
-    if ([b.x, b.y, b.width, b.height].every((n) => Number.isFinite(n))) return b;
+    if (![b.x, b.y, b.width, b.height].every((n) => Number.isFinite(n))) return null;
+    // Only where a screen still is (a monitor may have been unplugged since).
+    const area = screen.getDisplayMatching(b).workArea;
+    const visible =
+      b.x < area.x + area.width - 40 && b.x + b.width > area.x + 40 && b.y >= area.y - 10 && b.y < area.y + area.height - 40;
+    if (visible) return b;
   } catch {
     /* first time */
   }
   return null;
+}
+
+/** First time: the bottom-right corner of the screen the app is on, like a video pop-up. */
+function defaultMiniBounds(width, height) {
+  const area = (mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()) : screen.getPrimaryDisplay()).workArea;
+  return { x: area.x + area.width - width - 24, y: area.y + area.height - height - 24, width, height };
 }
 
 function saveMiniBounds() {
@@ -163,13 +174,10 @@ function openMiniWindow() {
     miniWindow.focus();
     return;
   }
-  const saved = readMiniBounds();
+  const bounds = readMiniBounds() ?? defaultMiniBounds(360, 116);
   const icon = nativeImage.createFromPath(path.join(__dirname, 'build', 'icon.png'));
   miniWindow = new BrowserWindow({
-    width: saved?.width ?? 360,
-    height: saved?.height ?? 116,
-    x: saved?.x,
-    y: saved?.y,
+    ...bounds,
     minWidth: 280,
     minHeight: 96,
     maxHeight: 220,
@@ -192,10 +200,18 @@ function openMiniWindow() {
   });
   // Above full-screen windows too, where the platform allows it.
   miniWindow.setAlwaysOnTop(true, 'floating');
-  miniWindow.once('ready-to-show', () => miniWindow?.show());
+  const reveal = () => {
+    if (!miniWindow || miniWindow.isDestroyed() || miniWindow.isVisible()) return;
+    miniWindow.show();
+    // The pop-up takes the big window's place until "back to the app".
+    if (mainWindow && !mainWindow.isMinimized()) mainWindow.minimize();
+  };
+  miniWindow.once('ready-to-show', reveal);
   miniWindow.webContents.on('did-finish-load', () => {
     if (miniState) miniWindow?.webContents.send('tars:mini-state', miniState);
+    reveal();
   });
+  miniWindow.webContents.on('did-fail-load', (_e, code, desc) => console.warn('[mini] load failed', code, desc));
   miniWindow.on('moved', saveMiniBounds);
   miniWindow.on('resized', saveMiniBounds);
   miniWindow.on('close', saveMiniBounds);
@@ -213,17 +229,13 @@ ipcMain.on('tars:mini-state', (_event, state) => {
 });
 ipcMain.on('tars:mini-command', (_event, cmd) => {
   if (!cmd || typeof cmd.kind !== 'string') return;
-  if (cmd.kind === 'expand') {
+  if (cmd.kind === 'expand' || cmd.kind === 'close') {
     // Back to the full app: show it and close the mini window.
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
     }
-    miniWindow?.close();
-    return;
-  }
-  if (cmd.kind === 'close') {
     miniWindow?.close();
     return;
   }
