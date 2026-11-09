@@ -1,8 +1,11 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import Ionicons from '@react-native-vector-icons/ionicons/static';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,7 +18,6 @@ import {
 
 import { CertificatePromptModal } from '../components/CertificatePromptModal';
 import { LanguageSelector } from '../components/LanguageSelector';
-import WaveformLogo from '../components/WaveformLogo';
 import { fetchServerInfo, login as subsonicLogin } from '../services/subsonicService';
 import { trustCertificateForHost } from '../services/sslTrustService';
 import { authStore } from '../store/authStore';
@@ -30,6 +32,15 @@ import {
 } from '../../modules/expo-ssl-trust/src';
 
 const PRIMARY = '#1D9BF0';
+// TARSMusic look: the same dark navy as the splash and launcher icon, with the
+// app blue as the accent (button, focused field, switches).
+const BACKGROUND = '#121826';
+const FIELD = '#1C2335';
+const FIELD_BORDER = '#2B3550';
+const PLACEHOLDER = 'rgba(255,255,255,0.45)';
+const LOGO = require('../assets/logo-mark.png');
+
+type FieldName = 'server' | 'user' | 'pass';
 
 export function LoginScreen() {
   const router = useRouter();
@@ -44,6 +55,8 @@ export function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [legacyAuth, setLegacyAuth] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [focused, setFocused] = useState<FieldName | null>(null);
 
   // SSL certificate prompt state
   const [certModalVisible, setCertModalVisible] = useState(false);
@@ -228,6 +241,13 @@ export function LoginScreen() {
 
   return (
     <View style={styles.root}>
+      {/* Soft blue glow at the top, fading into the navy background. */}
+      <LinearGradient
+        colors={['rgba(29,155,240,0.35)', 'rgba(29,155,240,0.08)', 'rgba(18,24,38,0)']}
+        locations={[0, 0.35, 0.7]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
@@ -235,59 +255,83 @@ export function LoginScreen() {
         <View style={styles.inner}>
         {/* Logo */}
         <View style={styles.logoContainer}>
-          <WaveformLogo size={80} color="#FFFFFF" />
+          <Image source={LOGO} style={styles.logo} resizeMode="contain" accessibilityIgnoresInvertColors />
         </View>
 
-        <Text style={styles.title}>substreamer</Text>
+        <Text style={styles.title}>TARSMusic</Text>
         <Text style={styles.subtitle}>
           {t('loginSubtitle')}
         </Text>
 
         {/* Form */}
         <View>
-          <TextInput
-            style={styles.input}
-            placeholder={t('loginServerPlaceholder')}
-            placeholderTextColor="rgba(255,255,255,0.85)"
-            value={serverUrl}
-            onChangeText={(t) => {
-              setServerUrl(t);
-              setError(null);
-            }}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            editable={!loading}
-            multiline={false}
-            numberOfLines={1}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder={t('username')}
-            placeholderTextColor="rgba(255,255,255,0.85)"
-            value={username}
-            onChangeText={(t) => {
-              setUsername(t);
-              setError(null);
-            }}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!loading}
-          />
-          <TextInput
-            style={[styles.input, styles.inputLast]}
-            placeholder={t('password')}
-            placeholderTextColor="rgba(255,255,255,0.85)"
-            value={password}
-            onChangeText={(t) => {
-              setPassword(t);
-              setError(null);
-            }}
-            secureTextEntry
-            editable={!loading}
-            returnKeyType="go"
-            onSubmitEditing={handleSubmit}
-          />
+          <View style={[styles.field, focused === 'server' && styles.fieldFocused]}>
+            <Ionicons name="server-outline" size={18} color={focused === 'server' ? PRIMARY : PLACEHOLDER} style={styles.fieldIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder={t('loginServerPlaceholder')}
+              placeholderTextColor={PLACEHOLDER}
+              value={serverUrl}
+              onChangeText={(t) => {
+                setServerUrl(t);
+                setError(null);
+              }}
+              onFocus={() => setFocused('server')}
+              onBlur={() => setFocused(null)}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              editable={!loading}
+              multiline={false}
+              numberOfLines={1}
+            />
+          </View>
+          <View style={[styles.field, focused === 'user' && styles.fieldFocused]}>
+            <Ionicons name="person-outline" size={18} color={focused === 'user' ? PRIMARY : PLACEHOLDER} style={styles.fieldIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder={t('username')}
+              placeholderTextColor={PLACEHOLDER}
+              value={username}
+              onChangeText={(t) => {
+                setUsername(t);
+                setError(null);
+              }}
+              onFocus={() => setFocused('user')}
+              onBlur={() => setFocused(null)}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+            />
+          </View>
+          <View style={[styles.field, styles.fieldLast, focused === 'pass' && styles.fieldFocused]}>
+            <Ionicons name="lock-closed-outline" size={18} color={focused === 'pass' ? PRIMARY : PLACEHOLDER} style={styles.fieldIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder={t('password')}
+              placeholderTextColor={PLACEHOLDER}
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                setError(null);
+              }}
+              onFocus={() => setFocused('pass')}
+              onBlur={() => setFocused(null)}
+              secureTextEntry={!showPassword}
+              editable={!loading}
+              returnKeyType="go"
+              onSubmitEditing={handleSubmit}
+            />
+            <Pressable
+              onPress={() => setShowPassword((v) => !v)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('password')}
+              style={styles.eye}
+            >
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={PLACEHOLDER} />
+            </Pressable>
+          </View>
 
           <Pressable
             style={styles.advancedToggle}
@@ -310,8 +354,8 @@ export function LoginScreen() {
                 <Switch
                   value={legacyAuth}
                   onValueChange={setLegacyAuth}
-                  trackColor={{ false: 'rgba(255,255,255,0.2)', true: '#FFFFFF' }}
-                  thumbColor={legacyAuth ? PRIMARY : 'rgba(255,255,255,0.9)'}
+                  trackColor={{ false: 'rgba(255,255,255,0.2)', true: PRIMARY }}
+                  thumbColor="#FFFFFF"
                   ios_backgroundColor="rgba(255,255,255,0.2)"
                   disabled={loading}
                 />
@@ -348,7 +392,7 @@ export function LoginScreen() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color={PRIMARY} />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={styles.buttonText}>{t('logIn')}</Text>
             )}
@@ -380,11 +424,10 @@ const styles = StyleSheet.create({
   // measured height (which on Android can stop short of the nav bar → black bar).
   root: {
     flex: 1,
-    backgroundColor: PRIMARY,
+    backgroundColor: BACKGROUND,
   },
   container: {
     flex: 1,
-    backgroundColor: PRIMARY,
     justifyContent: 'center',
   },
   inner: {
@@ -395,41 +438,62 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
+  },
+  logo: {
+    width: 96,
+    height: 96,
   },
   title: {
-    fontSize: 30,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '800',
     color: '#FFFFFF',
     textAlign: 'center',
+    letterSpacing: -0.5,
     marginBottom: 6,
   },
   subtitle: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
-    marginBottom: 28,
+    marginBottom: 32,
+  },
+  field: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: FIELD,
+    borderWidth: 1,
+    borderColor: FIELD_BORDER,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  fieldFocused: {
+    borderColor: PRIMARY,
+  },
+  fieldLast: {
+    marginBottom: 4,
+  },
+  fieldIcon: {
+    marginRight: 10,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10,
-    paddingHorizontal: 16,
+    flex: 1,
     paddingVertical: 14,
     fontSize: 16,
     color: '#FFFFFF',
-    marginBottom: 12,
   },
-  inputLast: {
-    marginBottom: 4,
+  eye: {
+    paddingLeft: 10,
   },
   error: {
     fontSize: 14,
-    color: '#FFEB3B',
+    color: '#FF6B6B',
     marginTop: 8,
     marginBottom: 4,
   },
   button: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: PRIMARY,
     borderRadius: 24,
     paddingVertical: 14,
     alignItems: 'center',
@@ -444,7 +508,7 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   buttonText: {
-    color: PRIMARY,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },

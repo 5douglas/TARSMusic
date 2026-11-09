@@ -54,6 +54,8 @@ import {
   pendingRequests,
   planQueueSync,
   refreshJamSessions,
+  setJamListenOnly,
+  setJamPermissions,
   startHosting,
   syncJamNow,
   toWireAction,
@@ -200,6 +202,25 @@ describe('hosting', () => {
     expect(mockServer.get('dino')).toBe('');
   });
 
+  it("doesn't carry out controls the host switched off, nor a listen-only listener's", async () => {
+    setPlayer(['s1', 's2', 's3'], 0, 'playing', 0);
+    await startHosting();
+    setJamPermissions({ playback: true, skip: false, queue: true });
+    setJamListenOnly('cid', true);
+    const sid = parseJamComment(mockServer.get('dino'))!.sid;
+    mockServer.set('bob', encodeJamComment('guest', sid, { at: Date.now(), reqs: [{ kind: 'next', n: 5 }, { kind: 'pause', n: 6 }] }));
+    mockServer.set('cid', encodeJamComment('guest', sid, { at: Date.now(), reqs: [{ kind: 'pause', n: 3 }] }));
+    await syncJamNow();
+    expect(mockPlayer.skipToNext).not.toHaveBeenCalled();
+    // bob's pause is allowed; cid's is not.
+    expect(mockPlayer.togglePlayPause).toHaveBeenCalledTimes(1);
+    const doc = parseJamComment(mockServer.get('dino'))!.doc as JamHostDoc;
+    expect(doc.handled).toEqual({ bob: 6, cid: 3 });
+    expect(doc.perms).toEqual({ playback: true, skip: false, queue: true });
+    expect(doc.listenOnly).toEqual(['cid']);
+    setJamPermissions({ playback: true, skip: true, queue: true });
+  });
+
   it('lists only fresh sessions of other people', async () => {
     const now = Date.now();
     mockServer.set('ana', encodeJamComment('host', 'aaaaaa111', { at: now, track: 's1', q: ['s1'], pos: 0, playing: true, handled: {}, members: ['bob'], title: 'Song' }));
@@ -270,6 +291,22 @@ describe('listening', () => {
     setPlayer(['s3'], 0, 'playing', 0);
     await syncJamNow();
     expect(mockPlayer.playTrack).not.toHaveBeenCalled();
+  });
+
+  it("blocks the listener's controls the host switched off, locally too", async () => {
+    setPlayer(['s2', 's3'], 0, 'playing', 30);
+    hostAt({ perms: { playback: true, skip: false, queue: true } });
+    await joinSession(SID, 'ana');
+    await syncJamNow();
+    expect(reportJamAction({ kind: 'next' })).toBe(false);
+    expect(reportJamAction({ kind: 'pause' })).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
+    const reqs = (parseJamComment(mockServer.get('dino'))!.doc as { reqs: { kind: string }[] }).reqs;
+    expect(reqs.map((r) => r.kind)).toEqual(['pause']);
+
+    hostAt({ listenOnly: ['dino'] });
+    await syncJamNow();
+    expect(reportJamAction({ kind: 'pause' })).toBe(false);
   });
 
   it("doesn't go back when it reached the host's next song a moment early", async () => {

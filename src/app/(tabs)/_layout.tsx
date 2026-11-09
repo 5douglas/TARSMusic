@@ -50,7 +50,16 @@ export default function TabLayout() {
           tabBarStyle: {
             backgroundColor: colors.background,
             borderTopColor: 'transparent',
+            // Same inset at both ends so the last tab ("Sua biblioteca", the
+            // longest label) doesn't run to the screen edge.
+            paddingHorizontal: 8,
           },
+          // Every tab gets an equal-width cell with icon and label centred, and the
+          // labels stay small and on one line (Spotify style), so a long label
+          // never pushes its tab towards the edge — even with a large system font.
+          tabBarItemStyle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+          tabBarLabelStyle: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
+          tabBarAllowFontScaling: false,
           headerTransparent: true,
           sceneStyle: { backgroundColor: 'transparent' },
           tabBarActiveTintColor: colors.primary,

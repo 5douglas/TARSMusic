@@ -14,6 +14,7 @@ import { GradientBackground } from '../components/GradientBackground';
 import { MiniBarChart } from '../components/MiniBarChart';
 import { SectionTitle } from '../components/SectionTitle';
 import { TopItemRow } from '../components/TopItemRow';
+import { WrappedStories } from '../components/WrappedStories';
 import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { useArtistCoverArt } from '../hooks/useTopArtists';
@@ -139,6 +140,7 @@ export function WrappedScreen() {
   const [result, setResult] = useState<ScrobbleAnalytics | undefined>(undefined);
   const [tick, setTick] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [storiesOpen, setStoriesOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -299,6 +301,28 @@ export function WrappedScreen() {
 
         {summary !== undefined && summary.totalPlays > 0 && (
           <>
+            {/* Stories: the recap Wrapped-style, each one shareable. */}
+            <Pressable
+              onPress={() => setStoriesOpen(true)}
+              accessibilityRole="button"
+              style={({ pressed }) => [pressed && styles.pressed]}
+            >
+              <LinearGradient
+                colors={['#7B2FF7', '#F107A3']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.storiesCard}
+              >
+                <View style={styles.storiesIcon}>
+                  <Ionicons name="play" size={26} color="#7B2FF7" />
+                </View>
+                <View style={styles.storiesText}>
+                  <Text style={styles.storiesTitle}>{t('wrappedStoriesOpen')}</Text>
+                  <Text style={styles.storiesSub}>{t('wrappedStoriesOpenHint')}</Text>
+                </View>
+              </LinearGradient>
+            </Pressable>
+
             {/* Numbers */}
             <View style={styles.statGrid}>
               {[
@@ -422,6 +446,21 @@ export function WrappedScreen() {
         <View style={styles.footer} />
       </ScrollView>
       <BottomChrome withSafeAreaPadding />
+      {storiesOpen && summary !== undefined && summary.totalPlays > 0 && (
+        <WrappedStories
+          visible
+          onClose={() => setStoriesOpen(false)}
+          data={{
+            summary,
+            periodLabel,
+            minutes,
+            peakHourLabel: summary.peakHour !== null ? formatHour(summary.peakHour) : null,
+            busiestDayLabel: summary.busiestDay ? formatDay(summary.busiestDay.date) : null,
+            bestMonthLabel: selectedMonth === null && bestMonth ? monthName(bestMonth.month, 'long') : null,
+            fmtInt,
+          }}
+        />
+      )}
     </GradientBackground>
   );
 }
@@ -468,4 +507,9 @@ const styles = StyleSheet.create({
   factText: { flex: 1, fontSize: 15 },
   footnote: { textAlign: 'center', paddingHorizontal: 12 },
   footer: { height: 40 },
+  storiesCard: { borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  storiesIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  storiesText: { flex: 1 },
+  storiesTitle: { color: '#fff', fontSize: 19, fontWeight: '800' },
+  storiesSub: { color: 'rgba(255,255,255,0.9)', fontSize: 13, marginTop: 2 },
 });

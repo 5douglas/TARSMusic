@@ -106,6 +106,30 @@ async function generate() {
   fs.writeFileSync(path.join(ASSETS_DIR, 'splash-logo.svg'), splashSvg);
   console.log('✔  splash-logo.svg (200×200 vector)');
 
+  // 3b. JS-side bootsplash assets (assets/bootsplash). The plugin only writes these
+  //     from its iOS mod, so `expo prebuild --platform android` never refreshes them:
+  //     they are committed, and must match the native splash (same background, same
+  //     logo) or the app flashes a different colour and logo on launch.
+  const bootsplashDir = path.resolve(__dirname, '..', 'assets', 'bootsplash');
+  fs.mkdirSync(bootsplashDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(bootsplashDir, 'manifest.json'),
+    JSON.stringify({ background: BACKGROUND, logo: { width: 130, height: 130 } }, null, 2) + '\n',
+  );
+  for (const [ratio, suffix] of [[1, ''], [1.5, '@1,5x'], [2, '@2x'], [3, '@3x'], [4, '@4x']]) {
+    await sharp(Buffer.from(splashSvg), { density: 72 * ratio * 4 })
+      .resize(Math.round(130 * ratio))
+      .png()
+      .toFile(path.join(bootsplashDir, `logo${suffix}.png`));
+  }
+  console.log('✔  assets/bootsplash (manifest + logo @1x-@4x)');
+
+  // 3c. Colour mark on transparent background – the TARSMusic logo on the login screen.
+  await sharp(Buffer.from(buildSvg(384, 'none', 'color', 0.92, 0)))
+    .png()
+    .toFile(path.join(ASSETS_DIR, 'logo-mark.png'));
+  console.log('✔  logo-mark.png (384×384)');
+
   // 4. Favicon – 48×48, dark bg, colour mark
   const faviconSvg = buildSvg(48, BACKGROUND, 'color', 0.70, 6);
   await sharp(Buffer.from(faviconSvg))

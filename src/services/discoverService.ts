@@ -3,6 +3,7 @@
  * charts sourced from Deezer, downloads queued in deemix).
  */
 import { discoverSettingsStore } from '../store/discoverSettingsStore';
+import { getDb } from '../store/persistence/db';
 import { ensureDiscoverSession } from './discoverAuthService';
 
 export interface DiscoverItem {
@@ -188,8 +189,35 @@ async function postJson<T>(path: string, body: object): Promise<T | null> {
   }
 }
 
-export function fetchDiscoverHome(refresh = false): Promise<DiscoverHome | null> {
-  return getJson<DiscoverHome>('/home', refresh, (d) => Array.isArray(d.sections));
+/** How far back the app's own listening history counts for the Discover mixes. */
+const MIX_HISTORY_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** The artists this account listened to most in the app (its own scrobble log), most first. */
+export async function topListenedArtists(limit = 12): Promise<string[]> {
+  const db = getDb();
+  if (db === null) return [];
+  try {
+    const rows = await db.getAllAsync<{ artist: string | null; c: number }>(
+      `SELECT artist, COUNT(*) AS c FROM scrobble_events
+        WHERE artist IS NOT NULL AND artist <> '' AND time >= ?
+        GROUP BY artist ORDER BY c DESC LIMIT ?`,
+      [Date.now() - MIX_HISTORY_MS, limit],
+    );
+    return rows.map((r) => (r.artist ?? '').trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The Discover home. "Mixes para você" are personal: the backend builds them from the
+ * artists sent here (this app's listening history), then the account's own Navidrome
+ * history. "Lançamentos" are the newest releases worldwide.
+ */
+export async function fetchDiscoverHome(refresh = false): Promise<DiscoverHome | null> {
+  const artists = await topListenedArtists();
+  const path = artists.length > 0 ? `/home?artists=${encodeURIComponent(artists.join('\n'))}` : '/home';
+  return getJson<DiscoverHome>(path, refresh, (d) => Array.isArray(d.sections));
 }
 
 /** A mix or chart playlist by the `path` its home card carries. */

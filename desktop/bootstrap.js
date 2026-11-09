@@ -67,3 +67,21 @@ try {
 } catch {
   /* not in the desktop app */
 }
+
+// Mini player: a small always-on-top window owned by the main process (desktop/mini).
+// src/services/desktopMiniPlayer.ts sends it what is playing and runs its buttons.
+try {
+  const { ipcRenderer } = window.require('electron');
+  globalThis.tarsDesktopMini = {
+    open: () => ipcRenderer.send('tars:mini-open'),
+    close: () => ipcRenderer.send('tars:mini-close'),
+    sendState: (state) => ipcRenderer.send('tars:mini-state', state),
+    onCommand: (listener) => {
+      const handler = (_event, cmd) => listener(cmd);
+      ipcRenderer.on('tars:mini-command', handler);
+      return () => ipcRenderer.removeListener('tars:mini-command', handler);
+    },
+  };
+} catch {
+  /* not in the desktop app */
+}

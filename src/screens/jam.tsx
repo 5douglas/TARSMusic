@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { HeaderHeightContext } from 'expo-router/react-navigation';
 import { useCallback, useContext, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { BottomChrome } from '../components/BottomChrome';
 import { CachedImage } from '../components/CachedImage';
@@ -11,8 +11,17 @@ import { GradientBackground } from '../components/GradientBackground';
 import { useJamLabel } from '../components/JamButton';
 import { SectionTitle } from '../components/SectionTitle';
 import { useTheme } from '../hooks/useTheme';
-import { joinSession, leaveSession, refreshJamSessions, startHosting } from '../services/jamService';
+import {
+  joinSession,
+  leaveSession,
+  refreshJamSessions,
+  setJamListenOnly,
+  setJamPermissions,
+  startHosting,
+} from '../services/jamService';
+import type { JamPermKey } from '../services/jamPerms';
 import { jamStore, type JamSessionSummary } from '../store/jamStore';
+import { authStore } from '../store/authStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { getArtistInitials } from '../utils/stringHelpers';
 
@@ -96,6 +105,86 @@ function SessionRow({ session, onJoin, busy }: { session: JamSessionSummary; onJ
         </View>
       )}
     </Pressable>
+  );
+}
+
+const PERM_ROWS: { key: JamPermKey; icon: React.ComponentProps<typeof Ionicons>['name']; label: string }[] = [
+  { key: 'playback', icon: 'play-outline', label: 'jamPermPlayback' },
+  { key: 'skip', icon: 'play-skip-forward-outline', label: 'jamPermSkip' },
+  { key: 'queue', icon: 'list-outline', label: 'jamPermQueue' },
+];
+
+/** Host: what listeners may do, by group of controls and per listener. */
+function HostPermissions() {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const perms = jamStore((s) => s.perms);
+  const members = jamStore((s) => s.members);
+  const listenOnly = jamStore((s) => s.listenOnly);
+  return (
+    <View style={[styles.permCard, { backgroundColor: colors.card }]}>
+      <Text style={[styles.permTitle, { color: colors.textPrimary }]}>{t('jamPermTitle')}</Text>
+      <Text style={[styles.permHint, { color: colors.textSecondary }]}>{t('jamPermHint')}</Text>
+      {PERM_ROWS.map((row) => (
+        <View key={row.key} style={styles.permRow}>
+          <Ionicons name={row.icon} size={20} color={colors.textSecondary} />
+          <Text style={[styles.permLabel, { color: colors.textPrimary }]}>{t(row.label)}</Text>
+          <Switch
+            value={perms[row.key]}
+            onValueChange={(v) => setJamPermissions({ ...perms, [row.key]: v })}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#fff"
+            accessibilityLabel={t(row.label)}
+          />
+        </View>
+      ))}
+      {members.length > 0 && (
+        <>
+          <Text style={[styles.permSubtitle, { color: colors.textSecondary }]}>{t('jamPermPeople')}</Text>
+          {members.map((m) => {
+            const allowed = !listenOnly.some((u) => u.toLowerCase() === m.toLowerCase());
+            return (
+              <View key={m} style={styles.permRow}>
+                <Avatar name={m} size={28} />
+                <View style={styles.permPerson}>
+                  <Text numberOfLines={1} style={[styles.permLabel, { color: colors.textPrimary }]}>{m}</Text>
+                  <Text style={[styles.permPersonState, { color: colors.textSecondary }]}>
+                    {allowed ? t('jamPermCanControl') : t('jamPermListenOnly')}
+                  </Text>
+                </View>
+                <Switch
+                  value={allowed}
+                  onValueChange={(v) => setJamListenOnly(m, !v)}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#fff"
+                  accessibilityLabel={m}
+                />
+              </View>
+            );
+          })}
+        </>
+      )}
+    </View>
+  );
+}
+
+/** Listener: what the host allows this account to do. */
+function GuestPermissions() {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const perms = jamStore((s) => s.perms);
+  const listenOnly = jamStore((s) => s.listenOnly);
+  const me = authStore((s) => s.username);
+  const mine = !!me && listenOnly.some((u) => u.toLowerCase() === me.toLowerCase());
+  const allowed = mine ? [] : PERM_ROWS.filter((r) => perms[r.key]).map((r) => t(r.label).toLowerCase());
+  if (!mine && allowed.length === PERM_ROWS.length) return null;
+  return (
+    <View style={[styles.guestPerm, { borderColor: colors.border }]}>
+      <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
+      <Text style={[styles.guestPermText, { color: colors.textSecondary }]}>
+        {allowed.length === 0 ? t('jamGuestListenOnly') : t('jamGuestAllowed', { list: allowed.join(', ') })}
+      </Text>
+    </View>
   );
 }
 
@@ -192,6 +281,7 @@ export function JamScreen() {
                   </View>
                 ))}
               </View>
+              {mode === 'guest' && <GuestPermissions />}
               {error && (
                 <Text style={[styles.error, { color: colors.textSecondary }]}>
                   {t('jamConnectionTrouble')}
@@ -213,6 +303,8 @@ export function JamScreen() {
           )}
           {actionError && <Text style={[styles.error, { color: colors.textSecondary }]}>{actionError}</Text>}
         </View>
+
+        {mode === 'host' && <HostPermissions />}
 
         {/* Sessions other people are hosting. */}
         <SectionTitle title={t('jamOpenSessions')} color={colors.textPrimary} />
@@ -277,4 +369,24 @@ const styles = StyleSheet.create({
   joinChip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
   joinChipText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   footer: { height: 120 },
+  permCard: { borderRadius: 16, padding: 16, marginBottom: 20 },
+  permTitle: { fontSize: 17, fontWeight: '700' },
+  permHint: { fontSize: 13, marginTop: 4, marginBottom: 6, lineHeight: 18 },
+  permSubtitle: { fontSize: 13, fontWeight: '600', marginTop: 14, marginBottom: 2 },
+  permRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  permLabel: { flex: 1, fontSize: 15 },
+  permPerson: { flex: 1, minWidth: 0 },
+  permPersonState: { fontSize: 12, marginTop: 1 },
+  guestPerm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: 'stretch',
+  },
+  guestPermText: { flex: 1, fontSize: 13, lineHeight: 18 },
 });

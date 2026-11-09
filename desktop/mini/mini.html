@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TARSMusic</title>
+<style>
+  :root { --bg: #121826; --fg: #ffffff; --muted: rgba(255,255,255,0.65); --accent: #1d9bf0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--fg); overflow: hidden;
+    font-family: "Segoe UI", system-ui, -apple-system, Ubuntu, Roboto, sans-serif; user-select: none; }
+  /* The whole window drags; buttons and the bar don't. */
+  body { -webkit-app-region: drag; }
+  #bg { position: fixed; inset: -30px; background-size: cover; background-position: center;
+    filter: blur(28px) brightness(0.45) saturate(1.3); transform: scale(1.1); transition: background-image .4s; }
+  #wrap { position: relative; height: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px 14px; }
+  #cover { height: 100%; max-height: 180px; aspect-ratio: 1; border-radius: 6px; background: #1c2335 center/cover no-repeat;
+    box-shadow: 0 4px 14px rgba(0,0,0,.45); flex: none; }
+  #info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+  #title { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #artist { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -4px; }
+  #controls { display: flex; align-items: center; gap: 6px; }
+  button { -webkit-app-region: no-drag; background: none; border: 0; color: var(--fg); cursor: pointer; display: grid;
+    place-items: center; border-radius: 50%; }
+  button:hover { background: rgba(255,255,255,0.12); }
+  button:active { transform: scale(.94); }
+  .ctl { width: 32px; height: 32px; }
+  #play { width: 38px; height: 38px; background: var(--fg); color: #000; }
+  #play:hover { background: #e6e6e6; }
+  svg { width: 18px; height: 18px; fill: currentColor; }
+  #play svg { width: 20px; height: 20px; }
+  #top { position: absolute; top: 4px; right: 4px; display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
+  body:hover #top { opacity: 1; }
+  #top button { width: 24px; height: 24px; }
+  #top svg { width: 14px; height: 14px; }
+  #bar { -webkit-app-region: no-drag; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: pointer; }
+  #track { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,0.18); }
+  #fill { height: 100%; width: 0; background: var(--fg); }
+  #bar:hover #track { height: 5px; }
+  #empty { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="wrap">
+  <div id="cover"></div>
+  <div id="info">
+    <div id="title">TARSMusic</div>
+    <div id="artist"></div>
+    <div id="controls">
+      <button class="ctl" id="prev" title="Anterior"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg></button>
+      <button id="play" title="Tocar / pausar"><svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg></button>
+      <button class="ctl" id="next" title="Próxima"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l10.5-7z"/></svg></button>
+    </div>
+  </div>
+  <div id="top">
+    <button id="expand" title="Voltar ao app"><svg viewBox="0 0 24 24"><path d="M14 3h7v7h-2V6.4l-6.3 6.3-1.4-1.4L17.6 5H14zM5 5h6v2H5v12h12v-6h2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg></button>
+    <button id="close" title="Fechar"><svg viewBox="0 0 24 24"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg></button>
+  </div>
+  <div id="bar"><div id="track"><div id="fill"></div></div></div>
+</div>
+<script>
+  const { ipcRenderer } = require('electron');
+  const $ = (id) => document.getElementById(id);
+  const PLAY = '<path d="M8 5v14l11-7z"/>';
+  const PAUSE = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+  let state = null;
+  const send = (cmd) => ipcRenderer.send('tars:mini-command', cmd);
+
+  function position() {
+    if (!state) return 0;
+    const p = state.playing ? state.position + (Date.now() - state.at) / 1000 : state.position;
+    return state.duration > 0 ? Math.min(p, state.duration) : p;
+  }
+
+  function render() {
+    if (!state || !state.title) {
+      $('title').textContent = 'TARSMusic';
+      $('artist').textContent = 'Nada tocando';
+    } else {
+      $('title').textContent = state.title;
+      $('artist').textContent = state.artist || '';
+      document.title = `${state.title} · ${state.artist || 'TARSMusic'}`;
+    }
+    const url = state && state.cover ? `url("${state.cover.replace(/"/g, '%22')}")` : '';
+    if ($('cover').dataset.url !== url) {
+      $('cover').dataset.url = url;
+      $('cover').style.backgroundImage = url;
+      $('bg').style.backgroundImage = url;
+    }
+    $('playIcon').innerHTML = state && state.playing ? PAUSE : PLAY;
+  }
+
+  function tick() {
+    const d = state && state.duration > 0 ? state.duration : 0;
+    $('fill').style.width = d ? `${(position() / d) * 100}%` : '0%';
+    requestAnimationFrame(tick);
+  }
+
+  ipcRenderer.on('tars:mini-state', (_e, s) => { state = s; render(); });
+  $('play').onclick = () => {
+    if (state) { state = { ...state, position: position(), at: Date.now(), playing: !state.playing }; render(); }
+    send({ kind: 'toggle' });
+  };
+  $('next').onclick = () => send({ kind: 'next' });
+  $('prev').onclick = () => send({ kind: 'prev' });
+  $('expand').onclick = () => send({ kind: 'expand' });
+  $('close').onclick = () => send({ kind: 'close' });
+  $('bar').onclick = (e) => {
+    if (!state || !(state.duration > 0)) return;
+    const r = $('bar').getBoundingClientRect();
+    const pos = ((e.clientX - r.left) / r.width) * state.duration;
+    state = { ...state, position: pos, at: Date.now() };
+    send({ kind: 'seek', position: pos });
+  };
+  // Space toggles, arrows skip, Esc closes.
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { e.preventDefault(); $('play').click(); }
+    else if (e.key === 'ArrowRight') send({ kind: 'next' });
+    else if (e.key === 'ArrowLeft') send({ kind: 'prev' });
+    else if (e.key === 'Escape') send({ kind: 'close' });
+  });
+  render();
+  requestAnimationFrame(tick);
+</script>
+</body>
+</html>

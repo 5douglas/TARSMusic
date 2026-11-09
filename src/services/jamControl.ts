@@ -24,7 +24,8 @@ export type JamAction =
   | { kind: 'addNext'; song: Child }
   | { kind: 'playNow'; song: Child; queue: Child[] };
 
-type Handler = (action: JamAction) => void;
+/** Returns false when the session does not allow the action (the player then skips it). */
+type Handler = (action: JamAction) => boolean | void;
 
 let handler: Handler | null = null;
 let followerDepth = 0;
@@ -38,15 +39,20 @@ export function isJamGuestActive(): boolean {
   return handler !== null;
 }
 
-/** Called by the player for a user action. A no-op outside a guest session. */
-export function reportJamAction(action: JamAction | (() => JamAction | null)): void {
-  if (!handler || followerDepth > 0) return;
+/**
+ * Called by the player for a user action. Returns false when this listener is not allowed
+ * to do it in the session (the host switched that control off): the player must then not
+ * carry it out locally either. Always true outside a guest session.
+ */
+export function reportJamAction(action: JamAction | (() => JamAction | null)): boolean {
+  if (!handler || followerDepth > 0) return true;
   const resolved = typeof action === 'function' ? action() : action;
-  if (!resolved) return;
+  if (!resolved) return true;
   try {
-    handler(resolved);
+    return handler(resolved) !== false;
   } catch {
     // Never let the session break a local control.
+    return true;
   }
 }
 

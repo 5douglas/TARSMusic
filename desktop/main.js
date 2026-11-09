@@ -10,6 +10,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 
 const WEB_ROOT = path.join(__dirname, 'web');
+const MINI_ROOT = path.join(__dirname, 'mini');
 const SCHEME = 'app';
 const ORIGIN = `${SCHEME}://tarsmusic`;
 
@@ -51,6 +52,12 @@ function serveWebBuild() {
   protocol.handle(SCHEME, (request) => {
     const { pathname } = new URL(request.url);
     const rel = decodeURIComponent(pathname).replace(/^\/+/, '');
+    // The mini player window's own page (desktop/mini).
+    if (rel.startsWith('__mini/')) {
+      const mini = path.normalize(path.join(MINI_ROOT, rel.slice('__mini/'.length)));
+      if (mini.startsWith(MINI_ROOT) && fs.existsSync(mini)) return net.fetch(pathToFileURL(mini).toString());
+      return new Response('not found', { status: 404 });
+    }
     let file = path.normalize(path.join(WEB_ROOT, rel));
     if (!file.startsWith(WEB_ROOT) || !rel || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       file = path.join(WEB_ROOT, 'index.html');
@@ -83,6 +90,10 @@ function createWindow() {
   Menu.setApplicationMenu(null);
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    if (miniWindow && !miniWindow.isDestroyed()) miniWindow.close();
+  });
 
   // Links to anything but the app itself open in the default browser.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -115,6 +126,109 @@ function createWindow() {
     mainWindow.loadURL(`${ORIGIN}/`);
   }
 }
+
+// --- Mini player --------------------------------------------------------------
+// A small frameless window that stays above other windows, with the cover, the song and
+// the main controls. The app (main window) keeps playing; it sends the mini window what
+// is playing (tars:mini-state) and carries out its buttons (tars:mini-command).
+let miniWindow = null;
+let miniState = null;
+
+function miniBoundsFile() {
+  return path.join(app.getPath('userData'), 'mini-player.json');
+}
+
+function readMiniBounds() {
+  try {
+    const b = JSON.parse(fs.readFileSync(miniBoundsFile(), 'utf8'));
+    if ([b.x, b.y, b.width, b.height].every((n) => Number.isFinite(n))) return b;
+  } catch {
+    /* first time */
+  }
+  return null;
+}
+
+function saveMiniBounds() {
+  if (!miniWindow || miniWindow.isDestroyed()) return;
+  try {
+    fs.writeFileSync(miniBoundsFile(), JSON.stringify(miniWindow.getBounds()));
+  } catch {
+    /* best effort */
+  }
+}
+
+function openMiniWindow() {
+  if (miniWindow && !miniWindow.isDestroyed()) {
+    miniWindow.show();
+    miniWindow.focus();
+    return;
+  }
+  const saved = readMiniBounds();
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'build', 'icon.png'));
+  miniWindow = new BrowserWindow({
+    width: saved?.width ?? 360,
+    height: saved?.height ?? 116,
+    x: saved?.x,
+    y: saved?.y,
+    minWidth: 280,
+    minHeight: 96,
+    maxHeight: 220,
+    frame: false,
+    resizable: true,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    fullscreenable: false,
+    maximizable: false,
+    backgroundColor: '#121826',
+    title: 'TARSMusic',
+    icon: icon.isEmpty() ? undefined : icon,
+    show: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      webSecurity: false,
+      spellcheck: false,
+    },
+  });
+  // Above full-screen windows too, where the platform allows it.
+  miniWindow.setAlwaysOnTop(true, 'floating');
+  miniWindow.once('ready-to-show', () => miniWindow?.show());
+  miniWindow.webContents.on('did-finish-load', () => {
+    if (miniState) miniWindow?.webContents.send('tars:mini-state', miniState);
+  });
+  miniWindow.on('moved', saveMiniBounds);
+  miniWindow.on('resized', saveMiniBounds);
+  miniWindow.on('close', saveMiniBounds);
+  miniWindow.on('closed', () => {
+    miniWindow = null;
+  });
+  miniWindow.loadURL(`${ORIGIN}/__mini/mini.html`);
+}
+
+ipcMain.on('tars:mini-open', () => openMiniWindow());
+ipcMain.on('tars:mini-close', () => miniWindow?.close());
+ipcMain.on('tars:mini-state', (_event, state) => {
+  miniState = state;
+  if (miniWindow && !miniWindow.isDestroyed()) miniWindow.webContents.send('tars:mini-state', state);
+});
+ipcMain.on('tars:mini-command', (_event, cmd) => {
+  if (!cmd || typeof cmd.kind !== 'string') return;
+  if (cmd.kind === 'expand') {
+    // Back to the full app: show it and close the mini window.
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    miniWindow?.close();
+    return;
+  }
+  if (cmd.kind === 'close') {
+    miniWindow?.close();
+    return;
+  }
+  mainWindow?.webContents.send('tars:mini-command', cmd);
+});
 
 let autoUpdater = null;
 function updater() {
