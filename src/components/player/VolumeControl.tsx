@@ -75,7 +75,7 @@ function DesktopVolumeControl({ colors }: VolumeControlProps) {
       />
       {isMiniPlayerAvailable() && (
         <Pressable
-          onPress={openMiniPlayer}
+          onPress={() => openMiniPlayer()}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Mini player"

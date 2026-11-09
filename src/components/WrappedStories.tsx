@@ -1,6 +1,6 @@
 /**
- * Retrospectiva in Spotify Wrapped-style stories: full-screen cards with progress bars at
- * the top, that move on by themselves or by tapping the sides. Each story can be shared
+ * Retrospectiva as stories: full-screen cards with progress bars at the top, that move
+ * on by themselves or by tapping the sides (arrow buttons and keys on the desktop). Each story can be shared
  * as an image (the share sheet on the phone, a downloaded PNG on the desktop app).
  */
 import Ionicons from '@react-native-vector-icons/ionicons/static';
@@ -11,7 +11,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Animated,
-  Easing,
   Image,
   Modal,
   Platform,
@@ -35,7 +34,7 @@ const LOGO = require('../assets/logo-mark.png');
 /** How long each story stays before moving on by itself. */
 export const STORY_MS = 7000;
 
-/** Each story's background: vivid two-colour gradients, like Wrapped. */
+/** Each story's background: vivid two-colour gradients. */
 const PALETTES: [string, string][] = [
   ['#1D9BF0', '#0B2A5B'],
   ['#7B2FF7', '#F107A3'],
@@ -274,21 +273,28 @@ export function WrappedStories({
   const [paused, setPaused] = useState(false);
   const [sharing, setSharing] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
+  /** Time spent on the current story, without the paused stretches. */
   const elapsed = useRef(0);
   const cardRef = useRef<View>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const artistCover = useArtistCoverArt(data.summary.topArtists[0]?.artistId)
     ?? data.summary.topAlbums.find((a) => a.artist === data.summary.topArtists[0]?.artist)?.coverArt;
 
-  // A 9:16 card, as big as the window allows (desktop windows are wide).
-  const cardH = Math.min(height - insets.top - insets.bottom, ((width) * 16) / 9);
-  const cardW = Math.min(width, (cardH * 9) / 16);
+  // Wide windows (the desktop app): arrow buttons beside the card.
+  const wide = width >= 700;
+  const side = wide ? 72 : 0;
+  // A 9:16 card, as big as the window allows.
+  const cardH = Math.min(height - insets.top - insets.bottom - (wide ? 48 : 0), ((width - side * 2) * 16) / 9);
+  const cardW = Math.min(width - side * 2, (cardH * 9) / 16);
 
   useEffect(() => {
     if (visible) {
       setIndex(0);
       elapsed.current = 0;
+      progress.setValue(0);
     }
-  }, [visible]);
+  }, [visible, progress]);
 
   const go = useCallback(
     (delta: number) => {
@@ -297,34 +303,46 @@ export function WrappedStories({
       setIndex((i) => {
         const next = i + delta;
         if (next >= ids.length) {
-          onClose();
+          onCloseRef.current();
           return i;
         }
         return Math.max(0, next);
       });
     },
-    [ids.length, onClose, progress],
+    [ids.length, progress],
   );
 
-  // Run the current story's bar; resume from where a pause stopped it.
+  // The current story's clock. A plain timer reading the wall clock, so it keeps time
+  // whatever re-renders the screen behind does, and resumes where a pause stopped it.
   useEffect(() => {
     if (!visible || paused || sharing) return undefined;
-    const start = Date.now();
-    const already = elapsed.current;
-    const anim = Animated.timing(progress, {
-      toValue: 1,
-      duration: Math.max(0, STORY_MS - already),
-      easing: Easing.linear,
-      useNativeDriver: false,
-    });
-    anim.start(({ finished }) => {
-      if (finished) go(1);
-    });
-    return () => {
-      anim.stop();
-      elapsed.current = already + (Date.now() - start);
-    };
+    let last = Date.now();
+    const timer = setInterval(() => {
+      const now = Date.now();
+      elapsed.current += now - last;
+      last = now;
+      const p = Math.min(1, elapsed.current / STORY_MS);
+      progress.setValue(p);
+      if (p >= 1) go(1);
+    }, 50);
+    return () => clearInterval(timer);
   }, [visible, paused, sharing, index, go, progress]);
+
+  // Desktop keys: arrows move, space pauses, Esc closes.
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'web' || typeof window === 'undefined') return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') go(1);
+      else if (e.key === 'ArrowLeft') go(-1);
+      else if (e.key === 'Escape') onCloseRef.current();
+      else if (e.key === ' ') {
+        e.preventDefault();
+        setPaused((p) => !p);
+      } else return;
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [visible, go]);
 
   const share = useCallback(async () => {
     if (!cardRef.current) return;
@@ -351,6 +369,29 @@ export function WrappedStories({
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent transparent>
       <View style={[styles.backdrop, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        {wide && (
+          <>
+            {/* The story's colours, dimmed, behind the card. */}
+            <LinearGradient colors={[c1, c2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, styles.wideGlow]} />
+            <View style={[StyleSheet.absoluteFill, styles.wideShade]} />
+          </>
+        )}
+        <View style={styles.stage}>
+          {wide && (
+            <Pressable
+              onPress={() => go(-1)}
+              disabled={index === 0}
+              style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+                styles.arrow,
+                (hovered || pressed) && styles.arrowHover,
+                index === 0 && styles.arrowDisabled,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t('wrappedStoriesPrev')}
+            >
+              <Ionicons name="chevron-back" size={28} color="#fff" />
+            </Pressable>
+          )}
         <View style={{ width: cardW, height: cardH }}>
           {/* What gets shared: the story card with its gradient and the TARSMusic brand. */}
           <View ref={cardRef} collapsable={false} style={styles.card}>
@@ -427,6 +468,20 @@ export function WrappedStories({
             </View>
           )}
         </View>
+          {wide && (
+            <Pressable
+              onPress={() => go(1)}
+              style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+                styles.arrow,
+                (hovered || pressed) && styles.arrowHover,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t('wrappedStoriesNext')}
+            >
+              <Ionicons name="chevron-forward" size={28} color="#fff" />
+            </Pressable>
+          )}
+        </View>
       </View>
     </Modal>
   );
@@ -434,7 +489,20 @@ export function WrappedStories({
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
-  card: { flex: 1, borderRadius: 14, overflow: 'hidden', backgroundColor: '#121826' },
+  wideGlow: { opacity: 0.55 },
+  wideShade: { backgroundColor: 'rgba(0,0,0,0.55)' },
+  stage: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  arrow: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  arrowHover: { backgroundColor: 'rgba(255,255,255,0.28)' },
+  arrowDisabled: { opacity: 0.3 },
+  card: { flex: 1, borderRadius: 18, overflow: 'hidden', backgroundColor: '#121826' },
   cardInner: { flex: 1, paddingHorizontal: 28, paddingTop: 72, paddingBottom: 84 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   introLogo: { width: 110, height: 110, marginBottom: 10 },
