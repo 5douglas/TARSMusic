@@ -21,6 +21,10 @@ export const JAM_COMMENT_PREFIX = 'TARSJAM1';
 
 export type JamRole = 'host' | 'guest';
 
+import { normalizeJamPerms, type JamPerms } from './jamPerms';
+
+export * from './jamPerms';
+
 /** The host's comment: what everyone should be hearing right now. */
 export interface JamHostDoc {
   /** Host clock, ms, when `pos` was read. */
@@ -36,6 +40,10 @@ export interface JamHostDoc {
   handled: Record<string, number>;
   /** Usernames of the listeners currently in the session. */
   members: string[];
+  /** What listeners may do (absent = everything). */
+  perms?: JamPerms;
+  /** Listeners the host set to "listen only": none of their controls are carried out. */
+  listenOnly?: string[];
   /** For the session list: what is playing. */
   title?: string;
   artist?: string;
@@ -92,6 +100,8 @@ export function parseJamComment(comment: string | null | undefined): Omit<JamEnt
       if (!Array.isArray(h.q) || typeof h.pos !== 'number' || typeof h.playing !== 'boolean') return null;
       if (!h.handled || typeof h.handled !== 'object') h.handled = {};
       if (!Array.isArray(h.members)) h.members = [];
+      h.perms = normalizeJamPerms(h.perms);
+      h.listenOnly = Array.isArray(h.listenOnly) ? h.listenOnly.filter((u) => typeof u === 'string') : [];
     } else {
       const g = doc as JamGuestDoc;
       if (!Array.isArray(g.reqs)) g.reqs = [];

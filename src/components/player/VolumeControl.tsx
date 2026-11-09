@@ -5,6 +5,7 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { getTrackPlayer } from 'react-native-queue-player';
 
 import { type ThemeColors } from '@/constants/theme';
+import { isMiniPlayerAvailable, openMiniPlayer } from '../../services/desktopMiniPlayer';
 
 interface VolumeControlProps {
   colors: ThemeColors;
@@ -72,6 +73,28 @@ function DesktopVolumeControl({ colors }: VolumeControlProps) {
         thumbTintColor={colors.textPrimary}
         accessibilityLabel="Volume"
       />
+      {isMiniPlayerAvailable() && (
+        <Pressable
+          onPress={openMiniPlayer}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Mini player"
+          // Native title tooltip on the desktop app (react-native-web passes it through).
+          {...({ title: 'Mini player' } as object)}
+          style={({ pressed }) => [styles.icon, pressed && styles.pressed]}
+        >
+          <MiniPlayerIcon color={colors.textPrimary} />
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+/** A window with a small window in its corner: Ionicons has no picture-in-picture glyph. */
+function MiniPlayerIcon({ color }: { color: string }) {
+  return (
+    <View style={[styles.pipOuter, { borderColor: color }]}>
+      <View style={[styles.pipInner, { backgroundColor: color }]} />
     </View>
   );
 }
@@ -92,5 +115,19 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.6,
+  },
+  pipOuter: {
+    width: 20,
+    height: 15,
+    borderWidth: 1.6,
+    borderRadius: 3,
+  },
+  pipInner: {
+    position: 'absolute',
+    right: 1.5,
+    bottom: 1.5,
+    width: 8,
+    height: 5.5,
+    borderRadius: 1,
   },
 });

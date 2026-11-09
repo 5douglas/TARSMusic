@@ -15,16 +15,20 @@
  */
 import { AppState } from 'react-native';
 
+import i18n from '../i18n/i18n';
 import { authStore } from '../store/authStore';
 import { jamStore, type JamSessionSummary } from '../store/jamStore';
 import { playerStore } from '../store/playerStore';
+import { processingOverlayStore } from '../store/processingOverlayStore';
 import { setJamActionHandler, runAsJamFollower, type JamAction } from './jamControl';
 import {
   currentJamUser,
   encodeJamComment,
   findJamHosts,
   findJamSession,
+  isJamActionAllowed,
   writeOwnJamComment,
+  type JamPerms,
   type JamGuestDoc,
   type JamHostDoc,
   type JamRequest,
@@ -356,6 +360,8 @@ function buildHostDoc(): JamHostDoc {
     playing: playbackState === 'playing' || playbackState === 'buffering' || playbackState === 'loading',
     handled,
     members: jamStore.getState().members,
+    perms: jamStore.getState().perms,
+    listenOnly: jamStore.getState().listenOnly,
     title: currentTrack?.title,
     artist: currentTrack?.artist,
     coverArt: currentTrack?.coverArt,
@@ -456,8 +462,10 @@ async function hostTick(sid: string): Promise<void> {
     const todo = pendingRequests((guest.doc as JamGuestDoc).reqs, handled[guest.owner]);
     for (const req of todo) {
       if (jamStore.getState().mode !== 'host') return;
+      const { perms, listenOnly } = jamStore.getState();
       try {
-        await applyHostRequest(req);
+        // A control the host switched off is marked handled but not carried out.
+        if (isJamActionAllowed(req.kind, guest.owner, perms, listenOnly)) await applyHostRequest(req);
       } catch {
         // One failed request must not block the ones after it.
       }
@@ -516,7 +524,12 @@ function onPlayerChange(
 
 /* ---------------------------- Guest ---------------------------- */
 
-function onGuestAction(action: JamAction): void {
+function onGuestAction(action: JamAction): boolean {
+  const { perms, listenOnly } = jamStore.getState();
+  if (!isJamActionAllowed(action.kind, currentJamUser(), perms, listenOnly)) {
+    processingOverlayStore.getState().showError(i18n.t('jamNotAllowed'));
+    return false;
+  }
   const n = Math.max(lastRequestN + 1, Date.now());
   lastRequestN = n;
   lastOwnActionAt = Date.now();
@@ -525,6 +538,7 @@ function onGuestAction(action: JamAction): void {
   void writeGuest().catch(() => {
     guestDirty = true;
   });
+  return true;
 }
 
 async function writeGuest(): Promise<void> {
@@ -554,6 +568,8 @@ async function guestTick(sid: string): Promise<void> {
   const doc = hostEntry.doc as JamHostDoc;
   clock.note(doc.at, readStart, readEnd);
   jamStore.getState().setMembers(doc.members.filter((m) => !sameUser(m, host)));
+  if (doc.perms) jamStore.getState().setPerms(doc.perms);
+  jamStore.getState().setListenOnly(doc.listenOnly ?? []);
 
   // The host has not carried out our last request yet: don't undo it locally meanwhile.
   const me = currentJamUser();
@@ -696,6 +712,7 @@ export async function startHosting(): Promise<void> {
   lastPublishedAt = 0;
   jamStore.getState().setEnded(null);
   jamStore.getState().setSession('host', sid, me);
+  jamStore.getState().setListenOnly([]);
   try {
     await publishHost();
     jamStore.getState().setConnected(true);
@@ -720,6 +737,9 @@ export async function joinSession(sid: string, host: string): Promise<void> {
   clock = new ClockSync();
   jamStore.getState().setEnded(null);
   jamStore.getState().setSession('guest', sid, host);
+  // Until the host's rules arrive, assume the defaults (the host still enforces its own).
+  jamStore.getState().setPerms({ playback: true, skip: true, queue: true });
+  jamStore.getState().setListenOnly([]);
   try {
     await writeGuest();
   } catch (err) {
@@ -744,6 +764,19 @@ export async function leaveSession(reason: 'host-left' | null = null): Promise<v
   } catch {
     // The others notice from the stale heartbeat instead.
   }
+}
+
+/** Host: changes what listeners may do. Listeners see it within a few seconds. */
+export function setJamPermissions(perms: JamPerms): void {
+  jamStore.getState().setPerms(perms);
+  if (jamStore.getState().mode === 'host') schedulePublish();
+}
+
+/** Host: sets one listener to "listen only" (true) or lets them control again (false). */
+export function setJamListenOnly(user: string, listenOnly: boolean): void {
+  const current = jamStore.getState().listenOnly.filter((u) => !sameUser(u, user));
+  jamStore.getState().setListenOnly(listenOnly ? [...current, user].sort((a, b) => a.localeCompare(b)) : current);
+  if (jamStore.getState().mode === 'host') schedulePublish();
 }
 
 /** Syncs with the session right away instead of waiting for the next tick. */

@@ -1,6 +1,11 @@
 const mockFetch = jest.fn();
 (global as any).fetch = mockFetch;
 
+const mockGetAll = jest.fn().mockResolvedValue([]);
+jest.mock('../../store/persistence/db', () => ({
+  getDb: () => ({ getAllAsync: (...args: unknown[]) => mockGetAll(...args) }),
+}));
+
 import { discoverSettingsStore } from '../../store/discoverSettingsStore';
 import {
   discoverPreviewUrl,
@@ -85,6 +90,15 @@ describe('fetchDiscoverHome', () => {
     expect(mockFetch.mock.calls[0][0]).toBe(`${BASE}/home?refresh=1`);
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
     await expect(fetchDiscoverHome()).resolves.toBeNull();
+  });
+
+  it("sends the artists this app listened to most, for the personal mixes", async () => {
+    mockGetAll.mockResolvedValueOnce([{ artist: 'Tyler, The Creator', c: 9 }, { artist: 'Jão', c: 4 }]);
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ sections: [] }) });
+    await fetchDiscoverHome();
+    expect(mockFetch.mock.calls[0][0]).toBe(
+      `${BASE}/home?artists=${encodeURIComponent('Tyler, The Creator\nJão')}`,
+    );
   });
 });
 

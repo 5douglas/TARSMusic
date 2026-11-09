@@ -70,6 +70,8 @@ LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "30"))
 PLAYLIST_TTL = int(os.environ.get("PLAYLIST_TTL", "2400"))      # previews do Deezer expiram em ~1h
 SCAN_INTERVAL = int(os.environ.get("SCAN_INTERVAL_HOURS", "12")) * 3600
 IGNORE_ARTISTS = {"various artists", "varios artistas"}
+# artistas MC/DJ ficam fora das sugestoes, como no autodl
+MC_DJ = re.compile(r"^(mc|dj)[ ._-]")
 SKIP_TITLES = re.compile(r"karaoke|instrumental version|sped up|slowed", re.I)
 
 # Top <pais> do perfil "Deezer Charts" (user 637006841); o resto e buscado por nome
@@ -178,6 +180,7 @@ class Library:
         self.albums: set[tuple[str, str]] = set()     # (artista, album) normalizados
         self.artists: dict[str, str] = {}             # normalizado -> nome original
         self.history: list[dict] = []                 # artistas mais ouvidos
+        self.history_by_user: dict[str, list[dict]] = {}  # usuario (minusculo) -> artistas mais ouvidos
         self.track_counts: dict[str, int] = {}        # artista normalizado -> faixas na biblioteca
 
     def refresh(self, force: bool = False):
@@ -228,26 +231,36 @@ class Library:
         since = int((datetime.now(timezone.utc) - timedelta(days=60)).timestamp())
         score: dict[str, float] = {}
         names: dict[str, str] = {}
-        rows = conn.execute(
-            "select m.artist, m.album_artist, count(*) from scrobbles s"
-            " join media_file m on m.id = s.media_file_id join user u on u.id = s.user_id"
-            f" where s.submission_time >= ?{users} group by 1, 2", [since, *params])
-        for artist, album_artist, n in rows:
-            for name in (artist or album_artist or "").split(" • ")[:1]:
-                key = normalize(name)
-                score[key] = score.get(key, 0) + 2 * n
-                names.setdefault(key, name.strip())
-        rows = conn.execute(
-            "select ar.name, a.play_count from annotation a join artist ar on ar.id = a.item_id"
-            f" join user u on u.id = a.user_id where a.item_type = 'artist' and a.play_count > 0{users}",
-            params)
-        for name, n in rows:
+        per_user: dict[str, dict[str, float]] = {}
+
+        def add(user: str, name: str, points: float, counted: bool):
             key = normalize(name)
-            score[key] = score.get(key, 0) + n
-            names.setdefault(key, name)
-        ranked = sorted(score.items(), key=lambda kv: kv[1], reverse=True)
-        self.history = [{"name": names[k], "score": s} for k, s in ranked
-                        if k and k not in IGNORE_ARTISTS]
+            if counted:
+                score[key] = score.get(key, 0) + points
+            mine = per_user.setdefault((user or "").lower(), {})
+            mine[key] = mine.get(key, 0) + points
+            names.setdefault(key, name.strip())
+
+        allowed = {u.lower() for u in HISTORY_USERS}
+        rows = conn.execute(
+            "select u.user_name, m.artist, m.album_artist, count(*) from scrobbles s"
+            " join media_file m on m.id = s.media_file_id join user u on u.id = s.user_id"
+            " where s.submission_time >= ? group by 1, 2, 3", [since])
+        for user, artist, album_artist, n in rows:
+            for name in (artist or album_artist or "").split(" • ")[:1]:
+                add(user, name, 2 * n, not allowed or (user or "").lower() in allowed)
+        rows = conn.execute(
+            "select u.user_name, ar.name, a.play_count from annotation a join artist ar on ar.id = a.item_id"
+            " join user u on u.id = a.user_id where a.item_type = 'artist' and a.play_count > 0")
+        for user, name, n in rows:
+            add(user, name, n, not allowed or (user or "").lower() in allowed)
+
+        def ranked(points: dict[str, float]) -> list[dict]:
+            order = sorted(points.items(), key=lambda kv: kv[1], reverse=True)
+            return [{"name": names[k], "score": s} for k, s in order if k and k not in IGNORE_ARTISTS]
+
+        self.history = ranked(score)
+        self.history_by_user = {u: ranked(p) for u, p in per_user.items() if u}
 
     def has_track(self, artist: str, title: str) -> bool:
         t = normalize_title(title)
@@ -487,20 +500,50 @@ def build_recommended(limit: int = 60, seeds: int = 12) -> dict:
                     items, seeds=[n for n, _ in seed_list])
 
 
-def history_seeds(count: int) -> list[tuple[str, int]]:
-    """Os `count` artistas mais ouvidos que existem no Deezer: [(nome, deezer_id)]."""
+def history_seeds(count: int, user: str | None = None, artists: list[str] | None = None) -> list[tuple[str, int]]:
+    """Os `count` artistas mais ouvidos que existem no Deezer: [(nome, deezer_id)].
+
+    Personalizado por usuario: primeiro os artistas que o app manda (o historico de escuta
+    do proprio app), depois o historico desse usuario no Navidrome. O historico geral so
+    entra quando o usuario ainda nao ouviu nada.
+    """
     autodl = artist_ids._autodl()
-    seeds = []
-    for entry in library.history:
+    names = [a for a in (artists or []) if a.strip()]
+    if user:
+        names += [h["name"] for h in library.history_by_user.get(user.lower(), [])]
+    if not names:
+        names = [h["name"] for h in library.history]
+    seeds, seen = [], set()
+    for name in names:
         if len(seeds) >= count:
             break
+        key = normalize(name)
+        if not key or key in seen or key in IGNORE_ARTISTS or MC_DJ.match(key):
+            continue
+        seen.add(key)
         try:
-            aid = artist_ids.lookup(entry["name"], autodl)
+            aid = artist_ids.lookup(name, autodl)
         except Exception:  # noqa: BLE001
             aid = None
-        if aid:
-            seeds.append((entry["name"], aid))
+        if aid and aid not in {a for _, a in seeds}:
+            seeds.append((name, aid))
     return seeds
+
+
+def global_releases(limit: int = 30) -> list[dict]:
+    """Os lancamentos mais recentes do mundo todo (editorial "All" do Deezer), sem MC/DJ."""
+    data = deezer.get("/editorial/0/releases", limit=100).get("data", [])
+    out, seen = [], set()
+    for alb in sorted(data, key=lambda a: a.get("release_date") or "", reverse=True):
+        artist = (alb.get("artist") or {}).get("name", "")
+        key = (normalize(artist), normalize_title(alb.get("title", "")))
+        if key in seen or normalize(artist) in IGNORE_ARTISTS or MC_DJ.match(normalize(artist)):
+            continue
+        seen.add(key)
+        out.append(album_item(alb))
+        if len(out) >= limit:
+            break
+    return out
 
 
 def build_mix(artist_id: int, limit: int = 40) -> dict:
@@ -554,17 +597,18 @@ def artist_missing(name: str, limit: int = 30) -> dict:
     return {"artist": artist_item(a), "count": len(missing), "items": missing}
 
 
-def build_home(releases: int = 20, mixes: int = 8) -> dict:
-    """Secoes da aba Descobrir: cards de lancamentos, mixes e charts."""
+def build_home(releases: int = 20, mixes: int = 8, user: str | None = None,
+               artists: list[str] | None = None) -> dict:
+    """Secoes da aba Descobrir: lancamentos do mundo todo, mixes do usuario e charts."""
     library.refresh()
-    release_cards = []
-    for alb in release_candidates()[:releases]:
-        try:
-            release_cards.append(album_item(deezer.get(f"/album/{alb['id']}")))
-        except Exception as exc:  # noqa: BLE001
-            log.warning("Album %s: %s", alb["id"], exc)
+    try:
+        release_cards = cache.get("global-releases", lambda: {"items": global_releases(releases)},
+                                  ttl=3600)["items"]
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Lancamentos globais: %s", exc)
+        release_cards = []
     mix_cards = []
-    for name, aid in history_seeds(mixes):
+    for name, aid in history_seeds(mixes, user, artists):
         try:
             pic = deezer.get(f"/artist/{aid}").get("picture_xl")
         except Exception:  # noqa: BLE001
@@ -1049,7 +1093,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, cache.get(f"chart-{country}", lambda: build_charts(country),
                                                   ttl=1800, refresh=refresh))
             if path == "/home":
-                return self._send(200, cache.get("home", build_home, refresh=refresh))
+                # Mixes por usuario: o app manda os artistas mais ouvidos nele (?artists=a,b,c).
+                user = self._user(query)
+                raw = (query.get("artists") or [""])[0]
+                artists = [a.strip() for a in raw.split("\n" if "\n" in raw else ",") if a.strip()][:12]
+                key = "home-" + hashlib.sha1(f"{user.lower()}|{'|'.join(artists)}".encode()).hexdigest()[:16]
+                return self._send(200, cache.get(key, lambda: build_home(user=user, artists=artists),
+                                                  refresh=refresh))
             m = re.fullmatch(r"/playlists/mix/(\d+)", path)
             if m:
                 aid = int(m.group(1))

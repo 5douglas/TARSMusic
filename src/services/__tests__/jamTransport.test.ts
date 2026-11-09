@@ -12,10 +12,27 @@ jest.mock('../subsonicService', () => ({
 }));
 
 import { authStore } from '../../store/authStore';
-import { encodeJamComment, findJamSession, parseJamComment, writeOwnJamComment } from '../jamTransport';
+import {
+  encodeJamComment,
+  findJamSession,
+  isJamActionAllowed,
+  parseJamComment,
+  permForAction,
+  writeOwnJamComment,
+} from '../jamTransport';
 
 const NAME = 'TARSMusic ouvir junto (não apagar)';
-const hostDoc = { at: 1, track: 's1', q: ['s1', 's2'], pos: 12, playing: true, handled: {}, members: [] };
+const hostDoc = {
+  at: 1,
+  track: 's1',
+  q: ['s1', 's2'],
+  pos: 12,
+  playing: true,
+  handled: {},
+  members: [],
+  perms: { playback: true, skip: true, queue: true },
+  listenOnly: [],
+};
 
 const mockFetch = jest.fn();
 (global as unknown as { fetch: typeof mockFetch }).fetch = mockFetch;
@@ -32,6 +49,31 @@ function jsonResponse(body: unknown, status = 200, headers: Record<string, strin
 beforeEach(() => {
   jest.clearAllMocks();
   authStore.setState({ serverUrl: 'https://music.test/', username: 'dino', password: 'pw', isLoggedIn: true } as never);
+});
+
+describe('jam permissions', () => {
+  it('maps each listener action to its group of controls', () => {
+    expect(['play', 'pause', 'seek'].map((k) => permForAction(k as never))).toEqual(['playback', 'playback', 'playback']);
+    expect(['next', 'prev', 'jump'].map((k) => permForAction(k as never))).toEqual(['skip', 'skip', 'skip']);
+    expect(['add', 'addNext', 'playNow', 'remove', 'shuffle'].map((k) => permForAction(k as never))).toEqual([
+      'queue', 'queue', 'queue', 'queue', 'queue',
+    ]);
+  });
+
+  it('blocks a switched-off group and listen-only listeners', () => {
+    const perms = { playback: true, skip: false, queue: true };
+    expect(isJamActionAllowed('pause', 'ana', perms, [])).toBe(true);
+    expect(isJamActionAllowed('next', 'ana', perms, [])).toBe(false);
+    expect(isJamActionAllowed('add', 'Ana', perms, ['ana'])).toBe(false);
+    expect(isJamActionAllowed('add', 'bia', perms, ['ana'])).toBe(true);
+  });
+
+  it('reads a host part from an older app (no rules) as everything allowed', () => {
+    const old = { at: 1, track: 's1', q: ['s1'], pos: 0, playing: true, handled: {}, members: [] };
+    const parsed = parseJamComment(encodeJamComment('host', 'abc123def', old as never));
+    expect((parsed?.doc as { perms: unknown }).perms).toEqual({ playback: true, skip: true, queue: true });
+    expect((parsed?.doc as { listenOnly: unknown }).listenOnly).toEqual([]);
+  });
 });
 
 describe('jam comments', () => {

@@ -495,7 +495,7 @@ export async function playTrack(
   queue: Child[],
   sourcePlaylistId?: string | null,
 ): Promise<void> {
-  reportJamAction({ kind: 'playNow', song: track, queue });
+  if (!reportJamAction({ kind: 'playNow', song: track, queue })) return;
   await awaitHydration();
   maybePromptFireBackgroundPlayback();
   pendingResumePosition = null;
@@ -545,7 +545,7 @@ export async function playTrack(
  * from the start: a same-index skip resets it and leaves the ended state.
  */
 export async function togglePlayPause(): Promise<void> {
-  reportJamAction(() => ({ kind: tp.getState() === 'playing' ? 'pause' : 'play' }));
+  if (!reportJamAction(() => ({ kind: tp.getState() === 'playing' ? 'pause' : 'play' }))) return;
   await awaitHydration();
   const state = tp.getState();
   if (state === 'playing') {
@@ -564,7 +564,7 @@ export async function togglePlayPause(): Promise<void> {
  * the play; from any live state the skip carries on as is.
  */
 export async function skipToNext(): Promise<void> {
-  reportJamAction({ kind: 'next' });
+  if (!reportJamAction({ kind: 'next' })) return;
   await awaitHydration();
   const wasEnded = tp.getState() === 'ended';
   await tp.skipToNext();
@@ -573,7 +573,7 @@ export async function skipToNext(): Promise<void> {
 
 /** Skip to the previous track in the queue (see `skipToNext` for the ended case). */
 export async function skipToPrevious(): Promise<void> {
-  reportJamAction({ kind: 'prev' });
+  if (!reportJamAction({ kind: 'prev' })) return;
   await awaitHydration();
   const wasEnded = tp.getState() === 'ended';
   await tp.skipToPrevious();
@@ -593,7 +593,7 @@ export function canSkipToPrevious(): boolean {
  * streams), so this is a straight passthrough with an optimistic store update.
  */
 export async function seekTo(position: number): Promise<void> {
-  reportJamAction({ kind: 'seek', pos: Math.max(0, position) });
+  if (!reportJamAction({ kind: 'seek', pos: Math.max(0, position) })) return;
   await awaitHydration();
   const target = Math.max(0, position);
   await tp.seekTo(target);
@@ -603,10 +603,12 @@ export async function seekTo(position: number): Promise<void> {
 
 /** Skip to a specific track in the queue by index. */
 export async function skipToTrack(index: number): Promise<void> {
-  reportJamAction(() => {
-    const song = currentChildQueue[index];
-    return song ? { kind: 'jump', songId: song.id, index } : null;
-  });
+  if (
+    !reportJamAction(() => {
+      const song = currentChildQueue[index];
+      return song ? { kind: 'jump', songId: song.id, index } : null;
+    })
+  ) return;
   await awaitHydration();
   await tp.skipToIndex(index);
   await tp.play();
@@ -830,7 +832,7 @@ export async function addToQueue(
 ): Promise<void> {
   if (tracks.length === 0) return;
   // An empty queue goes through playTrack, which reports itself.
-  if (currentChildQueue.length > 0) reportJamAction({ kind: 'add', songs: tracks });
+  if (currentChildQueue.length > 0 && !reportJamAction({ kind: 'add', songs: tracks })) return;
   await awaitHydration();
 
   if (currentChildQueue.length === 0) {
@@ -866,7 +868,7 @@ export async function addToQueue(
  * When the queue is empty, behaves like `playTrack`.
  */
 export async function playSongNext(song: Child): Promise<void> {
-  if (currentChildQueue.length > 0) reportJamAction({ kind: 'addNext', song });
+  if (currentChildQueue.length > 0 && !reportJamAction({ kind: 'addNext', song })) return;
   await awaitHydration();
 
   if (currentChildQueue.length === 0) {
@@ -907,10 +909,12 @@ export async function playSongNext(song: Child): Promise<void> {
  * back rather than adjusting by hand. Clears the queue when it was the last.
  */
 export async function removeFromQueue(index: number): Promise<void> {
-  reportJamAction(() => {
-    const song = currentChildQueue[index];
-    return song ? { kind: 'remove', songId: song.id, index } : null;
-  });
+  if (
+    !reportJamAction(() => {
+      const song = currentChildQueue[index];
+      return song ? { kind: 'remove', songId: song.id, index } : null;
+    })
+  ) return;
   await awaitHydration();
 
   if (index < 0 || index >= currentChildQueue.length) return;
@@ -1041,7 +1045,7 @@ registerPlayerPlayStatListener(applyLocalPlayToPlayer);
  * load it atomically. `trackPlaylistMap` is left intact — IDs are unchanged.
  */
 export async function shuffleQueue(): Promise<void> {
-  reportJamAction({ kind: 'shuffle' });
+  if (!reportJamAction({ kind: 'shuffle' })) return;
   await awaitHydration();
   if (currentChildQueue.length < 2) return;
 

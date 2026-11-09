@@ -2,14 +2,19 @@
   "name": "tarsmusic-desktop",
   "productName": "TARSMusic",
   "version": "0.0.0",
-  "description": "TARSMusic para Windows",
-  "author": "douglas",
+  "description": "TARSMusic, player de música para o seu servidor",
+  "author": {
+    "name": "douglas",
+    "email": "100371228+5douglas@users.noreply.github.com"
+  },
   "private": true,
   "main": "main.js",
+  "desktopName": "tarsmusic.desktop",
   "scripts": {
     "build:web": "node scripts/build-web.js",
     "start": "electron .",
-    "dist": "node scripts/build-web.js && electron-builder --win --publish never"
+    "dist": "node scripts/build-web.js && electron-builder --win --publish never",
+    "dist:linux": "node scripts/build-web.js && electron-builder --linux --publish never"
   },
   "dependencies": {
     "electron-updater": "6.8.11"
@@ -28,6 +33,7 @@
     },
     "files": [
       "main.js",
+      "mini/**/*",
       "web/**/*",
       "build/icon.png",
       "package.json"
@@ -53,6 +59,46 @@
       "shortcutName": "TARSMusic",
       "runAfterFinish": true
     },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Audio",
+      "executableName": "tarsmusic",
+      "artifactName": "TARSMusic-${version}-${arch}.${ext}",
+      "synopsis": "Player de música para o seu servidor Navidrome/Subsonic",
+      "maintainer": "douglas <100371228+5douglas@users.noreply.github.com>",
+      "mimeTypes": [
+        "x-scheme-handler/substreamer"
+      ],
+      "syncDesktopName": true
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0"
+      ],
+      "packageName": "tarsmusic"
+    },
     "publish": [
       {
         "provider": "github",
@@ -60,6 +106,10 @@
         "repo": "TARSMusic",
         "releaseType": "release"
       }
-    ]
-  }
+    ],
+    "rpm": {
+      "packageName": "tarsmusic"
+    }
+  },
+  "homepage": "https://github.com/5douglas/TARSMusic"
 }
